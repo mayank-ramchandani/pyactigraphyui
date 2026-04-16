@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     gfortran \
-    libatlas-base-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY src/backend/requirements-docker.txt /app/requirements-docker.txt
