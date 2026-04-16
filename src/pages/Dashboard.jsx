@@ -13,6 +13,8 @@ import MetricsPanel from "../components/MetricsPanel";
 import ResultsPanel from "../components/ResultsPanel";
 import ExportPanel from "../components/ExportPanel";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 import {
   getDefaultAlgorithm,
   getDefaultSelectedMetrics,
@@ -131,7 +133,7 @@ export default function Dashboard() {
       formData.append("activityChannel", activityChannel);
       formData.append("resampleFreq", resampleFreq);
 
-      const res = await fetch("http://localhost:8000/api/preview/basic", {
+      const res = await fetch(`${API_BASE_URL}/api/preview/basic`, {
         method: "POST",
         body: formData,
       });
@@ -179,7 +181,7 @@ export default function Dashboard() {
       formData.append("resampleFreq", resampleFreq);
       formData.append("analysisMode", analysisMode);
 
-      const res = await fetch("http://localhost:8000/api/analyze/basic", {
+      const res = await fetch(`${API_BASE_URL}/api/analyze/basic`, {
         method: "POST",
         body: formData,
       });
