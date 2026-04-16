@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import pyActigraphy
@@ -83,9 +84,9 @@ def validate_custom_csv_file(file_path: str, sep: str = ","):
 def load_custom_csv(
     file_path: str,
     timestamp_col: str = "Timestamp",
-    activity_col: str | None = None,
-    light_col: str | None = None,
-    temperature_col: str | None = None,
+    activity_col: Optional[str] = None,
+    light_col: Optional[str] = None,
+    temperature_col: Optional[str] = None,
     sep: str = ",",
 ):
     df = validate_custom_csv_file(file_path, sep=sep)
