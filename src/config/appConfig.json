@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 2,
+  "appName": "Actigraphy Dashboard",
+  "layout": {
+    "sidebarEnabled": true,
+    "sidebarPosition": "left",
+    "panelOrder": [
+      "fileSelection",
+      "preview",
+      "cleaning",
+      "diaryAndLogs",
+      "metrics",
+      "results",
+      "export"
+    ]
+  },
+  "features": {
+    "masking": {
+      "enabled": true,
+      "defaultAskAfterPreview": true
+    },
+    "sleepDiary": {
+      "enabled": true
+    },
+    "startStopTimes": {
+      "enabled": true
+    },
+    "sleepScoringPreview": {
+      "enabled": true
+    },
+    "lightMetrics": {
+      "enabled": true
+    },
+    "advancedAnalyses": {
+      "enabled": true,
+      "showAsPlannedByDefault": true
+    },
+    "registryMode": {
+      "enabled": false,
+      "description": "Reserved for future pyActigraphy registry-based metric discovery."
+    }
+  },
+  "workflow": [
+    {
+      "id": "1",
+      "key": "fileSelection",
+      "title": "Select Files",
+      "description": "Upload actigraphy and optional supporting files."
+    },
+    {
+      "id": "2",
+      "key": "preview",
+      "title": "Preview Full Recording",
+      "description": "Inspect the full recording before cleaning and analysis."
+    },
+    {
+      "id": "3",
+      "key": "cleaning",
+      "title": "Cleaning & Masking",
+      "description": "Optionally apply masking and recording-bound cleaning."
+    },
+    {
+      "id": "4",
+      "key": "diaryAndLogs",
+      "title": "Sleep Diary / Logs",
+      "description": "Attach sleep diary or start-stop-time files when available."
+    },
+    {
+      "id": "5",
+      "key": "metrics",
+      "title": "Choose Metrics & Algorithms",
+      "description": "Select metrics, rest-detection algorithms, and parameter settings."
+    },
+    {
+      "id": "6",
+      "key": "results",
+      "title": "Generate Results",
+      "description": "Create summaries, overlays, and analysis outputs."
+    },
+    {
+      "id": "7",
+      "key": "export",
+      "title": "Export Outputs",
+      "description": "Save tables, overlays, and report-ready outputs."
+    }
+  ],
+  "panels": {
+    "fileSelection": {
+      "enabled": true,
+      "title": "1. File Selection"
+    },
+    "preview": {
+      "enabled": true,
+      "title": "2. Full Recording Preview"
+    },
+    "cleaning": {
+      "enabled": true,
+      "title": "3. Cleaning & Masking"
+    },
+    "diaryAndLogs": {
+      "enabled": true,
+      "title": "4. Sleep Diary / Start-Stop Files"
+    },
+    "metrics": {
+      "enabled": true,
+      "title": "5. Choose Metrics & Algorithms"
+    },
+    "results": {
+      "enabled": true,
+      "title": "6. Generate Results"
+    },
+    "export": {
+      "enabled": true,
+      "title": "7. Export Outputs"
+    }
+  },
+  "uiText": {
+    "maskingHelp": "Masking is used to exclude spurious inactivity or non-wear periods, such as times when the watch was removed.",
+    "diaryHelp": "Sleep diary overlays should show nocturnal sleep and naps distinctly. Provide diary-format help directly in the upload area.",
+    "sstHelp": "Start/Stop Time files define the effective recording interval (i.e., when watch was actually worn by participant, instead of for demonstration purposes, etc.) and is optional.",
+    "algorithmHelp": "All scoring algorithms return a binary rest/activity time series and can be previewed as overlays."
+  }
+}

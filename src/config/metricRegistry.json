@@ -1,0 +1,1420 @@
+{
+  "schemaVersion": 2,
+  "categories": [
+    {
+      "id": "rest_activity",
+      "label": "Rest-Activity Rhythms",
+      "description": "Non-parametric rest-activity rhythm metrics and related summary measures."
+    },
+    {
+      "id": "fragmentation",
+      "label": "Fragmentation / State Transition",
+      "description": "Metrics that quantify fragmentation of rest and activity patterns."
+    },
+    {
+      "id": "sleep",
+      "label": "Sleep Metrics",
+      "description": "Sleep- or scoring-dependent summary metrics."
+    },
+    {
+      "id": "light",
+      "label": "Light Metrics",
+      "description": "Light exposure summary and threshold-based metrics."
+    },
+    {
+      "id": "advanced",
+      "label": "Advanced Analyses",
+      "description": "Advanced signal-processing and chronobiology analyses exposed by pyActigraphy."
+    }
+  ],
+  "metrics": [
+    {
+      "id": "adat",
+      "backendMethod": "ADAT",
+      "backendKey": "average_daily_activity_total",
+      "label": "Average Daily Activity Total",
+      "shortLabel": "ADAT",
+      "category": "rest_activity",
+      "subcategory": "daily_summary",
+      "summary": "Average total daily activity across the recording.",
+      "description": "Computes the average daily activity total over the recording, with optional rescaling to account for masked periods and optional exclusion of partial start/end days.",
+      "references": [
+        "pyActigraphy documentation: MetricsMixin.ADAT"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": false,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to a binary active/inactive series before computing ADAT."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        },
+        {
+          "name": "rescale",
+          "label": "Rescale for masked periods",
+          "type": "boolean",
+          "default": true,
+          "description": "Rescale daily totals to account for masked periods."
+        },
+        {
+          "name": "exclude_ends",
+          "label": "Exclude first and last day",
+          "type": "boolean",
+          "default": false,
+          "description": "Exclude partial first and last days from the calculation."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "adatp",
+      "backendMethod": "ADATp",
+      "backendKey": "average_daily_activity_total_per_period",
+      "label": "Average Daily Activity Total per Period",
+      "shortLabel": "ADATp",
+      "category": "rest_activity",
+      "subcategory": "daily_summary_per_period",
+      "summary": "Average daily activity total computed separately for each period.",
+      "description": "Splits the recording into consecutive periods and computes ADAT for each period.",
+      "references": [
+        "pyActigraphy documentation: MetricsMixin.ADATp"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": false,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": "7D",
+          "description": "Length of each consecutive period, expressed as a pandas-style duration string."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to a binary active/inactive series before computing ADATp."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        },
+        {
+          "name": "rescale",
+          "label": "Rescale for masked periods",
+          "type": "boolean",
+          "default": true,
+          "description": "Rescale period totals to account for masked periods."
+        },
+        {
+          "name": "exclude_ends",
+          "label": "Exclude first and last day",
+          "type": "boolean",
+          "default": false,
+          "description": "Exclude partial days from the calculation."
+        },
+        {
+          "name": "verbose",
+          "label": "Verbose output",
+          "type": "boolean",
+          "default": false,
+          "description": "Show the number of periods found and unaccounted time."
+        }
+      ],
+      "resultSchema": {
+        "type": "list<number>",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "l5",
+      "backendMethod": "L5",
+      "backendKey": "least_active_5h",
+      "label": "Least Active 5 Hours",
+      "shortLabel": "L5",
+      "category": "rest_activity",
+      "subcategory": "nonparametric",
+      "summary": "Mean activity during the 5 least active hours of the day.",
+      "description": "Computes the average activity during the least active 5-hour interval of the average day.",
+      "references": [
+        "Van Someren et al. (1997)",
+        "pyActigraphy documentation: MetricsMixin.L5"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": false,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing L5."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "m10",
+      "backendMethod": "M10",
+      "backendKey": "most_active_10h",
+      "label": "Most Active 10 Hours",
+      "shortLabel": "M10",
+      "category": "rest_activity",
+      "subcategory": "nonparametric",
+      "summary": "Mean activity during the 10 most active hours of the day.",
+      "description": "Computes the average activity during the most active 10-hour interval of the average day.",
+      "references": [
+        "Van Someren et al. (1997)",
+        "pyActigraphy documentation: MetricsMixin.M10"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": false,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing M10."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "ra",
+      "backendMethod": "RA",
+      "backendKey": "relative_amplitude",
+      "label": "Relative Amplitude",
+      "shortLabel": "RA",
+      "category": "rest_activity",
+      "subcategory": "nonparametric",
+      "summary": "Relative amplitude between the most active 10 hours and least active 5 hours of the average day.",
+      "description": "RA is computed from M10 and L5 and is commonly used to quantify the strength of day-night rest-activity rhythm amplitude.",
+      "references": [
+        "Van Someren et al. (1997)",
+        "pyActigraphy documentation: MetricsMixin.RA"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": true,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing RA."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": [0, 1]
+      },
+      "previewOverlaySupport": {
+        "fullRecording": false,
+        "dailyProfile": false,
+        "algorithmOverlay": false
+      }
+    },
+    {
+      "id": "l5p",
+      "backendMethod": "L5p",
+      "backendKey": "least_active_5h_per_period",
+      "label": "Least Active 5 Hours per Period",
+      "shortLabel": "L5p",
+      "category": "rest_activity",
+      "subcategory": "nonparametric_per_period",
+      "summary": "L5 computed separately for each consecutive period.",
+      "description": "Splits the recording into consecutive periods and computes the L5 value for each period.",
+      "references": [
+        "pyActigraphy documentation: MetricsMixin.L5p"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": false,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": "7D",
+          "description": "Length of each consecutive period."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing L5p."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        },
+        {
+          "name": "verbose",
+          "label": "Verbose output",
+          "type": "boolean",
+          "default": false,
+          "description": "Show period-count and unaccounted-time information."
+        }
+      ],
+      "resultSchema": {
+        "type": "list<number>",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "m10p",
+      "backendMethod": "M10p",
+      "backendKey": "most_active_10h_per_period",
+      "label": "Most Active 10 Hours per Period",
+      "shortLabel": "M10p",
+      "category": "rest_activity",
+      "subcategory": "nonparametric_per_period",
+      "summary": "M10 computed separately for each consecutive period.",
+      "description": "Splits the recording into consecutive periods and computes the M10 value for each period.",
+      "references": [
+        "pyActigraphy documentation: MetricsMixin.M10p"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": false,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": "7D",
+          "description": "Length of each consecutive period."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing M10p."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        },
+        {
+          "name": "verbose",
+          "label": "Verbose output",
+          "type": "boolean",
+          "default": false,
+          "description": "Show period-count and unaccounted-time information."
+        }
+      ],
+      "resultSchema": {
+        "type": "list<number>",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "rap",
+      "backendMethod": "RAp",
+      "backendKey": "relative_amplitude_per_period",
+      "label": "Relative Amplitude per Period",
+      "shortLabel": "RAp",
+      "category": "rest_activity",
+      "subcategory": "nonparametric_per_period",
+      "summary": "RA computed separately for each consecutive period.",
+      "description": "Splits the recording into consecutive periods and computes RA independently for each period. Default period length is 7 days in pyActigraphy tutorials.",
+      "references": [
+        "pyActigraphy tutorial: Non-parametric variables per period"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": "7D",
+          "description": "Length of each consecutive period."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing RAp."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        },
+        {
+          "name": "verbose",
+          "label": "Verbose output",
+          "type": "boolean",
+          "default": false,
+          "description": "Show period-count and unaccounted-time information."
+        }
+      ],
+      "resultSchema": {
+        "type": "list<number>",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "is",
+      "backendMethod": "IS",
+      "backendKey": "interdaily_stability",
+      "label": "Interdaily Stability",
+      "shortLabel": "IS",
+      "category": "rest_activity",
+      "subcategory": "nonparametric",
+      "summary": "Quantifies the repeatability of the daily rest-activity pattern across days.",
+      "description": "IS is a non-parametric rest-activity rhythm variable that reflects how stable the 24-hour activity pattern is across the recording.",
+      "references": [
+        "Witting et al. (1990)",
+        "pyActigraphy documentation: MetricsMixin.IS"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "freq",
+          "label": "Resampling frequency",
+          "type": "select",
+          "default": "1H",
+          "options": ["1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min", "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min", "36min", "40min", "45min", "48min", "60min"],
+          "description": "Resampling frequency used before computing IS."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing IS."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "ism",
+      "backendMethod": "ISm",
+      "backendKey": "interdaily_stability_mean",
+      "label": "Mean Interdaily Stability",
+      "shortLabel": "ISm",
+      "category": "rest_activity",
+      "subcategory": "nonparametric_mean",
+      "summary": "Average IS across multiple resampling frequencies.",
+      "description": "ISm is the average of IS values computed using several allowed resampling frequencies.",
+      "references": [
+        "Gonçalves et al. (2014)",
+        "pyActigraphy tutorial: Mean IS and IV"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "freqs",
+          "label": "Resampling frequencies",
+          "type": "multiselect",
+          "default": ["1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min", "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min", "36min", "40min", "45min", "48min", "60min"],
+          "options": ["1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min", "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min", "36min", "40min", "45min", "48min", "60min"],
+          "description": "Set of allowed resampling frequencies across which IS is averaged."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing ISm."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "isp",
+      "backendMethod": "ISp",
+      "backendKey": "interdaily_stability_per_period",
+      "label": "Interdaily Stability per Period",
+      "shortLabel": "ISp",
+      "category": "rest_activity",
+      "subcategory": "nonparametric_per_period",
+      "summary": "IS computed separately for each consecutive period.",
+      "description": "Splits the recording into consecutive periods and computes IS independently for each period. Default period length is 7 days in pyActigraphy.",
+      "references": [
+        "pyActigraphy tutorial: Non-parametric variables per period"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": "7D",
+          "description": "Length of each consecutive period."
+        },
+        {
+          "name": "freq",
+          "label": "Resampling frequency",
+          "type": "select",
+          "default": "1H",
+          "options": ["1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min", "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min", "36min", "40min", "45min", "48min", "60min"],
+          "description": "Resampling frequency used before computing ISp."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing ISp."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        },
+        {
+          "name": "verbose",
+          "label": "Verbose output",
+          "type": "boolean",
+          "default": false,
+          "description": "Show period-count and unaccounted-time information."
+        }
+      ],
+      "resultSchema": {
+        "type": "list<number>",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "iv",
+      "backendMethod": "IV",
+      "backendKey": "intradaily_variability",
+      "label": "Intradaily Variability",
+      "shortLabel": "IV",
+      "category": "rest_activity",
+      "subcategory": "nonparametric",
+      "summary": "Quantifies fragmentation or hour-to-hour variability in the activity rhythm.",
+      "description": "IV is a non-parametric metric that reflects rhythm fragmentation and within-day variability.",
+      "references": [
+        "Witting et al. (1990)",
+        "pyActigraphy documentation: MetricsMixin.IV"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "freq",
+          "label": "Resampling frequency",
+          "type": "select",
+          "default": "1H",
+          "options": ["1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min", "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min", "36min", "40min", "45min", "48min", "60min"],
+          "description": "Resampling frequency used before computing IV."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing IV."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "ivm",
+      "backendMethod": "IVm",
+      "backendKey": "intradaily_variability_mean",
+      "label": "Mean Intradaily Variability",
+      "shortLabel": "IVm",
+      "category": "rest_activity",
+      "subcategory": "nonparametric_mean",
+      "summary": "Average IV across multiple resampling frequencies.",
+      "description": "IVm is the average of IV values computed across several allowed resampling frequencies.",
+      "references": [
+        "Gonçalves et al. (2014)",
+        "pyActigraphy tutorial: Mean IS and IV"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "freqs",
+          "label": "Resampling frequencies",
+          "type": "multiselect",
+          "default": ["1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min", "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min", "36min", "40min", "45min", "48min", "60min"],
+          "options": ["1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min", "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min", "36min", "40min", "45min", "48min", "60min"],
+          "description": "Set of allowed resampling frequencies across which IV is averaged."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing IVm."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "ivp",
+      "backendMethod": "IVp",
+      "backendKey": "intradaily_variability_per_period",
+      "label": "Intradaily Variability per Period",
+      "shortLabel": "IVp",
+      "category": "rest_activity",
+      "subcategory": "nonparametric_per_period",
+      "summary": "IV computed separately for each consecutive period.",
+      "description": "Splits the recording into consecutive periods and computes IV independently for each period. Default period length is 7 days in pyActigraphy.",
+      "references": [
+        "pyActigraphy tutorial: Non-parametric variables per period"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": "7D",
+          "description": "Length of each consecutive period."
+        },
+        {
+          "name": "freq",
+          "label": "Resampling frequency",
+          "type": "select",
+          "default": "1H",
+          "options": ["1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min", "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min", "36min", "40min", "45min", "48min", "60min"],
+          "description": "Resampling frequency used before computing IVp."
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity signal",
+          "type": "boolean",
+          "default": true,
+          "description": "Convert activity to binary active/inactive values before computing IVp."
+        },
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used if binarization is enabled."
+        },
+        {
+          "name": "verbose",
+          "label": "Verbose output",
+          "type": "boolean",
+          "default": false,
+          "description": "Show period-count and unaccounted-time information."
+        }
+      ],
+      "resultSchema": {
+        "type": "list<number>",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "sri",
+      "backendMethod": "SleepRegularityIndex",
+      "backendKey": "sleep_regularity_index",
+      "label": "Sleep Regularity Index",
+      "shortLabel": "SRI",
+      "category": "sleep",
+      "subcategory": "sleep_summary",
+      "summary": "Quantifies regularity of sleep-wake timing from one day to the next.",
+      "description": "SRI is computed from a binary sleep-wake time series, so it requires sleep scoring or equivalent sleep-state information.",
+      "references": [
+        "pyActigraphy package overview",
+        "pyActigraphy sleep scoring workflow"
+      ],
+      "requiresSleepScoring": true,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": true,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedAlgorithms": ["cole_kripke", "sadeh", "oakley", "scripps", "crespo", "roenneberg"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": [0, 100]
+      },
+      "previewOverlaySupport": {
+        "fullRecording": true,
+        "dailyProfile": false,
+        "algorithmOverlay": true
+      }
+    },
+    {
+      "id": "tst",
+      "backendMethod": "TotalSleepTime",
+      "backendKey": "total_sleep_time",
+      "label": "Total Sleep Time",
+      "shortLabel": "TST",
+      "category": "sleep",
+      "subcategory": "sleep_summary",
+      "summary": "Total amount of sleep in the analyzed interval.",
+      "description": "TST is derived from an algorithm-generated or diary-based sleep/rest time series.",
+      "references": [
+        "pyActigraphy sleep scoring workflow"
+      ],
+      "requiresSleepScoring": true,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedAlgorithms": ["cole_kripke", "sadeh", "oakley", "scripps", "crespo", "roenneberg"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "number",
+        "unit": "epochs_or_minutes",
+        "expectedRange": null
+      },
+      "previewOverlaySupport": {
+        "fullRecording": true,
+        "dailyProfile": false,
+        "algorithmOverlay": true
+      }
+    },
+    {
+      "id": "waso",
+      "backendMethod": "WakeAfterSleepOnset",
+      "backendKey": "wake_after_sleep_onset",
+      "label": "Wake After Sleep Onset",
+      "shortLabel": "WASO",
+      "category": "sleep",
+      "subcategory": "sleep_summary",
+      "summary": "Wakefulness occurring after sleep onset within the analyzed sleep period.",
+      "description": "WASO is a sleep-fragmentation summary derived from a scored sleep/rest series.",
+      "references": [
+        "pyActigraphy sleep scoring workflow"
+      ],
+      "requiresSleepScoring": true,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedAlgorithms": ["cole_kripke", "sadeh", "oakley", "scripps", "crespo", "roenneberg"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "number",
+        "unit": "epochs_or_minutes",
+        "expectedRange": null
+      },
+      "previewOverlaySupport": {
+        "fullRecording": true,
+        "dailyProfile": false,
+        "algorithmOverlay": true
+      }
+    },
+    {
+      "id": "sleep_efficiency",
+      "backendMethod": "SleepEfficiency",
+      "backendKey": "sleep_efficiency",
+      "label": "Sleep Efficiency",
+      "shortLabel": "Sleep Efficiency",
+      "category": "sleep",
+      "subcategory": "sleep_summary",
+      "summary": "Proportion of time in bed or sleep interval spent asleep.",
+      "description": "Sleep efficiency is a sleep summary statistic derived from a scored sleep/rest series, often reported as a percentage.",
+      "references": [
+        "pyActigraphy sleep scoring workflow"
+      ],
+      "requiresSleepScoring": true,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedAlgorithms": ["cole_kripke", "sadeh", "oakley", "scripps", "crespo", "roenneberg"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "number",
+        "unit": "%",
+        "expectedRange": [0, 100]
+      },
+      "previewOverlaySupport": {
+        "fullRecording": true,
+        "dailyProfile": false,
+        "algorithmOverlay": true
+      }
+    },
+    {
+      "id": "kra",
+      "backendMethod": "kRA",
+      "backendKey": "rest_to_activity_fragmentation",
+      "label": "kRA",
+      "shortLabel": "kRA",
+      "category": "fragmentation",
+      "subcategory": "state_transition",
+      "summary": "Rest-to-activity transition probability summary metric.",
+      "description": "kRA summarizes the sustained transition probability from rest to activity and is used to characterize fragmentation of rest-activity patterns.",
+      "references": [
+        "Lim et al. (2011)",
+        "pyActigraphy tutorial: State transition probabilities"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used to classify epochs as active or resting."
+        },
+        {
+          "name": "start",
+          "label": "Start time",
+          "type": "time_or_keyword",
+          "default": null,
+          "allowedKeywords": ["AonT", "AoffT"],
+          "description": "Optional analysis-window start time. pyActigraphy also allows AonT and AoffT keywords."
+        },
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": null,
+          "description": "Optional analysis-window duration."
+        },
+        {
+          "name": "frac",
+          "label": "LOWESS fraction",
+          "type": "number",
+          "default": 0.3,
+          "min": 0,
+          "max": 1,
+          "step": 0.05,
+          "description": "Fraction of data used for LOWESS smoothing."
+        },
+        {
+          "name": "it",
+          "label": "LOWESS iterations",
+          "type": "integer",
+          "default": 0,
+          "min": 0,
+          "step": 1,
+          "description": "Number of LOWESS residual-based reweighting iterations."
+        },
+        {
+          "name": "logit",
+          "label": "Apply logit transform",
+          "type": "boolean",
+          "default": false,
+          "description": "Return logit-transformed kRA instead of the raw value."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "kar",
+      "backendMethod": "kAR",
+      "backendKey": "activity_to_rest_fragmentation",
+      "label": "kAR",
+      "shortLabel": "kAR",
+      "category": "fragmentation",
+      "subcategory": "state_transition",
+      "summary": "Activity-to-rest transition probability summary metric.",
+      "description": "kAR summarizes the sustained transition probability from activity to rest and is used to characterize fragmentation of rest-activity patterns.",
+      "references": [
+        "Lim et al. (2011)",
+        "pyActigraphy tutorial: State transition probabilities"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "threshold",
+          "label": "Threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used to classify epochs as active or resting."
+        },
+        {
+          "name": "start",
+          "label": "Start time",
+          "type": "time_or_keyword",
+          "default": null,
+          "allowedKeywords": ["AonT", "AoffT"],
+          "description": "Optional analysis-window start time. pyActigraphy also allows AonT and AoffT keywords."
+        },
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": null,
+          "description": "Optional analysis-window duration."
+        },
+        {
+          "name": "frac",
+          "label": "LOWESS fraction",
+          "type": "number",
+          "default": 0.3,
+          "min": 0,
+          "max": 1,
+          "step": 0.05,
+          "description": "Fraction of data used for LOWESS smoothing."
+        },
+        {
+          "name": "it",
+          "label": "LOWESS iterations",
+          "type": "integer",
+          "default": 0,
+          "min": 0,
+          "step": 1,
+          "description": "Number of LOWESS residual-based reweighting iterations."
+        },
+        {
+          "name": "logit",
+          "label": "Apply logit transform",
+          "type": "boolean",
+          "default": false,
+          "description": "Return logit-transformed kAR instead of the raw value."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "light_tat",
+      "backendMethod": "TAT",
+      "backendKey": "time_above_threshold",
+      "label": "Time Above Threshold",
+      "shortLabel": "TAT",
+      "category": "light",
+      "subcategory": "threshold_based",
+      "summary": "Time spent above a specified light threshold.",
+      "description": "TAT is a light-exposure metric supported by pyLight workflows in pyActigraphy and will be available only when light data are present.",
+      "references": [
+        "pyActigraphy package overview",
+        "pyLight tutorials"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": true
+      },
+      "parameterSchema": [
+        {
+          "name": "threshold",
+          "label": "Light threshold",
+          "type": "number",
+          "default": 500,
+          "min": 0,
+          "step": 1,
+          "description": "Threshold used for the time-above-threshold light metric."
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": "time",
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "light_mlit500",
+      "backendMethod": "MLit500",
+      "backendKey": "mean_light_above_500",
+      "label": "Mean Light Above 500 lux",
+      "shortLabel": "MLit500",
+      "category": "light",
+      "subcategory": "threshold_based",
+      "summary": "Light-exposure summary using the 500 lux threshold family described in pyLight examples.",
+      "description": "Placeholder metadata for pyLight threshold-based metrics. Will be enabled when the backend light-analysis path is added.",
+      "references": [
+        "pyActigraphy package overview",
+        "pyLight tutorials"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": true
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "cosinor",
+      "backendMethod": "Cosinor",
+      "backendKey": "cosinor_analysis",
+      "label": "Cosinor Analysis",
+      "shortLabel": "Cosinor",
+      "category": "advanced",
+      "subcategory": "rhythm_modeling",
+      "summary": "Cosinor model fitting for periodic rhythmicity analysis.",
+      "description": "Advanced pyActigraphy analysis module for rhythmic signal modeling.",
+      "references": [
+        "pyActigraphy tutorials: Cosinor"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": true
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "object",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "dfa",
+      "backendMethod": "DFA",
+      "backendKey": "detrended_fluctuation_analysis",
+      "label": "Detrended Fluctuation Analysis",
+      "shortLabel": "DFA",
+      "category": "advanced",
+      "subcategory": "signal_complexity",
+      "summary": "Detrended fluctuation analysis of actigraphy signals.",
+      "description": "Advanced pyActigraphy analysis module for signal scaling and complexity properties.",
+      "references": [
+        "pyActigraphy tutorials: MF-DFA"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": true
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "object",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "flm",
+      "backendMethod": "FLM",
+      "backendKey": "functional_linear_modeling",
+      "label": "Functional Linear Modelling",
+      "shortLabel": "FLM",
+      "category": "advanced",
+      "subcategory": "functional_analysis",
+      "summary": "Functional linear modelling of actigraphy signals.",
+      "description": "Advanced pyActigraphy analysis module for functional-data-style modelling.",
+      "references": [
+        "pyActigraphy tutorials: FLM"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": true
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "object",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "lids",
+      "backendMethod": "LIDS",
+      "backendKey": "locomotor_inactivity_during_sleep",
+      "label": "Locomotor Inactivity During Sleep",
+      "shortLabel": "LIDS",
+      "category": "advanced",
+      "subcategory": "sleep_dynamics",
+      "summary": "Locomotor Inactivity During Sleep analysis.",
+      "description": "Advanced pyActigraphy analysis for characterizing sleep-related inactivity patterns.",
+      "references": [
+        "pyActigraphy package overview"
+      ],
+      "requiresSleepScoring": true,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": true
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "object",
+        "unit": null,
+        "expectedRange": null
+      }
+    },
+    {
+      "id": "ssa",
+      "backendMethod": "SSA",
+      "backendKey": "singular_spectrum_analysis",
+      "label": "Singular Spectrum Analysis",
+      "shortLabel": "SSA",
+      "category": "advanced",
+      "subcategory": "decomposition",
+      "summary": "Singular spectrum analysis for decomposition and rhythm extraction.",
+      "description": "Advanced pyActigraphy analysis module for decomposition and component extraction.",
+      "references": [
+        "pyActigraphy tutorials: SSA"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": true
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "object",
+        "unit": null,
+        "expectedRange": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 2,
+  "previewCards": [
+    {
+      "id": "mask_overlay_preview",
+      "title": "Mask Overlay Preview",
+      "description": "Shows masked or excluded intervals overlaid on the full recording preview.",
+      "plotType": "mask_overlay",
+      "defaultVisible": false,
+      "supportsMaskOverlay": true,
+      "supportsDiaryOverlay": false,
+      "supportsAlgorithmOverlay": false,
+      "supportsLightOverlay": false
+    },
+    {
+      "id": "sleep_diary_overlay_preview",
+      "title": "Sleep Diary Overlay",
+      "description": "Shows sleep diary annotations over the actigraphy time series, with naps and nocturnal sleep distinguished visually.",
+      "plotType": "sleep_diary_overlay",
+      "defaultVisible": false,
+      "supportsMaskOverlay": true,
+      "supportsDiaryOverlay": true,
+      "supportsAlgorithmOverlay": false,
+      "supportsLightOverlay": false
+    },
+    {
+      "id": "light_overlay_preview",
+      "title": "Light Overlay Preview - To be Added",
+      "description": "Shows light exposure alongside activity when the loaded file includes light channels.",
+      "plotType": "light_overlay",
+      "defaultVisible": false,
+      "supportsMaskOverlay": true,
+      "supportsDiaryOverlay": false,
+      "supportsAlgorithmOverlay": false,
+      "supportsLightOverlay": true
+    }
+  ],
+  "resultCards": [
+    {
+      "id": "metric_plot",
+      "title": "Metric Summary Visual",
+      "description": "Plot or structured summary of the selected metric output.",
+      "plotType": "selected_metric_plot"
+    },
+    {
+      "id": "summary_table",
+      "title": "Tabular Output",
+      "description": "Table of computed summary values and method settings.",
+      "plotType": "summary_table"
+    },
+    {
+      "id": "methods_summary",
+      "title": "Methods Summary",
+      "description": "Human-readable description of the selected processing steps, algorithms, and parameters for reporting.",
+      "plotType": "methods_summary"
+    },
+    {
+      "id": "overlay_output",
+      "title": "Overlay Output",
+      "description": "Preview of masks, diary overlays, or algorithm-derived binary series.",
+      "plotType": "overlay_plot"
+    }
+  ]
+}

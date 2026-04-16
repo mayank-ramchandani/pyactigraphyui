@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 2,
+  "algorithms": [
+    {
+      "id": "cole_kripke",
+      "backendKey": "cole_kripke",
+      "backendMethod": "CK",
+      "label": "Cole-Kripke",
+      "shortLabel": "CK",
+      "summary": "Epoch-by-epoch rest/activity scoring algorithm commonly used in adult actigraphy studies.",
+      "description": "Cole-Kripke is a classic epoch-by-epoch sleep/rest scoring algorithm.",
+      "citationText": "Cole RJ, Kripke DF, Gruen W, et al. Automatic sleep/wake identification from wrist activity.",
+      "context": "Legacy adult research",
+      "note": "General default for adult actigraphy sleep/rest scoring.",
+      "warnings": [],
+      "scoringType": "epoch_by_epoch",
+      "outputType": "binary_time_series",
+      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "default": true,
+      "allowMultipleSelection": true,
+      "supportsBinaryPreviewOverlay": true,
+      "reportingReady": true,
+      "uiExposure": {
+        "showInSelector": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": []
+    },
+    {
+      "id": "sadeh",
+      "backendKey": "sadeh",
+      "backendMethod": "Sadeh",
+      "label": "Sadeh",
+      "shortLabel": "Sadeh",
+      "summary": "Epoch-by-epoch rest/activity scoring algorithm often used in pediatric and adolescent studies.",
+      "description": "Sadeh is frequently used in younger populations, though it is also applied more broadly in actigraphy workflows.",
+      "citationText": "Sadeh A, Sharkey KM, Carskadon MA. Activity-based sleep-wake identification.",
+      "context": "Pediatric / adolescent research",
+      "note": "Favored for pediatric and adolescent applications.",
+      "warnings": [],
+      "scoringType": "epoch_by_epoch",
+      "outputType": "binary_time_series",
+      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "default": false,
+      "allowMultipleSelection": true,
+      "supportsBinaryPreviewOverlay": true,
+      "reportingReady": true,
+      "uiExposure": {
+        "showInSelector": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": []
+    },
+    {
+      "id": "oakley",
+      "backendKey": "oakley",
+      "backendMethod": "Oakley",
+      "label": "Oakley",
+      "shortLabel": "Oakley",
+      "summary": "Epoch-by-epoch rest/activity scoring algorithm associated with Actiware workflows.",
+      "description": "Oakley scoring is commonly associated with Actiware software from Respironics. Users should be cautious when applying it outside the device/software context it is commonly paired with.",
+      "citationText": "Oakley N. Validation with sleep/wake scoring in Actiwatch/Actiware contexts.",
+      "context": "Actiwatch / Actiware-style scoring",
+      "warnings": [
+        "Use with caution on non-Respironics datasets."
+      ],
+      "scoringType": "epoch_by_epoch",
+      "outputType": "binary_time_series",
+      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "default": false,
+      "allowMultipleSelection": true,
+      "supportsBinaryPreviewOverlay": true,
+      "reportingReady": true,
+      "uiExposure": {
+        "showInSelector": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "thresholdMode",
+          "label": "Threshold mode",
+          "type": "multiselect",
+          "default": ["auto"],
+          "options": ["auto", "manual"],
+          "description": "Run Oakley with automatically determined threshold, user-defined threshold, or both."
+        },
+        {
+          "name": "manualThreshold",
+          "label": "Manual wake threshold",
+          "type": "number",
+          "default": 40,
+          "min": 0,
+          "step": 1,
+          "description": "Note. A value of 40 is commonly described as a medium wake threshold in Actiware-style contexts."
+        }
+      ]
+    },
+    {
+      "id": "scripps",
+      "backendKey": "scripps",
+      "backendMethod": "Scripps",
+      "label": "Scripps",
+      "shortLabel": "Scripps",
+      "summary": "Epoch-by-epoch rest/activity scoring algorithm available in pyActigraphy’s sleep-algorithm toolkit.",
+      "description": "Scripps can be exposed alongside the other binary rest/activity scoring algorithms and previewed as an overlay over the full recording.",
+      "citationText": "Scripps Clinic / actigraphy sleep-wake scoring reference.",
+      "context": "Alternative epoch-by-epoch sleep-rest scoring",
+      "note": "Useful as an additional comparison overlay when users want to compare multiple scoring algorithms.",
+      "warnings": [],
+      "scoringType": "epoch_by_epoch",
+      "outputType": "binary_time_series",
+      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "default": false,
+      "allowMultipleSelection": true,
+      "supportsBinaryPreviewOverlay": true,
+      "reportingReady": true,
+      "uiExposure": {
+        "showInSelector": true,
+        "advanced": false,
+        "planned": true
+      },
+      "parameterSchema": []
+    },
+    {
+      "id": "crespo",
+      "backendKey": "crespo",
+      "backendMethod": "Crespo",
+      "label": "Crespo",
+      "shortLabel": "Crespo",
+      "summary": "Rest-period detection algorithm using pattern-based activity structure rather than only simple epoch-by-epoch scoring.",
+      "description": "Crespo is one of the automatic rest-detection approaches documented in pyActigraphy. It is used with its alpha parameter",
+      "citationText": "Crespo et al. automatic rest-period detection approach.",
+      "context": "Pattern-based rest detection",
+      "warnings": [],
+      "scoringType": "rest_period_detection",
+      "outputType": "binary_time_series",
+      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "default": false,
+      "allowMultipleSelection": true,
+      "supportsBinaryPreviewOverlay": true,
+      "reportingReady": true,
+      "uiExposure": {
+        "showInSelector": true,
+        "advanced": true,
+        "planned": true
+      },
+      "parameterSchema": [
+        {
+          "name": "alphaMode",
+          "label": "Alpha mode",
+          "type": "select",
+          "default": "default",
+          "options": ["default", "auto", "manual"],
+          "description": "Run Crespo using tutorial-like defaults, automatic behavior, or a user-specified alpha."
+        },
+        {
+          "name": "alpha",
+          "label": "Alpha (hours)",
+          "type": "number",
+          "default": 8,
+          "min": 0,
+          "step": 0.5,
+          "description": "User-defined alpha in hours when manual alpha mode is selected."
+        }
+      ]
+    },
+    {
+      "id": "roenneberg",
+      "backendKey": "roenneberg",
+      "backendMethod": "Roenneberg",
+      "label": "Roenneberg",
+      "shortLabel": "Roenneberg",
+      "summary": "Automatic rest-period detection approach available in pyActigraphy.",
+      "description": "Roenneberg is one of the pyActigraphy-supported rest-detection workflows.",
+      "citationText": "Roenneberg-inspired automatic rest-period detection approach.",
+      "context": "Automatic rest detection",
+      "warnings": [],
+      "scoringType": "rest_period_detection",
+      "outputType": "binary_time_series",
+      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
+      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "default": false,
+      "allowMultipleSelection": true,
+      "supportsBinaryPreviewOverlay": true,
+      "reportingReady": true,
+      "uiExposure": {
+        "showInSelector": true,
+        "advanced": true,
+        "planned": true
+      },
+      "parameterSchema": [
+        {
+          "name": "thresholdFactors",
+          "label": "Threshold factor(s)",
+          "type": "number_list",
+          "default": [0.15],
+          "description": "One or more threshold-factor values to run and compare."
+        }
+      ]
+    }
+  ]
+}
