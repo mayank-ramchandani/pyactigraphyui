@@ -1,7 +1,13 @@
 import React from "react";
 
-export default function WorkflowSidebar({ workflow, currentStep }) {
+export default function WorkflowSidebar({
+  workflow,
+  currentStep,
+  maxUnlockedStep,
+  onStepClick,
+}) {
   const currentStepNumber = Number(currentStep);
+  const unlockedStepNumber = Number(maxUnlockedStep || currentStep);
 
   return (
     <div
@@ -34,15 +40,15 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
           marginBottom: 16,
         }}
       >
-        This workflow is sequential. Completed steps are shown for reference, but earlier steps are locked once you move forward.
+        You can move between the current step and any unlocked earlier step.
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
         {workflow.map((item, index) => {
           const stepNumber = Number(item.id);
-          const isActive = item.id === currentStep;
+          const isActive = stepNumber === currentStepNumber;
           const isCompleted = stepNumber < currentStepNumber;
-          const isUpcoming = stepNumber > currentStepNumber;
+          const isUnlocked = stepNumber <= unlockedStepNumber;
           const isLast = index === workflow.length - 1;
 
           return (
@@ -63,7 +69,10 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
                   minHeight: isLast ? 36 : 72,
                 }}
               >
-                <div
+                <button
+                  type="button"
+                  disabled={!isUnlocked}
+                  onClick={() => isUnlocked && onStepClick?.(item.id)}
                   style={{
                     width: 34,
                     height: 34,
@@ -76,10 +85,12 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
                     justifyContent: "center",
                     fontWeight: 700,
                     flexShrink: 0,
+                    cursor: isUnlocked ? "pointer" : "not-allowed",
+                    opacity: isUnlocked ? 1 : 0.5,
                   }}
                 >
                   {isCompleted ? "✓" : item.id}
-                </div>
+                </button>
 
                 {!isLast && (
                   <div
@@ -95,7 +106,10 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
                 )}
               </div>
 
-              <div
+              <button
+                type="button"
+                disabled={!isUnlocked}
+                onClick={() => isUnlocked && onStepClick?.(item.id)}
                 style={{
                   border: isActive
                     ? "1px solid #0f172a"
@@ -105,7 +119,9 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
                   borderRadius: 16,
                   padding: 14,
                   background: isActive ? "#f8fafc" : isCompleted ? "#f8fafc" : "white",
-                  opacity: isUpcoming ? 0.9 : 1,
+                  opacity: isUnlocked ? 1 : 0.6,
+                  textAlign: "left",
+                  cursor: isUnlocked ? "pointer" : "not-allowed",
                 }}
               >
                 <div
@@ -146,7 +162,7 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {isActive ? "Current" : isCompleted ? "Done" : "Pending"}
+                    {isActive ? "Current" : isCompleted ? "Done" : isUnlocked ? "Unlocked" : "Locked"}
                   </div>
                 </div>
 
@@ -161,7 +177,7 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
                     {item.description}
                   </div>
                 )}
-              </div>
+              </button>
             </div>
           );
         })}

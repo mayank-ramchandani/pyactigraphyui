@@ -37,6 +37,7 @@ function extractFileType(name) {
 
 export default function Dashboard() {
   const [currentStep, setCurrentStep] = useState("1");
+  const [maxUnlockedStep, setMaxUnlockedStep] = useState("1");
 
   const [uploadedFiles, setUploadedFiles] = useState({
     actigraphy: [],
@@ -100,6 +101,38 @@ export default function Dashboard() {
       }),
     []
   );
+
+  const currentStepIndex = workflowSteps.findIndex((step) => step.id === currentStep);
+  const currentStepNumber = Number(currentStep);
+
+  const goToStep = (stepId) => {
+    if (Number(stepId) <= Number(maxUnlockedStep)) {
+      setCurrentStep(stepId);
+    }
+  };
+
+  const unlockAndGoToStep = (stepId) => {
+    const target = Number(stepId);
+    const unlocked = Number(maxUnlockedStep);
+    if (target > unlocked) {
+      setMaxUnlockedStep(String(target));
+    }
+    setCurrentStep(String(stepId));
+  };
+
+  const goNext = () => {
+    if (currentStepIndex < workflowSteps.length - 1) {
+      const nextStep = workflowSteps[currentStepIndex + 1];
+      unlockAndGoToStep(nextStep.id);
+    }
+  };
+
+  const goPrevious = () => {
+    if (currentStepIndex > 0) {
+      const prevStep = workflowSteps[currentStepIndex - 1];
+      goToStep(prevStep.id);
+    }
+  };
 
   const familyMetricIds = useMemo(() => {
     const familyLookup = Object.fromEntries(
@@ -183,15 +216,15 @@ export default function Dashboard() {
         temperature_col: "",
         nonwear_col: "",
       });
-      setCurrentStep("3");
+      unlockAndGoToStep("3");
     } else {
-      setCurrentStep("2");
+      unlockAndGoToStep("2");
     }
   };
 
   const handleCsvNeedsMapping = () => {
     setCsvNeedsMapping(true);
-    setCurrentStep("2");
+    unlockAndGoToStep("2");
   };
 
   const onPreview = async () => {
@@ -227,7 +260,7 @@ export default function Dashboard() {
 
       setPreviewData(data);
       setPreviewLoaded(true);
-      setCurrentStep("3");
+      unlockAndGoToStep("3");
     } catch (err) {
       setPreviewError(err.message || "Failed to load preview.");
       setPreviewLoaded(false);
@@ -270,7 +303,7 @@ export default function Dashboard() {
       setQcWarnings(data.qcWarnings || []);
       setSelectedResultMetric(Object.keys(results)[0] || "");
       setResultsGenerated(true);
-      setCurrentStep("9");
+      unlockAndGoToStep("9");
     } catch (err) {
       setAnalysisError(err.message || "Failed to generate results.");
       setResultsGenerated(false);
@@ -279,232 +312,147 @@ export default function Dashboard() {
     }
   };
 
-  const renderCurrentStep = () => {
-    const detectedInputType =
-      previewData?.detected_input_type || extractFileType(actigraphyFile?.name) || "unknown";
+  const detectedInputType =
+    previewData?.detected_input_type || extractFileType(actigraphyFile?.name) || "unknown";
 
-    if (currentStep === "1") {
-      return (
-        <FileSelectionPanel
-          title={appConfig.panels.fileSelection.title}
-          uploadedFiles={uploadedFiles}
-          setUploadedFiles={setUploadedFiles}
-          setCurrentStep={setCurrentStep}
-          analysisMode={analysisMode}
-          setAnalysisMode={setAnalysisMode}
-          setPreviewLoaded={setPreviewLoaded}
-          setPreviewData={setPreviewData}
-          setPreviewError={setPreviewError}
-          setAnalysisError={setAnalysisError}
-          setResultsGenerated={setResultsGenerated}
-          fileError={fileError}
-          setFileError={setFileError}
-          onActigraphyFilesChange={handleActigraphyFilesChange}
-          onCsvNeedsMapping={handleCsvNeedsMapping}
-        />
-      );
-    }
+  let content = null;
 
-    if (currentStep === "2") {
-      return (
-        <CsvMappingPanel
-          title={appConfig.panels.csvMapping.title}
-          csvFile={actigraphyFile}
-          csvMapping={csvMapping}
-          setCsvMapping={setCsvMapping}
-          csvSeparator={csvSeparator}
-          setCsvSeparator={setCsvSeparator}
-          onContinue={onPreview}
-        />
-      );
-    }
-
-    if (currentStep === "3") {
-      return (
-        <PreviewPanel
-          title={appConfig.panels.preview.title}
-          mode="activity"
-          previewLoaded={previewLoaded}
-          previewLoading={previewLoading}
-          previewError={previewError}
-          previewData={previewData}
-          onPreview={onPreview}
-          onContinue={() => setCurrentStep("4")}
-        />
-      );
-    }
-
-    if (currentStep === "4") {
-      return (
-        <PreviewPanel
-          title={appConfig.panels.lightPreview.title}
-          mode="light"
-          previewLoaded={previewLoaded}
-          previewLoading={previewLoading}
-          previewError={previewError}
-          previewData={previewData}
-          onPreview={onPreview}
-          onContinue={() => setCurrentStep("5")}
-        />
-      );
-    }
-
-    if (currentStep === "5") {
-      return (
-        <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
-          <h2 style={{ marginTop: 0 }}>{appConfig.panels.cleaning.title}</h2>
-          <p style={{ color: "#64748b", lineHeight: 1.6 }}>{appConfig.uiText.maskingHelp}</p>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-            <button
-              type="button"
-              onClick={() => setCurrentStep("6")}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 12,
-                background: "#0f172a",
-                color: "white",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Continue
-            </button>
-          </div>
+  if (currentStep === "1") {
+    content = (
+      <FileSelectionPanel
+        title={appConfig.panels.fileSelection.title}
+        uploadedFiles={uploadedFiles}
+        setUploadedFiles={setUploadedFiles}
+        setCurrentStep={setCurrentStep}
+        analysisMode={analysisMode}
+        setAnalysisMode={setAnalysisMode}
+        setPreviewLoaded={setPreviewLoaded}
+        setPreviewData={setPreviewData}
+        setPreviewError={setPreviewError}
+        setAnalysisError={setAnalysisError}
+        setResultsGenerated={setResultsGenerated}
+        fileError={fileError}
+        setFileError={setFileError}
+        onActigraphyFilesChange={handleActigraphyFilesChange}
+        onCsvNeedsMapping={handleCsvNeedsMapping}
+      />
+    );
+  } else if (currentStep === "2") {
+    content = (
+      <CsvMappingPanel
+        title={appConfig.panels.csvMapping.title}
+        csvFile={actigraphyFile}
+        csvMapping={csvMapping}
+        setCsvMapping={setCsvMapping}
+        csvSeparator={csvSeparator}
+        setCsvSeparator={setCsvSeparator}
+        onContinue={onPreview}
+      />
+    );
+  } else if (currentStep === "3") {
+    content = (
+      <PreviewPanel
+        title={appConfig.panels.preview.title}
+        mode="activity"
+        previewLoaded={previewLoaded}
+        previewLoading={previewLoading}
+        previewError={previewError}
+        previewData={previewData}
+        onPreview={onPreview}
+        onContinue={() => unlockAndGoToStep("4")}
+      />
+    );
+  } else if (currentStep === "4") {
+    content = (
+      <PreviewPanel
+        title={appConfig.panels.lightPreview.title}
+        mode="light"
+        previewLoaded={previewLoaded}
+        previewLoading={previewLoading}
+        previewError={previewError}
+        previewData={previewData}
+        onPreview={onPreview}
+        onContinue={() => unlockAndGoToStep("5")}
+      />
+    );
+  } else if (currentStep === "5") {
+    content = (
+      <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
+        <h2 style={{ marginTop: 0 }}>{appConfig.panels.cleaning.title}</h2>
+        <p style={{ color: "#64748b", lineHeight: 1.6 }}>{appConfig.uiText.maskingHelp}</p>
+      </div>
+    );
+  } else if (currentStep === "6") {
+    content = (
+      <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
+        <h2 style={{ marginTop: 0 }}>{appConfig.panels.sleepDiary.title}</h2>
+        <p style={{ color: "#64748b", lineHeight: 1.6 }}>{appConfig.uiText.diaryHelp}</p>
+        <div style={{ fontSize: 14, color: "#475569", marginTop: 12 }}>
+          Uploaded files: {(uploadedFiles.sleepDiary || []).length}
         </div>
-      );
-    }
-
-    if (currentStep === "6") {
-      return (
-        <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
-          <h2 style={{ marginTop: 0 }}>{appConfig.panels.sleepDiary.title}</h2>
-          <p style={{ color: "#64748b", lineHeight: 1.6 }}>{appConfig.uiText.diaryHelp}</p>
-          <div style={{ fontSize: 14, color: "#475569", marginTop: 12 }}>
-            Uploaded files: {(uploadedFiles.sleepDiary || []).length}
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-            <button
-              type="button"
-              onClick={() => setCurrentStep("7")}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 12,
-                background: "#0f172a",
-                color: "white",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Continue
-            </button>
-          </div>
+      </div>
+    );
+  } else if (currentStep === "7") {
+    content = (
+      <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
+        <h2 style={{ marginTop: 0 }}>{appConfig.panels.startStop.title}</h2>
+        <p style={{ color: "#64748b", lineHeight: 1.6 }}>{appConfig.uiText.sstHelp}</p>
+        <div style={{ fontSize: 14, color: "#475569", marginTop: 12 }}>
+          Uploaded files: {(uploadedFiles.startStop || []).length}
         </div>
-      );
-    }
-
-    if (currentStep === "7") {
-      return (
-        <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
-          <h2 style={{ marginTop: 0 }}>{appConfig.panels.startStop.title}</h2>
-          <p style={{ color: "#64748b", lineHeight: 1.6 }}>{appConfig.uiText.sstHelp}</p>
-          <div style={{ fontSize: 14, color: "#475569", marginTop: 12 }}>
-            Uploaded files: {(uploadedFiles.startStop || []).length}
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-            <button
-              type="button"
-              onClick={() => setCurrentStep("8")}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 12,
-                background: "#0f172a",
-                color: "white",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (currentStep === "8") {
-      return (
-        <div style={{ display: "grid", gap: 20 }}>
-          <MetricsPanel
-            title={appConfig.panels.metrics.title}
-            metricRegistry={metricRegistry}
-            algorithmRegistry={algorithmRegistry}
-            analysisFamilyRegistry={analysisFamilyRegistry}
-            sharedParamRegistry={sharedParamRegistry}
-            selectedMetrics={selectedMetrics}
-            setSelectedMetrics={setSelectedMetrics}
-            selectedFamilies={selectedFamilies}
-            setSelectedFamilies={setSelectedFamilies}
-            analysisScope={analysisScope}
-            setAnalysisScope={setAnalysisScope}
-            selectedAlgorithm={selectedAlgorithm}
-            setSelectedAlgorithm={setSelectedAlgorithm}
-            setCurrentStep={setCurrentStep}
-            sharedValues={sharedValues}
-            setSharedValues={setSharedValues}
-            metricOverrides={metricOverrides}
-            setMetricOverrides={setMetricOverrides}
-            algorithmParams={algorithmParams}
-            setAlgorithmParams={setAlgorithmParams}
-            analysisMode={analysisMode}
-            inputType={detectedInputType}
-          />
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={handleGenerateResults}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 12,
-                background: "#0f172a",
-                color: "white",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Generate Results
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (currentStep === "9") {
-      return (
-        <ResultsPanel
-          title={appConfig.panels.results.title}
-          resultsGenerated={resultsGenerated}
-          onGenerate={handleGenerateResults}
-          selectedResultMetric={selectedResultMetric}
-          setSelectedResultMetric={setSelectedResultMetric}
-          selectedMetrics={resolvedSelectedMetrics}
-          summaryResults={summaryResults}
-          qcWarnings={qcWarnings}
+      </div>
+    );
+  } else if (currentStep === "8") {
+    content = (
+      <div style={{ display: "grid", gap: 20 }}>
+        <MetricsPanel
+          title={appConfig.panels.metrics.title}
           metricRegistry={metricRegistry}
           algorithmRegistry={algorithmRegistry}
+          analysisFamilyRegistry={analysisFamilyRegistry}
+          sharedParamRegistry={sharedParamRegistry}
+          selectedMetrics={selectedMetrics}
+          setSelectedMetrics={setSelectedMetrics}
+          selectedFamilies={selectedFamilies}
+          setSelectedFamilies={setSelectedFamilies}
+          analysisScope={analysisScope}
+          setAnalysisScope={setAnalysisScope}
           selectedAlgorithm={selectedAlgorithm}
-          analysisConfig={resolvedAnalysisConfig}
-          analysisError={analysisError}
-          analysisLoading={analysisLoading}
+          setSelectedAlgorithm={setSelectedAlgorithm}
+          setCurrentStep={setCurrentStep}
+          sharedValues={sharedValues}
+          setSharedValues={setSharedValues}
+          metricOverrides={metricOverrides}
+          setMetricOverrides={setMetricOverrides}
+          algorithmParams={algorithmParams}
+          setAlgorithmParams={setAlgorithmParams}
           analysisMode={analysisMode}
+          inputType={detectedInputType}
         />
-      );
-    }
-
-    return (
+      </div>
+    );
+  } else if (currentStep === "9") {
+    content = (
+      <ResultsPanel
+        title={appConfig.panels.results.title}
+        resultsGenerated={resultsGenerated}
+        onGenerate={handleGenerateResults}
+        selectedResultMetric={selectedResultMetric}
+        setSelectedResultMetric={setSelectedResultMetric}
+        selectedMetrics={resolvedSelectedMetrics}
+        summaryResults={summaryResults}
+        qcWarnings={qcWarnings}
+        metricRegistry={metricRegistry}
+        algorithmRegistry={algorithmRegistry}
+        selectedAlgorithm={selectedAlgorithm}
+        analysisConfig={resolvedAnalysisConfig}
+        analysisError={analysisError}
+        analysisLoading={analysisLoading}
+        analysisMode={analysisMode}
+      />
+    );
+  } else {
+    content = (
       <ExportPanel
         title={appConfig.panels.export.title}
         exports={exportRegistry.exports}
@@ -512,7 +460,10 @@ export default function Dashboard() {
         summaryResults={summaryResults}
       />
     );
-  };
+  }
+
+  const canGoPrevious = currentStepIndex > 0;
+  const canGoNext = currentStepIndex < workflowSteps.length - 1 && currentStepNumber < Number(maxUnlockedStep) + 1;
 
   return (
     <div
@@ -539,11 +490,64 @@ export default function Dashboard() {
         >
           {appConfig.layout.sidebarEnabled && (
             <div style={{ position: "sticky", top: 24 }}>
-              <WorkflowSidebar workflow={workflowSteps} currentStep={currentStep} />
+              <WorkflowSidebar
+                workflow={workflowSteps}
+                currentStep={currentStep}
+                maxUnlockedStep={maxUnlockedStep}
+                onStepClick={goToStep}
+              />
             </div>
           )}
 
-          <div>{renderCurrentStep()}</div>
+          <div style={{ display: "grid", gap: 16 }}>
+            {content}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                background: "white",
+                border: "1px solid #e2e8f0",
+                borderRadius: 16,
+                padding: 16,
+              }}
+            >
+              <button
+                type="button"
+                onClick={goPrevious}
+                disabled={!canGoPrevious}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 12,
+                  background: canGoPrevious ? "white" : "#e2e8f0",
+                  color: canGoPrevious ? "#0f172a" : "#94a3b8",
+                  border: "1px solid #cbd5e1",
+                  cursor: canGoPrevious ? "pointer" : "not-allowed",
+                  fontWeight: 600,
+                }}
+              >
+                Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={!canGoNext}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 12,
+                  background: canGoNext ? "#0f172a" : "#94a3b8",
+                  color: "white",
+                  border: "none",
+                  cursor: canGoNext ? "pointer" : "not-allowed",
+                  fontWeight: 600,
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
