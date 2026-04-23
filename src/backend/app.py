@@ -53,6 +53,7 @@ def _load_raw_or_tabular(file_path, original_name, csv_mapping, csv_separator):
             mapped_df = load_custom_tabular(
                 file_path=file_path,
                 timestamp_col=csv_mapping.get("timestamp_col"),
+                time_col=csv_mapping.get("time_col"),
                 activity_col=csv_mapping.get("activity_col"),
                 light_col=csv_mapping.get("light_col") or None,
                 temperature_col=csv_mapping.get("temperature_col") or None,
@@ -67,6 +68,24 @@ def _load_raw_or_tabular(file_path, original_name, csv_mapping, csv_separator):
 
     raw = load_native_file(file_path, reader_type)
     return raw, reader_type, {}
+
+
+def _load_light_raw_with_fallback(file_path, original_name, csv_separator):
+    reader_type = infer_reader_type(file_path)
+
+    try:
+        if reader_type == "tabular":
+            mapped_df, resolved_mapping = load_auto_tabular(file_path, sep=csv_separator)
+            raw = build_baseraw_from_dataframe(mapped_df, name=original_name)
+            return raw, reader_type, resolved_mapping
+
+        raw = load_native_file(file_path, reader_type)
+        return raw, reader_type, {}
+    except Exception:
+        # fallback path for brittle native readers like some RPX light-enabled exports
+        mapped_df, resolved_mapping = load_auto_tabular(file_path, sep=csv_separator)
+        raw = build_baseraw_from_dataframe(mapped_df, name=original_name)
+        return raw, "tabular_fallback", resolved_mapping
 
 
 @app.post("/api/preview/basic")
@@ -91,7 +110,7 @@ async def preview_basic(
 
         if (not light_preview.get("light_preview_available")) and lightFile is not None:
             light_tmp = _write_upload_to_temp(lightFile)
-            light_raw, _, _ = _load_raw_or_tabular(light_tmp, lightFile.filename, {}, csvSeparator)
+            light_raw, _, _ = _load_light_raw_with_fallback(light_tmp, lightFile.filename, csvSeparator)
             light_preview = build_light_preview(raw=light_raw, resample_freq=resampleFreq)
 
         return JSONResponse(

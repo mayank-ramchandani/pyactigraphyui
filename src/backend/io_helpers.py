@@ -25,20 +25,20 @@ READERS = {
 
 COMMON_TIMESTAMP_COLUMNS = [
     "Timestamp", "timestamp", "DateTime", "datetime", "time", "Time",
-    "date_time", "DATE/TIME", "Data", "Hora", "Date", "DATE"
+    "date_time", "DATE/TIME", "Data", "Hora", "Date", "DATE", "Datum", "Zeit"
 ]
 
 COMMON_ACTIVITY_COLUMNS = [
     "VM", "vm", "activity", "Activity", "Axis1", "AxisXCounts",
     "activity_counts", "counts", "Atividade", "PIM", "TAT", "ZCM",
-    "Activity Marker", "activity"
+    "Activity Marker", "Aktivität"
 ]
 
 COMMON_LIGHT_COLUMNS = [
     "light", "Light", "Lux", "lux", "Illuminance", "illuminance",
     "LIGHT", "AMB LIGHT", "Luminosidade", "RED LIGHT", "GREEN LIGHT",
     "BLUE LIGHT", "IR LIGHT", "UVA LIGHT", "UVB LIGHT",
-    "MELANOPIC_LUX", "CLEAR", "whitelight"
+    "MELANOPIC_LUX", "CLEAR", "whitelight", "Weißes Licht"
 ]
 
 COMMON_TEMPERATURE_COLUMNS = [
@@ -47,16 +47,17 @@ COMMON_TEMPERATURE_COLUMNS = [
 ]
 
 COMMON_NONWEAR_COLUMNS = [
-    "nonwear", "NonWear", "mask", "Mask", "wear", "Wear", "offwrist"
+    "nonwear", "NonWear", "mask", "Mask", "wear", "Wear", "offwrist",
+    "Status „Nicht am Handgelenk“"
 ]
 
-PREFERRED_ACTIVITY_ORDER = ["VM", "activity", "Atividade", "PIM", "TAT", "ZCM", "Axis1"]
-PREFERRED_LIGHT_ORDER = ["LIGHT", "AMB LIGHT", "Luminosidade", "Lux", "light", "whitelight", "MELANOPIC_LUX", "CLEAR"]
+PREFERRED_ACTIVITY_ORDER = ["VM", "activity", "Atividade", "PIM", "TAT", "ZCM", "Axis1", "Aktivität"]
+PREFERRED_LIGHT_ORDER = ["LIGHT", "AMB LIGHT", "Luminosidade", "Lux", "light", "whitelight", "MELANOPIC_LUX", "CLEAR", "Weißes Licht"]
 
 COMMON_SEPARATORS = [",", ";", "\t", "|"]
 
 
-def _read_text_head(file_path: str, n_chars: int = 12000) -> str:
+def _read_text_head(file_path: str, n_chars: int = 20000) -> str:
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         return f.read(n_chars)
 
@@ -70,19 +71,15 @@ def infer_reader_type(file_path: str):
     if suffix in ("csv", "txt", "gz"):
         head = _read_text_head(file_path).lower()
 
-        # Actiware / RPX exports in different languages
         if "actiware export file" in head or "actiware-exportdatei" in head or "fichier d'exportation actiware" in head:
             return "rpx"
 
-        # Daqtometer export
         if "serial number:" in head and "sample rate:" in head and "store rate:" in head:
             return "dqt"
 
-        # TAL export
         if "luminosidade" in head and "atividade" in head and "data; hora;" in head:
             return "tal"
 
-        # MESA-style table
         if "mesaid,line,linetime" in head:
             return "mesa"
 
@@ -138,7 +135,6 @@ def _looks_like_real_header(columns):
     if len(cols) < 2:
         return False
 
-    matches = 0
     known = (
         [x.lower() for x in COMMON_TIMESTAMP_COLUMNS]
         + [x.lower() for x in COMMON_ACTIVITY_COLUMNS]
@@ -147,6 +143,7 @@ def _looks_like_real_header(columns):
         + [x.lower() for x in COMMON_NONWEAR_COLUMNS]
     )
 
+    matches = 0
     for c in cols:
         if c.lower() in known:
             matches += 1
@@ -160,7 +157,7 @@ def _try_read_delimited(file_path: str, sep: str, header_row: int):
         sep=sep,
         header=header_row,
         engine="python",
-        on_bad_lines="skip"
+        on_bad_lines="skip",
     )
 
 
@@ -206,10 +203,32 @@ def _read_delimited_with_header_detection(file_path: str, preferred_sep: Optiona
     raise ValueError("Could not parse tabular file with any supported delimiter/header combination.")
 
 
+def _read_rpx_epoch_table(file_path: str) -> pd.DataFrame:
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        lines = f.readlines()
+
+    header_idx = None
+    for idx, line in enumerate(lines):
+        if '"Zeile","Datum","Zeit"' in line or '"Line","Date","Time"' in line:
+            header_idx = idx
+            break
+
+    if header_idx is None:
+        raise ValueError("Could not find RPX epoch data header.")
+
+    from io import StringIO
+    table_text = "".join(lines[header_idx:])
+    df = pd.read_csv(StringIO(table_text), engine="python")
+    return df
+
+
 def read_tabular_file(file_path: str, sep: Optional[str] = None) -> pd.DataFrame:
     suffix = Path(file_path).suffix.lower()
 
     if suffix in (".csv", ".txt", ".gz"):
+        head = _read_text_head(file_path).lower()
+        if "actiware export file" in head or "actiware-exportdatei" in head or "fichier d'exportation actiware" in head:
+            return _read_rpx_epoch_table(file_path)
         return _read_delimited_with_header_detection(file_path, preferred_sep=sep)
 
     if suffix in (".xls", ".xlsx", ".ods"):
@@ -222,7 +241,8 @@ def detect_csv_mapping(df: pd.DataFrame) -> Dict[str, Any]:
     cols = list(df.columns)
 
     mapping = {
-        "timestamp_col": _find_first_existing(cols, COMMON_TIMESTAMP_COLUMNS),
+        "timestamp_col": _find_first_existing(cols, ["Timestamp", "DateTime", "datetime", "Data", "Date", "Datum"]),
+        "time_col": _find_first_existing(cols, ["Time", "Hora", "Zeit"]),
         "activity_col": _choose_preferred_column(cols, PREFERRED_ACTIVITY_ORDER, COMMON_ACTIVITY_COLUMNS),
         "light_col": _choose_preferred_column(cols, PREFERRED_LIGHT_ORDER, COMMON_LIGHT_COLUMNS),
         "temperature_col": _find_first_existing(cols, COMMON_TEMPERATURE_COLUMNS),
@@ -239,6 +259,7 @@ def load_custom_tabular(
     light_col: Optional[str] = None,
     temperature_col: Optional[str] = None,
     nonwear_col: Optional[str] = None,
+    time_col: Optional[str] = None,
     sep: str = ",",
 ):
     df = read_tabular_file(file_path, sep=sep)
@@ -248,7 +269,12 @@ def load_custom_tabular(
 
     work = df.copy()
 
-    if timestamp_col == "Data" and "Hora" in work.columns:
+    if time_col and time_col in work.columns:
+        work["_combined_timestamp"] = (
+            work[timestamp_col].astype(str).str.strip() + " " + work[time_col].astype(str).str.strip()
+        )
+        time_source = "_combined_timestamp"
+    elif timestamp_col == "Data" and "Hora" in work.columns:
         work["_combined_timestamp"] = (
             work["Data"].astype(str).str.strip() + " " + work["Hora"].astype(str).str.strip()
         )
@@ -256,6 +282,11 @@ def load_custom_tabular(
     elif timestamp_col == "Date" and "Time" in work.columns:
         work["_combined_timestamp"] = (
             work["Date"].astype(str).str.strip() + " " + work["Time"].astype(str).str.strip()
+        )
+        time_source = "_combined_timestamp"
+    elif timestamp_col == "Datum" and "Zeit" in work.columns:
+        work["_combined_timestamp"] = (
+            work["Datum"].astype(str).str.strip() + " " + work["Zeit"].astype(str).str.strip()
         )
         time_source = "_combined_timestamp"
     else:
@@ -302,6 +333,7 @@ def load_auto_tabular(file_path: str, sep: str = ",") -> Tuple[pd.DataFrame, Dic
     return load_custom_tabular(
         file_path=file_path,
         timestamp_col=mapping["timestamp_col"],
+        time_col=mapping.get("time_col"),
         activity_col=mapping.get("activity_col"),
         light_col=mapping.get("light_col"),
         temperature_col=mapping.get("temperature_col"),
