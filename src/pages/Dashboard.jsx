@@ -532,9 +532,9 @@ export default function Dashboard() {
 
             <ExportPanel
               title={appConfig.panels.export.title}
-              exports={exportRegistry.exports}
-              enabled={resultsGenerated}
-              summaryResults={summaryResults}
+              exportRegistry={exportRegistry}
+              setCurrentStep={setCurrentStep}
+              resultsGenerated={resultsGenerated}
             />
           </div>
         </div>
