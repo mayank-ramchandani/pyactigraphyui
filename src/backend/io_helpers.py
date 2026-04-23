@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
+import csv
 
 import pandas as pd
 import pyActigraphy
@@ -23,22 +24,26 @@ READERS = {
 }
 
 COMMON_TIMESTAMP_COLUMNS = [
-    "Timestamp", "timestamp", "DateTime", "datetime", "time", "Time", "date_time", "DATE/TIME", "Data", "Hora"
+    "Timestamp", "timestamp", "DateTime", "datetime", "time", "Time",
+    "date_time", "DATE/TIME", "Data", "Hora", "Date", "DATE"
 ]
 
 COMMON_ACTIVITY_COLUMNS = [
-    "VM", "vm", "activity", "Activity", "Axis1", "AxisXCounts", "activity_counts", "counts",
-    "Atividade", "PIM", "TAT", "ZCM"
+    "VM", "vm", "activity", "Activity", "Axis1", "AxisXCounts",
+    "activity_counts", "counts", "Atividade", "PIM", "TAT", "ZCM",
+    "Activity Marker"
 ]
 
 COMMON_LIGHT_COLUMNS = [
     "light", "Light", "Lux", "lux", "Illuminance", "illuminance",
-    "LIGHT", "AMB LIGHT", "Luminosidade", "RED LIGHT", "GREEN LIGHT", "BLUE LIGHT",
-    "IR LIGHT", "UVA LIGHT", "UVB LIGHT", "MELANOPIC_LUX", "CLEAR"
+    "LIGHT", "AMB LIGHT", "Luminosidade", "RED LIGHT", "GREEN LIGHT",
+    "BLUE LIGHT", "IR LIGHT", "UVA LIGHT", "UVB LIGHT",
+    "MELANOPIC_LUX", "CLEAR"
 ]
 
 COMMON_TEMPERATURE_COLUMNS = [
-    "temperature", "Temperature", "temp", "Temp", "TEMPERATURE", "EXT TEMPERATURE"
+    "temperature", "Temperature", "temp", "Temp", "TEMPERATURE",
+    "EXT TEMPERATURE"
 ]
 
 COMMON_NONWEAR_COLUMNS = [
@@ -47,6 +52,8 @@ COMMON_NONWEAR_COLUMNS = [
 
 PREFERRED_ACTIVITY_ORDER = ["VM", "activity", "Atividade", "PIM", "TAT", "ZCM"]
 PREFERRED_LIGHT_ORDER = ["LIGHT", "AMB LIGHT", "Luminosidade", "Lux", "light", "MELANOPIC_LUX", "CLEAR"]
+
+COMMON_SEPARATORS = [",", ";", "\t", "|"]
 
 
 def infer_reader_type(file_path: str):
@@ -88,15 +95,94 @@ def _choose_preferred_column(columns: List[str], preferred_order: List[str], fal
     return _find_first_existing(columns, fallback_candidates)
 
 
+def _sniff_separator(file_path: str, fallback=","):
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            sample = f.read(5000)
+        dialect = csv.Sniffer().sniff(sample, delimiters=";,|\t,")
+        return dialect.delimiter
+    except Exception:
+        return fallback
+
+
+def _looks_like_real_header(columns):
+    cols = [str(c).strip() for c in columns if str(c).strip()]
+    if len(cols) < 2:
+        return False
+
+    matches = 0
+    for c in cols:
+        lc = c.lower()
+        if (
+            lc in [x.lower() for x in COMMON_TIMESTAMP_COLUMNS]
+            or lc in [x.lower() for x in COMMON_ACTIVITY_COLUMNS]
+            or lc in [x.lower() for x in COMMON_LIGHT_COLUMNS]
+            or lc in [x.lower() for x in COMMON_TEMPERATURE_COLUMNS]
+            or lc in [x.lower() for x in COMMON_NONWEAR_COLUMNS]
+        ):
+            matches += 1
+
+    return matches >= 1
+
+
+def _try_read_delimited(file_path: str, sep: str, header_row: int):
+    return pd.read_csv(
+        file_path,
+        sep=sep,
+        header=header_row,
+        engine="python",
+        on_bad_lines="skip"
+    )
+
+
+def _read_delimited_with_header_detection(file_path: str, preferred_sep: Optional[str] = None):
+    seps = []
+    if preferred_sep:
+        seps.append(preferred_sep)
+    sniffed = _sniff_separator(file_path, fallback=",")
+    if sniffed not in seps:
+        seps.append(sniffed)
+    for sep in COMMON_SEPARATORS:
+        if sep not in seps:
+            seps.append(sep)
+
+    best_df = None
+    best_score = -1
+
+    for sep in seps:
+        for header_row in range(0, 25):
+            try:
+                df = _try_read_delimited(file_path, sep=sep, header_row=header_row)
+                if df is None or df.empty:
+                    continue
+
+                cols = list(df.columns)
+                score = 0
+                if _looks_like_real_header(cols):
+                    score += 10
+                score += len([c for c in cols if str(c).strip()])
+
+                if score > best_score:
+                    best_score = score
+                    best_df = df
+
+                if _looks_like_real_header(cols):
+                    return df
+            except Exception:
+                continue
+
+    if best_df is not None:
+        return best_df
+
+    raise ValueError("Could not parse tabular file with any supported delimiter/header combination.")
+
+
 def read_tabular_file(file_path: str, sep: Optional[str] = None) -> pd.DataFrame:
     suffix = Path(file_path).suffix.lower()
 
-    if suffix == ".csv":
-        return pd.read_csv(file_path, sep=sep or ",")
-    if suffix == ".txt":
-        return pd.read_csv(file_path, sep=sep or ";")
-    if suffix == ".gz":
-        return pd.read_csv(file_path, compression="gzip")
+    if suffix in (".csv", ".txt", ".gz"):
+        return _read_delimited_with_header_detection(file_path, preferred_sep=sep)
+
     if suffix in (".xls", ".xlsx", ".ods"):
         return pd.read_excel(file_path)
 
@@ -136,6 +222,11 @@ def load_custom_tabular(
     if timestamp_col == "Data" and "Hora" in work.columns:
         work["_combined_timestamp"] = (
             work["Data"].astype(str).str.strip() + " " + work["Hora"].astype(str).str.strip()
+        )
+        time_source = "_combined_timestamp"
+    elif timestamp_col == "Date" and "Time" in work.columns:
+        work["_combined_timestamp"] = (
+            work["Date"].astype(str).str.strip() + " " + work["Time"].astype(str).str.strip()
         )
         time_source = "_combined_timestamp"
     else:
