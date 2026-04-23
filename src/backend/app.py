@@ -47,7 +47,7 @@ def _json_or_empty(value):
 def _load_raw_or_tabular(file_path, original_name, csv_mapping, csv_separator):
     reader_type = infer_reader_type(file_path)
 
-    if reader_type in ("csv", "txt", "gz", "xls", "xlsx", "ods"):
+    if reader_type == "tabular":
         has_manual_mapping = bool(csv_mapping.get("timestamp_col")) and bool(csv_mapping.get("activity_col"))
         if has_manual_mapping:
             mapped_df = load_custom_tabular(

@@ -31,14 +31,14 @@ COMMON_TIMESTAMP_COLUMNS = [
 COMMON_ACTIVITY_COLUMNS = [
     "VM", "vm", "activity", "Activity", "Axis1", "AxisXCounts",
     "activity_counts", "counts", "Atividade", "PIM", "TAT", "ZCM",
-    "Activity Marker"
+    "Activity Marker", "activity"
 ]
 
 COMMON_LIGHT_COLUMNS = [
     "light", "Light", "Lux", "lux", "Illuminance", "illuminance",
     "LIGHT", "AMB LIGHT", "Luminosidade", "RED LIGHT", "GREEN LIGHT",
     "BLUE LIGHT", "IR LIGHT", "UVA LIGHT", "UVB LIGHT",
-    "MELANOPIC_LUX", "CLEAR"
+    "MELANOPIC_LUX", "CLEAR", "whitelight"
 ]
 
 COMMON_TEMPERATURE_COLUMNS = [
@@ -47,21 +47,50 @@ COMMON_TEMPERATURE_COLUMNS = [
 ]
 
 COMMON_NONWEAR_COLUMNS = [
-    "nonwear", "NonWear", "mask", "Mask", "wear", "Wear"
+    "nonwear", "NonWear", "mask", "Mask", "wear", "Wear", "offwrist"
 ]
 
-PREFERRED_ACTIVITY_ORDER = ["VM", "activity", "Atividade", "PIM", "TAT", "ZCM"]
-PREFERRED_LIGHT_ORDER = ["LIGHT", "AMB LIGHT", "Luminosidade", "Lux", "light", "MELANOPIC_LUX", "CLEAR"]
+PREFERRED_ACTIVITY_ORDER = ["VM", "activity", "Atividade", "PIM", "TAT", "ZCM", "Axis1"]
+PREFERRED_LIGHT_ORDER = ["LIGHT", "AMB LIGHT", "Luminosidade", "Lux", "light", "whitelight", "MELANOPIC_LUX", "CLEAR"]
 
 COMMON_SEPARATORS = [",", ";", "\t", "|"]
 
 
+def _read_text_head(file_path: str, n_chars: int = 12000) -> str:
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        return f.read(n_chars)
+
+
 def infer_reader_type(file_path: str):
     suffix = Path(file_path).suffix.lower().replace(".", "")
-    if suffix in READERS:
+
+    if suffix in ("awd", "agd", "atr", "bba", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
         return suffix
-    if suffix in ("csv", "txt", "gz", "json", "xls", "xlsx", "ods"):
-        return suffix
+
+    if suffix in ("csv", "txt", "gz"):
+        head = _read_text_head(file_path).lower()
+
+        # Actiware / RPX exports in different languages
+        if "actiware export file" in head or "actiware-exportdatei" in head or "fichier d'exportation actiware" in head:
+            return "rpx"
+
+        # Daqtometer export
+        if "serial number:" in head and "sample rate:" in head and "store rate:" in head:
+            return "dqt"
+
+        # TAL export
+        if "luminosidade" in head and "atividade" in head and "data; hora;" in head:
+            return "tal"
+
+        # MESA-style table
+        if "mesaid,line,linetime" in head:
+            return "mesa"
+
+        return "tabular"
+
+    if suffix in ("xls", "xlsx", "ods"):
+        return "tabular"
+
     raise ValueError("Unsupported file type: {}".format(suffix))
 
 
@@ -97,8 +126,7 @@ def _choose_preferred_column(columns: List[str], preferred_order: List[str], fal
 
 def _sniff_separator(file_path: str, fallback=","):
     try:
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            sample = f.read(5000)
+        sample = _read_text_head(file_path, n_chars=5000)
         dialect = csv.Sniffer().sniff(sample, delimiters=";,|\t,")
         return dialect.delimiter
     except Exception:
@@ -111,15 +139,16 @@ def _looks_like_real_header(columns):
         return False
 
     matches = 0
+    known = (
+        [x.lower() for x in COMMON_TIMESTAMP_COLUMNS]
+        + [x.lower() for x in COMMON_ACTIVITY_COLUMNS]
+        + [x.lower() for x in COMMON_LIGHT_COLUMNS]
+        + [x.lower() for x in COMMON_TEMPERATURE_COLUMNS]
+        + [x.lower() for x in COMMON_NONWEAR_COLUMNS]
+    )
+
     for c in cols:
-        lc = c.lower()
-        if (
-            lc in [x.lower() for x in COMMON_TIMESTAMP_COLUMNS]
-            or lc in [x.lower() for x in COMMON_ACTIVITY_COLUMNS]
-            or lc in [x.lower() for x in COMMON_LIGHT_COLUMNS]
-            or lc in [x.lower() for x in COMMON_TEMPERATURE_COLUMNS]
-            or lc in [x.lower() for x in COMMON_NONWEAR_COLUMNS]
-        ):
+        if c.lower() in known:
             matches += 1
 
     return matches >= 1
@@ -150,7 +179,7 @@ def _read_delimited_with_header_detection(file_path: str, preferred_sep: Optiona
     best_score = -1
 
     for sep in seps:
-        for header_row in range(0, 25):
+        for header_row in range(0, 30):
             try:
                 df = _try_read_delimited(file_path, sep=sep, header_row=header_row)
                 if df is None or df.empty:

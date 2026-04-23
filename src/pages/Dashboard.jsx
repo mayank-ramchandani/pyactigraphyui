@@ -50,6 +50,7 @@ export default function Dashboard() {
   });
 
   const [selectedPreviewFile, setSelectedPreviewFile] = useState("");
+  const [selectedLightPreviewFile, setSelectedLightPreviewFile] = useState("");
 
   const [analysisMode, setAnalysisMode] = useState("standard");
   const [analysisScope, setAnalysisScope] = useState("metric");
@@ -91,12 +92,17 @@ export default function Dashboard() {
   const [summaryResults, setSummaryResults] = useState({});
 
   const actigraphyFiles = uploadedFiles.actigraphy || [];
+  const lightFiles = uploadedFiles.light || [];
+
   const actigraphyFile =
     actigraphyFiles.find((file) => file.name === selectedPreviewFile) ||
     actigraphyFiles[0] ||
     null;
 
-  const lightFile = uploadedFiles.light?.[0] || null;
+  const lightFile =
+    lightFiles.find((file) => file.name === selectedLightPreviewFile) ||
+    lightFiles[0] ||
+    null;
 
   const workflowSteps = useMemo(
     () =>
@@ -185,10 +191,6 @@ export default function Dashboard() {
     setQcWarnings([]);
     setAnalysisError("");
 
-    const first = files?.[0];
-    const ext = getExtension(first?.name || "");
-    const isTabular = [".csv", ".txt", ".gz", ".xls", ".xlsx", ".ods"].includes(ext);
-
     setShowManualMapping(false);
     setCsvMapping({
       timestamp_col: "",
@@ -198,11 +200,7 @@ export default function Dashboard() {
       nonwear_col: "",
     });
 
-    if (isTabular) {
-      unlockAndGoToStep("3");
-    } else {
-      unlockAndGoToStep("3");
-    }
+    unlockAndGoToStep("3");
   };
 
   const handleCsvNeedsMapping = () => {
@@ -339,6 +337,9 @@ export default function Dashboard() {
         actigraphyFiles={actigraphyFiles}
         selectedPreviewFile={selectedPreviewFile}
         setSelectedPreviewFile={setSelectedPreviewFile}
+        lightFiles={lightFiles}
+        selectedLightPreviewFile={selectedLightPreviewFile}
+        setSelectedLightPreviewFile={setSelectedLightPreviewFile}
       />
     );
   } else if (currentStep === "4") {
@@ -354,101 +355,13 @@ export default function Dashboard() {
         actigraphyFiles={actigraphyFiles}
         selectedPreviewFile={selectedPreviewFile}
         setSelectedPreviewFile={setSelectedPreviewFile}
-      />
-    );
-  } else if (currentStep === "5") {
-    content = (
-      <SupportFilesStep
-        title={appConfig.panels.cleaning.title}
-        description="Cleaning is the broader preprocessing stage. Masking is one part of cleaning and is used to exclude bad or non-wear periods."
-        files={uploadedFiles.masking}
-        onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, masking: files }))}
-        options={[
-          { id: "applyMasking", label: "Apply uploaded masking file if present", defaultValue: true },
-          { id: "respectNonwear", label: "Respect detected non-wear from the loaded file when available", defaultValue: true },
-        ]}
-      />
-    );
-  } else if (currentStep === "6") {
-    content = (
-      <SupportFilesStep
-        title={appConfig.panels.sleepDiary.title}
-        description="Sleep diary files provide reported bedtimes, wake times, naps, or diary states. These are different from masking files."
-        files={uploadedFiles.sleepDiary}
-        onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, sleepDiary: files }))}
-        options={[
-          { id: "useDiary", label: "Use uploaded sleep diary when available", defaultValue: true },
-        ]}
-      />
-    );
-  } else if (currentStep === "7") {
-    content = (
-      <SupportFilesStep
-        title={appConfig.panels.startStop.title}
-        description="Start/stop files define the intended valid analysis interval. They are related to cleaning, but not the same as masking."
-        files={uploadedFiles.startStop}
-        onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, startStop: files }))}
-        options={[
-          { id: "applyStartStop", label: "Apply uploaded start/stop intervals if present", defaultValue: true },
-        ]}
-      />
-    );
-  } else if (currentStep === "8") {
-    content = (
-      <MetricsPanel
-        title={appConfig.panels.metrics.title}
-        metricRegistry={metricRegistry}
-        algorithmRegistry={algorithmRegistry}
-        analysisFamilyRegistry={analysisFamilyRegistry}
-        sharedParamRegistry={sharedParamRegistry}
-        selectedMetrics={selectedMetrics}
-        setSelectedMetrics={setSelectedMetrics}
-        selectedFamilies={selectedFamilies}
-        setSelectedFamilies={setSelectedFamilies}
-        analysisScope={analysisScope}
-        setAnalysisScope={setAnalysisScope}
-        selectedAlgorithm={selectedAlgorithm}
-        setSelectedAlgorithm={setSelectedAlgorithm}
-        setCurrentStep={setCurrentStep}
-        sharedValues={sharedValues}
-        setSharedValues={setSharedValues}
-        metricOverrides={metricOverrides}
-        setMetricOverrides={setMetricOverrides}
-        algorithmParams={algorithmParams}
-        setAlgorithmParams={setAlgorithmParams}
-        analysisMode={analysisMode}
-        inputType={detectedInputType}
-      />
-    );
-  } else if (currentStep === "9") {
-    content = (
-      <ResultsPanel
-        title={appConfig.panels.results.title}
-        resultsGenerated={resultsGenerated}
-        onGenerate={handleGenerateResults}
-        selectedResultMetric={selectedResultMetric}
-        setSelectedResultMetric={setSelectedResultMetric}
-        selectedMetrics={resolvedSelectedMetrics}
-        summaryResults={summaryResults}
-        qcWarnings={qcWarnings}
-        metricRegistry={metricRegistry}
-        algorithmRegistry={algorithmRegistry}
-        selectedAlgorithm={selectedAlgorithm}
-        analysisConfig={resolvedAnalysisConfig}
-        analysisError={analysisError}
-        analysisLoading={analysisLoading}
-        analysisMode={analysisMode}
+        lightFiles={lightFiles}
+        selectedLightPreviewFile={selectedLightPreviewFile}
+        setSelectedLightPreviewFile={setSelectedLightPreviewFile}
       />
     );
   } else {
-    content = (
-      <ExportPanel
-        title={appConfig.panels.export.title}
-        exports={exportRegistry.exports}
-        enabled={resultsGenerated}
-        summaryResults={summaryResults}
-      />
-    );
+      content = <div />;
   }
 
   const canGoPrevious = currentStepIndex > 0;
@@ -505,42 +418,22 @@ export default function Dashboard() {
                 Previous
               </button>
 
-              <div style={{ display: "flex", gap: 10 }}>
-                {currentStep === "8" && (
-                  <button
-                    type="button"
-                    onClick={handleGenerateResults}
-                    style={{
-                      padding: "10px 16px",
-                      borderRadius: 12,
-                      background: "#0f172a",
-                      color: "white",
-                      border: "none",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Generate Results
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={goNext}
-                  disabled={!canGoNext}
-                  style={{
-                    padding: "10px 16px",
-                    borderRadius: 12,
-                    background: canGoNext ? "#0f172a" : "#94a3b8",
-                    color: "white",
-                    border: "none",
-                    cursor: canGoNext ? "pointer" : "not-allowed",
-                    fontWeight: 600,
-                  }}
-                >
-                  Next
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={!canGoNext}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 12,
+                  background: canGoNext ? "#0f172a" : "#94a3b8",
+                  color: "white",
+                  border: "none",
+                  cursor: canGoNext ? "pointer" : "not-allowed",
+                  fontWeight: 600,
+                }}
+              >
+                Next
+              </button>
             </div>
           </div>
         </div>
