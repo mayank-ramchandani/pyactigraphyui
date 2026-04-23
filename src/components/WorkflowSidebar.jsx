@@ -1,11 +1,6 @@
 import React from "react";
 
-export default function WorkflowSidebar({
-  workflow,
-  currentStep,
-  maxUnlockedStep,
-  onStepClick,
-}) {
+export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep, onStepClick }) {
   const currentStepNumber = Number(currentStep);
   const unlockedStepNumber = Number(maxUnlockedStep || currentStep);
 
@@ -19,27 +14,11 @@ export default function WorkflowSidebar({
         boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
       }}
     >
-      <div
-        style={{
-          fontSize: 14,
-          fontWeight: 700,
-          color: "#334155",
-          marginBottom: 6,
-          textTransform: "uppercase",
-          letterSpacing: "0.04em",
-        }}
-      >
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#334155", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
         Workflow
       </div>
 
-      <div
-        style={{
-          fontSize: 12,
-          color: "#64748b",
-          lineHeight: 1.5,
-          marginBottom: 16,
-        }}
-      >
+      <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, marginBottom: 16 }}>
         You can move between the current step and any unlocked earlier step.
       </div>
 
@@ -52,23 +31,8 @@ export default function WorkflowSidebar({
           const isLast = index === workflow.length - 1;
 
           return (
-            <div
-              key={item.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "36px 1fr",
-                gap: 12,
-                alignItems: "start",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  minHeight: isLast ? 36 : 72,
-                }}
-              >
+            <div key={item.id} style={{ display: "grid", gridTemplateColumns: "36px 1fr", gap: 12, alignItems: "start" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minHeight: isLast ? 36 : 72 }}>
                 <button
                   type="button"
                   disabled={!isUnlocked}
@@ -84,7 +48,6 @@ export default function WorkflowSidebar({
                     alignItems: "center",
                     justifyContent: "center",
                     fontWeight: 700,
-                    flexShrink: 0,
                     cursor: isUnlocked ? "pointer" : "not-allowed",
                     opacity: isUnlocked ? 1 : 0.5,
                   }}
@@ -111,11 +74,7 @@ export default function WorkflowSidebar({
                 disabled={!isUnlocked}
                 onClick={() => isUnlocked && onStepClick?.(item.id)}
                 style={{
-                  border: isActive
-                    ? "1px solid #0f172a"
-                    : isCompleted
-                    ? "1px solid #cbd5e1"
-                    : "1px solid #e2e8f0",
+                  border: isActive ? "1px solid #0f172a" : isCompleted ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
                   borderRadius: 16,
                   padding: 14,
                   background: isActive ? "#f8fafc" : isCompleted ? "#f8fafc" : "white",
@@ -124,41 +83,16 @@ export default function WorkflowSidebar({
                   cursor: isUnlocked ? "pointer" : "not-allowed",
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    alignItems: "flex-start",
-                    marginBottom: 4,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      color: "#0f172a",
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    {item.title}
-                  </div>
-
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", marginBottom: 4 }}>
+                  <div style={{ fontWeight: 600, color: "#0f172a", lineHeight: 1.35 }}>{item.title}</div>
                   <div
                     style={{
                       fontSize: 11,
                       fontWeight: 700,
                       padding: "4px 8px",
                       borderRadius: 999,
-                      background: isActive
-                        ? "#0f172a"
-                        : isCompleted
-                        ? "#e2e8f0"
-                        : "#f1f5f9",
-                      color: isActive
-                        ? "white"
-                        : isCompleted
-                        ? "#334155"
-                        : "#64748b",
+                      background: isActive ? "#0f172a" : isCompleted ? "#e2e8f0" : "#f1f5f9",
+                      color: isActive ? "white" : isCompleted ? "#334155" : "#64748b",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -166,17 +100,7 @@ export default function WorkflowSidebar({
                   </div>
                 </div>
 
-                {item.description && (
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: "#64748b",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {item.description}
-                  </div>
-                )}
+                {item.description && <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>{item.description}</div>}
               </button>
             </div>
           );

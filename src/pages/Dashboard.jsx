@@ -14,6 +14,7 @@ import PreviewPanel from "../components/PreviewPanel";
 import MetricsPanel from "../components/MetricsPanel";
 import ResultsPanel from "../components/ResultsPanel";
 import ExportPanel from "../components/ExportPanel";
+import SupportFilesStep from "../components/SupportFilesStep";
 
 import {
   getDefaultAlgorithm,
@@ -30,9 +31,9 @@ function buildApiUrl(path) {
   return `${base}${cleanPath}`;
 }
 
-function extractFileType(name) {
-  const parts = name?.split(".") || [];
-  return parts.length > 1 ? parts.pop().toLowerCase() : "unknown";
+function getExtension(name) {
+  const parts = name?.toLowerCase().split(".") || [];
+  return parts.length > 1 ? `.${parts.pop()}` : "";
 }
 
 export default function Dashboard() {
@@ -41,11 +42,14 @@ export default function Dashboard() {
 
   const [uploadedFiles, setUploadedFiles] = useState({
     actigraphy: [],
+    masking: [],
     sleepDiary: [],
     light: [],
     temperature: [],
     startStop: [],
   });
+
+  const [selectedPreviewFile, setSelectedPreviewFile] = useState("");
 
   const [analysisMode, setAnalysisMode] = useState("standard");
   const [analysisScope, setAnalysisScope] = useState("metric");
@@ -60,12 +64,8 @@ export default function Dashboard() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
 
-  const [selectedMetrics, setSelectedMetrics] = useState(
-    getDefaultSelectedMetrics(metricRegistry)
-  );
-  const [selectedAlgorithm, setSelectedAlgorithm] = useState(
-    getDefaultAlgorithm(algorithmRegistry)
-  );
+  const [selectedMetrics, setSelectedMetrics] = useState(getDefaultSelectedMetrics(metricRegistry));
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState(getDefaultAlgorithm(algorithmRegistry));
 
   const [sharedValues, setSharedValues] = useState({});
   const [metricOverrides, setMetricOverrides] = useState({});
@@ -75,7 +75,6 @@ export default function Dashboard() {
   const [activityTransform, setActivityTransform] = useState("none");
   const [lightTransform, setLightTransform] = useState("none");
 
-  const [csvNeedsMapping, setCsvNeedsMapping] = useState(false);
   const [csvMapping, setCsvMapping] = useState({
     timestamp_col: "",
     activity_col: "",
@@ -84,53 +83,53 @@ export default function Dashboard() {
     nonwear_col: "",
   });
   const [csvSeparator, setCsvSeparator] = useState(",");
+  const [showManualMapping, setShowManualMapping] = useState(false);
 
   const [resultsGenerated, setResultsGenerated] = useState(false);
   const [selectedResultMetric, setSelectedResultMetric] = useState("");
   const [qcWarnings, setQcWarnings] = useState([]);
   const [summaryResults, setSummaryResults] = useState({});
 
-  const actigraphyFile = uploadedFiles.actigraphy?.[0] || null;
+  const actigraphyFiles = uploadedFiles.actigraphy || [];
+  const actigraphyFile =
+    actigraphyFiles.find((file) => file.name === selectedPreviewFile) ||
+    actigraphyFiles[0] ||
+    null;
+
   const lightFile = uploadedFiles.light?.[0] || null;
 
   const workflowSteps = useMemo(
     () =>
       getVisibleWorkflowSteps(appConfig, {
-        enableCleaning: !!appConfig?.features?.masking?.enabled,
+        enableCleaning: true,
         enableDiary: true,
       }),
     []
   );
 
   const currentStepIndex = workflowSteps.findIndex((step) => step.id === currentStep);
-  const currentStepNumber = Number(currentStep);
 
   const goToStep = (stepId) => {
-    if (Number(stepId) <= Number(maxUnlockedStep)) {
-      setCurrentStep(stepId);
-    }
+    if (Number(stepId) <= Number(maxUnlockedStep)) setCurrentStep(stepId);
   };
 
   const unlockAndGoToStep = (stepId) => {
-    const target = Number(stepId);
-    const unlocked = Number(maxUnlockedStep);
-    if (target > unlocked) {
-      setMaxUnlockedStep(String(target));
-    }
+    const n = Number(stepId);
+    if (n > Number(maxUnlockedStep)) setMaxUnlockedStep(String(n));
     setCurrentStep(String(stepId));
   };
 
   const goNext = () => {
     if (currentStepIndex < workflowSteps.length - 1) {
-      const nextStep = workflowSteps[currentStepIndex + 1];
-      unlockAndGoToStep(nextStep.id);
+      const next = workflowSteps[currentStepIndex + 1];
+      unlockAndGoToStep(next.id);
     }
   };
 
   const goPrevious = () => {
     if (currentStepIndex > 0) {
-      const prevStep = workflowSteps[currentStepIndex - 1];
-      goToStep(prevStep.id);
+      const prev = workflowSteps[currentStepIndex - 1];
+      goToStep(prev.id);
     }
   };
 
@@ -146,9 +145,7 @@ export default function Dashboard() {
   }, [selectedFamilies]);
 
   const resolvedSelectedMetrics = useMemo(() => {
-    if (analysisMode === "standard") {
-      return getDefaultSelectedMetrics(metricRegistry);
-    }
+    if (analysisMode === "standard") return getDefaultSelectedMetrics(metricRegistry);
     return analysisScope === "family" ? familyMetricIds : selectedMetrics;
   }, [analysisMode, analysisScope, familyMetricIds, selectedMetrics]);
 
@@ -167,34 +164,18 @@ export default function Dashboard() {
         metricOverrides,
         algorithmParams,
       }),
-    [
-      selectedMetrics,
-      selectedFamilies,
-      analysisScope,
-      selectedAlgorithm,
-      sharedValues,
-      metricOverrides,
-      algorithmParams,
-    ]
+    [selectedMetrics, selectedFamilies, analysisScope, selectedAlgorithm, sharedValues, metricOverrides, algorithmParams]
   );
 
   const parseJsonResponse = async (res) => {
     const text = await res.text();
-    if (!text) {
-      throw new Error(`Empty response from server (${res.status})`);
-    }
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(`Server did not return valid JSON (${res.status})`);
-    }
+    if (!text) throw new Error(`Empty response from server (${res.status})`);
+    return JSON.parse(text);
   };
 
   const handleActigraphyFilesChange = (files) => {
-    setUploadedFiles((prev) => ({
-      ...prev,
-      actigraphy: files,
-    }));
+    setUploadedFiles((prev) => ({ ...prev, actigraphy: files }));
+    setSelectedPreviewFile(files?.[0]?.name || "");
 
     setPreviewLoaded(false);
     setPreviewData(null);
@@ -205,25 +186,27 @@ export default function Dashboard() {
     setAnalysisError("");
 
     const first = files?.[0];
-    const isCsv = first?.name?.toLowerCase().endsWith(".csv");
-    setCsvNeedsMapping(Boolean(isCsv));
+    const ext = getExtension(first?.name || "");
+    const isTabular = [".csv", ".txt", ".gz", ".xls", ".xlsx", ".ods"].includes(ext);
 
-    if (!isCsv) {
-      setCsvMapping({
-        timestamp_col: "",
-        activity_col: "",
-        light_col: "",
-        temperature_col: "",
-        nonwear_col: "",
-      });
+    setShowManualMapping(false);
+    setCsvMapping({
+      timestamp_col: "",
+      activity_col: "",
+      light_col: "",
+      temperature_col: "",
+      nonwear_col: "",
+    });
+
+    if (isTabular) {
       unlockAndGoToStep("3");
     } else {
-      unlockAndGoToStep("2");
+      unlockAndGoToStep("3");
     }
   };
 
   const handleCsvNeedsMapping = () => {
-    setCsvNeedsMapping(true);
+    setShowManualMapping(true);
     unlockAndGoToStep("2");
   };
 
@@ -240,12 +223,10 @@ export default function Dashboard() {
       formData.append("file", actigraphyFile);
       formData.append("activityChannel", activityChannel);
       formData.append("resampleFreq", "1min");
-      formData.append("csvMapping", JSON.stringify(csvMapping));
+      formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
       formData.append("csvSeparator", csvSeparator);
 
-      if (lightFile) {
-        formData.append("lightFile", lightFile);
-      }
+      if (lightFile) formData.append("lightFile", lightFile);
 
       const res = await fetch(buildApiUrl("api/preview/basic"), {
         method: "POST",
@@ -254,13 +235,11 @@ export default function Dashboard() {
 
       const data = await parseJsonResponse(res);
 
-      if (!res.ok) {
-        throw new Error(data?.detail || "Failed to load preview.");
-      }
+      if (!res.ok) throw new Error(data?.detail || "Failed to load preview.");
 
       setPreviewData(data);
       setPreviewLoaded(true);
-      unlockAndGoToStep("3");
+      unlockAndGoToStep("4");
     } catch (err) {
       setPreviewError(err.message || "Failed to load preview.");
       setPreviewLoaded(false);
@@ -284,7 +263,7 @@ export default function Dashboard() {
       formData.append("lightTransform", lightTransform);
       formData.append("analysisMode", analysisMode);
       formData.append("analysisConfig", JSON.stringify(resolvedAnalysisConfig));
-      formData.append("csvMapping", JSON.stringify(csvMapping));
+      formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
       formData.append("csvSeparator", csvSeparator);
 
       const res = await fetch(buildApiUrl("api/analyze/basic"), {
@@ -294,9 +273,7 @@ export default function Dashboard() {
 
       const data = await parseJsonResponse(res);
 
-      if (!res.ok) {
-        throw new Error(data?.detail || "Failed to generate results.");
-      }
+      if (!res.ok) throw new Error(data?.detail || "Failed to generate results.");
 
       const results = data.results || {};
       setSummaryResults(results);
@@ -313,7 +290,7 @@ export default function Dashboard() {
   };
 
   const detectedInputType =
-    previewData?.detected_input_type || extractFileType(actigraphyFile?.name) || "unknown";
+    previewData?.detected_input_type || getExtension(actigraphyFile?.name || "").replace(".", "") || "unknown";
 
   let content = null;
 
@@ -359,7 +336,9 @@ export default function Dashboard() {
         previewError={previewError}
         previewData={previewData}
         onPreview={onPreview}
-        onContinue={() => unlockAndGoToStep("4")}
+        actigraphyFiles={actigraphyFiles}
+        selectedPreviewFile={selectedPreviewFile}
+        setSelectedPreviewFile={setSelectedPreviewFile}
       />
     );
   } else if (currentStep === "4") {
@@ -372,64 +351,74 @@ export default function Dashboard() {
         previewError={previewError}
         previewData={previewData}
         onPreview={onPreview}
-        onContinue={() => unlockAndGoToStep("5")}
+        actigraphyFiles={actigraphyFiles}
+        selectedPreviewFile={selectedPreviewFile}
+        setSelectedPreviewFile={setSelectedPreviewFile}
       />
     );
   } else if (currentStep === "5") {
     content = (
-      <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
-        <h2 style={{ marginTop: 0 }}>{appConfig.panels.cleaning.title}</h2>
-        <p style={{ color: "#64748b", lineHeight: 1.6 }}>{appConfig.uiText.maskingHelp}</p>
-      </div>
+      <SupportFilesStep
+        title={appConfig.panels.cleaning.title}
+        description="Cleaning is the broader preprocessing stage. Masking is one part of cleaning and is used to exclude bad or non-wear periods."
+        files={uploadedFiles.masking}
+        onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, masking: files }))}
+        options={[
+          { id: "applyMasking", label: "Apply uploaded masking file if present", defaultValue: true },
+          { id: "respectNonwear", label: "Respect detected non-wear from the loaded file when available", defaultValue: true },
+        ]}
+      />
     );
   } else if (currentStep === "6") {
     content = (
-      <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
-        <h2 style={{ marginTop: 0 }}>{appConfig.panels.sleepDiary.title}</h2>
-        <p style={{ color: "#64748b", lineHeight: 1.6 }}>{appConfig.uiText.diaryHelp}</p>
-        <div style={{ fontSize: 14, color: "#475569", marginTop: 12 }}>
-          Uploaded files: {(uploadedFiles.sleepDiary || []).length}
-        </div>
-      </div>
+      <SupportFilesStep
+        title={appConfig.panels.sleepDiary.title}
+        description="Sleep diary files provide reported bedtimes, wake times, naps, or diary states. These are different from masking files."
+        files={uploadedFiles.sleepDiary}
+        onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, sleepDiary: files }))}
+        options={[
+          { id: "useDiary", label: "Use uploaded sleep diary when available", defaultValue: true },
+        ]}
+      />
     );
   } else if (currentStep === "7") {
     content = (
-      <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
-        <h2 style={{ marginTop: 0 }}>{appConfig.panels.startStop.title}</h2>
-        <p style={{ color: "#64748b", lineHeight: 1.6 }}>{appConfig.uiText.sstHelp}</p>
-        <div style={{ fontSize: 14, color: "#475569", marginTop: 12 }}>
-          Uploaded files: {(uploadedFiles.startStop || []).length}
-        </div>
-      </div>
+      <SupportFilesStep
+        title={appConfig.panels.startStop.title}
+        description="Start/stop files define the intended valid analysis interval. They are related to cleaning, but not the same as masking."
+        files={uploadedFiles.startStop}
+        onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, startStop: files }))}
+        options={[
+          { id: "applyStartStop", label: "Apply uploaded start/stop intervals if present", defaultValue: true },
+        ]}
+      />
     );
   } else if (currentStep === "8") {
     content = (
-      <div style={{ display: "grid", gap: 20 }}>
-        <MetricsPanel
-          title={appConfig.panels.metrics.title}
-          metricRegistry={metricRegistry}
-          algorithmRegistry={algorithmRegistry}
-          analysisFamilyRegistry={analysisFamilyRegistry}
-          sharedParamRegistry={sharedParamRegistry}
-          selectedMetrics={selectedMetrics}
-          setSelectedMetrics={setSelectedMetrics}
-          selectedFamilies={selectedFamilies}
-          setSelectedFamilies={setSelectedFamilies}
-          analysisScope={analysisScope}
-          setAnalysisScope={setAnalysisScope}
-          selectedAlgorithm={selectedAlgorithm}
-          setSelectedAlgorithm={setSelectedAlgorithm}
-          setCurrentStep={setCurrentStep}
-          sharedValues={sharedValues}
-          setSharedValues={setSharedValues}
-          metricOverrides={metricOverrides}
-          setMetricOverrides={setMetricOverrides}
-          algorithmParams={algorithmParams}
-          setAlgorithmParams={setAlgorithmParams}
-          analysisMode={analysisMode}
-          inputType={detectedInputType}
-        />
-      </div>
+      <MetricsPanel
+        title={appConfig.panels.metrics.title}
+        metricRegistry={metricRegistry}
+        algorithmRegistry={algorithmRegistry}
+        analysisFamilyRegistry={analysisFamilyRegistry}
+        sharedParamRegistry={sharedParamRegistry}
+        selectedMetrics={selectedMetrics}
+        setSelectedMetrics={setSelectedMetrics}
+        selectedFamilies={selectedFamilies}
+        setSelectedFamilies={setSelectedFamilies}
+        analysisScope={analysisScope}
+        setAnalysisScope={setAnalysisScope}
+        selectedAlgorithm={selectedAlgorithm}
+        setSelectedAlgorithm={setSelectedAlgorithm}
+        setCurrentStep={setCurrentStep}
+        sharedValues={sharedValues}
+        setSharedValues={setSharedValues}
+        metricOverrides={metricOverrides}
+        setMetricOverrides={setMetricOverrides}
+        algorithmParams={algorithmParams}
+        setAlgorithmParams={setAlgorithmParams}
+        analysisMode={analysisMode}
+        inputType={detectedInputType}
+      />
     );
   } else if (currentStep === "9") {
     content = (
@@ -463,31 +452,17 @@ export default function Dashboard() {
   }
 
   const canGoPrevious = currentStepIndex > 0;
-  const canGoNext = currentStepIndex < workflowSteps.length - 1 && currentStepNumber < Number(maxUnlockedStep) + 1;
+  const canGoNext = currentStepIndex < workflowSteps.length - 1;
 
   return (
-    <div
-      style={{
-        padding: 24,
-        fontFamily: "Arial, sans-serif",
-        background: "#f8fafc",
-        minHeight: "100vh",
-      }}
-    >
+    <div style={{ padding: 24, fontFamily: "Arial, sans-serif", background: "#f8fafc", minHeight: "100vh" }}>
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <h1 style={{ fontSize: 32, marginBottom: 8 }}>{appConfig.appName}</h1>
         <p style={{ color: "#475569", marginBottom: 24, lineHeight: 1.5 }}>
-          Sequential, page-based actigraphy workflow with CSV mapping, native readers, light preview, and registry-driven analysis setup.
+          Sequential actigraphy workflow with optional tabular mapping, light preview, support files, and family-aware analysis.
         </p>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "280px 1fr",
-            gap: 24,
-            alignItems: "start",
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 24, alignItems: "start" }}>
           {appConfig.layout.sidebarEnabled && (
             <div style={{ position: "sticky", top: 24 }}>
               <WorkflowSidebar
@@ -530,22 +505,42 @@ export default function Dashboard() {
                 Previous
               </button>
 
-              <button
-                type="button"
-                onClick={goNext}
-                disabled={!canGoNext}
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: 12,
-                  background: canGoNext ? "#0f172a" : "#94a3b8",
-                  color: "white",
-                  border: "none",
-                  cursor: canGoNext ? "pointer" : "not-allowed",
-                  fontWeight: 600,
-                }}
-              >
-                Next
-              </button>
+              <div style={{ display: "flex", gap: 10 }}>
+                {currentStep === "8" && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateResults}
+                    style={{
+                      padding: "10px 16px",
+                      borderRadius: 12,
+                      background: "#0f172a",
+                      color: "white",
+                      border: "none",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Generate Results
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={goNext}
+                  disabled={!canGoNext}
+                  style={{
+                    padding: "10px 16px",
+                    borderRadius: 12,
+                    background: canGoNext ? "#0f172a" : "#94a3b8",
+                    color: "white",
+                    border: "none",
+                    cursor: canGoNext ? "pointer" : "not-allowed",
+                    fontWeight: 600,
+                  }}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </div>

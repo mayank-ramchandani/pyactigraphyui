@@ -6,16 +6,13 @@ import json
 import tempfile
 from pathlib import Path
 
-from .analysis import (
-    run_basic_pyactigraphy_analysis,
-    build_native_preview,
-    build_light_preview,
-)
+from .analysis import run_basic_pyactigraphy_analysis, build_native_preview, build_light_preview
 from .qc import quick_qc
 from .io_helpers import (
     load_native_file,
     infer_reader_type,
-    load_custom_csv,
+    load_custom_tabular,
+    load_auto_tabular,
     build_baseraw_from_dataframe,
 )
 
@@ -36,9 +33,80 @@ app.add_middleware(
 def _write_upload_to_temp(upload: UploadFile):
     suffix = Path(upload.filename).suffix.lower()
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        content = upload.file.read()
-        tmp.write(content)
+        tmp.write(upload.file.read())
         return tmp.name
+
+
+def _json_or_empty(value):
+    try:
+        return json.loads(value or "{}")
+    except Exception:
+        return {}
+
+
+def _load_raw_or_tabular(file_path, original_name, csv_mapping, csv_separator):
+    reader_type = infer_reader_type(file_path)
+
+    if reader_type in ("csv", "txt", "gz", "xls", "xlsx", "ods"):
+        has_manual_mapping = bool(csv_mapping.get("timestamp_col")) and bool(csv_mapping.get("activity_col"))
+        if has_manual_mapping:
+            mapped_df = load_custom_tabular(
+                file_path=file_path,
+                timestamp_col=csv_mapping.get("timestamp_col"),
+                activity_col=csv_mapping.get("activity_col"),
+                light_col=csv_mapping.get("light_col") or None,
+                temperature_col=csv_mapping.get("temperature_col") or None,
+                nonwear_col=csv_mapping.get("nonwear_col") or None,
+                sep=csv_separator,
+            )
+        else:
+            mapped_df, csv_mapping = load_auto_tabular(file_path, sep=csv_separator)
+
+        raw = build_baseraw_from_dataframe(mapped_df, name=original_name)
+        return raw, reader_type, csv_mapping
+
+    raw = load_native_file(file_path, reader_type)
+    return raw, reader_type, {}
+
+
+@app.post("/api/preview/basic")
+async def preview_basic(
+    file: UploadFile = File(...),
+    lightFile: Optional[UploadFile] = File(None),
+    activityChannel: str = Form("VM"),
+    resampleFreq: str = Form("1min"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
+):
+    try:
+        csv_mapping = _json_or_empty(csvMapping)
+
+        tmp_path = _write_upload_to_temp(file)
+        raw, reader_type, resolved_mapping = _load_raw_or_tabular(
+            tmp_path, file.filename, csv_mapping, csvSeparator
+        )
+
+        preview = build_native_preview(raw=raw, activity_channel=activityChannel, resample_freq=resampleFreq)
+        light_preview = build_light_preview(raw=raw, resample_freq=resampleFreq)
+
+        if (not light_preview.get("light_preview_available")) and lightFile is not None:
+            light_tmp = _write_upload_to_temp(lightFile)
+            light_raw, _, _ = _load_raw_or_tabular(light_tmp, lightFile.filename, {}, csvSeparator)
+            light_preview = build_light_preview(raw=light_raw, resample_freq=resampleFreq)
+
+        return JSONResponse(
+            content={
+                **preview,
+                **light_preview,
+                "detected_input_type": reader_type,
+                "resolved_csv_mapping": resolved_mapping,
+            }
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": "Server error: {}".format(str(e))})
 
 
 @app.post("/api/analyze/basic")
@@ -58,27 +126,12 @@ async def analyze_basic(
         family_requests = analysis_config.get("families", [])
         analysis_scope = analysis_config.get("analysisScope", "metric")
         algorithm_request = analysis_config.get("algorithm")
-        csv_mapping = json.loads(csvMapping or "{}")
+        csv_mapping = _json_or_empty(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
-        reader_type = infer_reader_type(tmp_path)
-
-        if reader_type == "csv":
-            if not csv_mapping.get("timestamp_col") or not csv_mapping.get("activity_col"):
-                raise ValueError("CSV files require timestamp and activity column mapping before analysis.")
-
-            mapped_df = load_custom_csv(
-                tmp_path,
-                timestamp_col=csv_mapping.get("timestamp_col"),
-                activity_col=csv_mapping.get("activity_col"),
-                light_col=csv_mapping.get("light_col") or None,
-                temperature_col=csv_mapping.get("temperature_col") or None,
-                nonwear_col=csv_mapping.get("nonwear_col") or None,
-                sep=csvSeparator,
-            )
-            raw = build_baseraw_from_dataframe(mapped_df, name=file.filename)
-        else:
-            raw = load_native_file(tmp_path, reader_type)
+        raw, reader_type, resolved_mapping = _load_raw_or_tabular(
+            tmp_path, file.filename, csv_mapping, csvSeparator
+        )
 
         results = run_basic_pyactigraphy_analysis(
             raw=raw,
@@ -89,85 +142,17 @@ async def analyze_basic(
         )
 
         warnings = quick_qc(results)
+
         return JSONResponse(
             content={
                 "results": results,
                 "qcWarnings": warnings,
                 "detected_input_type": reader_type,
+                "resolved_csv_mapping": resolved_mapping,
             }
         )
 
     except ValueError as e:
         return JSONResponse(status_code=400, content={"detail": str(e)})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": f"Server error: {str(e)}"})
-
-
-@app.post("/api/preview/basic")
-async def preview_basic(
-    file: UploadFile = File(...),
-    lightFile: Optional[UploadFile] = File(None),
-    activityChannel: str = Form("VM"),
-    resampleFreq: str = Form("1min"),
-    csvMapping: str = Form("{}"),
-    csvSeparator: str = Form(","),
-):
-    try:
-        csv_mapping = json.loads(csvMapping or "{}")
-
-        tmp_path = _write_upload_to_temp(file)
-        reader_type = infer_reader_type(tmp_path)
-
-        if reader_type == "csv":
-            if not csv_mapping.get("timestamp_col") or not csv_mapping.get("activity_col"):
-                raise ValueError("CSV files require timestamp and activity column mapping before preview.")
-
-            mapped_df = load_custom_csv(
-                tmp_path,
-                timestamp_col=csv_mapping.get("timestamp_col"),
-                activity_col=csv_mapping.get("activity_col"),
-                light_col=csv_mapping.get("light_col") or None,
-                temperature_col=csv_mapping.get("temperature_col") or None,
-                nonwear_col=csv_mapping.get("nonwear_col") or None,
-                sep=csvSeparator,
-            )
-            raw = build_baseraw_from_dataframe(mapped_df, name=file.filename)
-            preview = build_native_preview(
-                raw=raw,
-                activity_channel=activityChannel,
-                resample_freq=resampleFreq,
-            )
-            light_preview = build_light_preview(raw=raw, resample_freq=resampleFreq)
-        else:
-            raw = load_native_file(tmp_path, reader_type)
-            preview = build_native_preview(
-                raw=raw,
-                activity_channel=activityChannel,
-                resample_freq=resampleFreq,
-            )
-            light_preview = build_light_preview(raw=raw, resample_freq=resampleFreq)
-
-        if (not light_preview.get("light_preview_available")) and lightFile is not None:
-            light_tmp_path = _write_upload_to_temp(lightFile)
-            light_reader_type = infer_reader_type(light_tmp_path)
-            if light_reader_type == "csv":
-                light_preview = {
-                    "light_preview_available": False,
-                    "light_preview": [],
-                }
-            else:
-                light_raw = load_native_file(light_tmp_path, light_reader_type)
-                light_preview = build_light_preview(raw=light_raw, resample_freq=resampleFreq)
-
-        merged = {
-            **preview,
-            **light_preview,
-            "detected_input_type": reader_type,
-        }
-
-        return JSONResponse(content=merged)
-
-    except ValueError as e:
-        return JSONResponse(status_code=400, content={"detail": str(e)})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": f"Server error: {str(e)}"})
+        return JSONResponse(status_code=500, content={"detail": "Server error: {}".format(str(e))})

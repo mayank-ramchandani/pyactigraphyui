@@ -11,9 +11,7 @@ import {
 
 function formatValue(value) {
   if (value == null || Number.isNaN(value)) return "Not available";
-  if (typeof value === "number") {
-    return Number.isInteger(value) ? String(value) : value.toFixed(2);
-  }
+  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(2);
   return String(value);
 }
 
@@ -25,7 +23,9 @@ export default function PreviewPanel({
   previewError,
   previewData,
   onPreview,
-  onContinue,
+  actigraphyFiles = [],
+  selectedPreviewFile = "",
+  setSelectedPreviewFile = () => {},
 }) {
   const summary = previewData?.summary || {};
   const detectedInputType = previewData?.detected_input_type || "unknown";
@@ -38,40 +38,62 @@ export default function PreviewPanel({
   const previewTitle = mode === "light" ? "Light Preview" : "Activity Preview";
 
   return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #e2e8f0",
-        borderRadius: 20,
-        padding: 20,
-      }}
-    >
+    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
         {mode === "light"
-          ? "Inspect light data after the activity preview. If no light channel is available, this step will explain that."
-          : "Load a full-recording activity preview before moving to cleaning, sleep diary, and start/stop pages."}
+          ? "Inspect light data from the selected actigraphy file or optional light file."
+          : "Choose an uploaded actigraphy file and load its preview."}
       </p>
 
-      {mode === "activity" && (
-        <div style={{ marginBottom: 16 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Preview file</div>
+          <select
+            value={selectedPreviewFile}
+            onChange={(e) => setSelectedPreviewFile(e.target.value)}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid #cbd5e1",
+              background: "white",
+              minWidth: 280,
+            }}
+          >
+            {actigraphyFiles.map((file) => (
+              <option key={file.name} value={file.name}>
+                {file.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ alignSelf: "end" }}>
           <button
             onClick={onPreview}
-            disabled={previewLoading}
+            disabled={previewLoading || !selectedPreviewFile}
             style={{
               padding: "10px 16px",
               borderRadius: 12,
-              background: previewLoading ? "#94a3b8" : "#0f172a",
+              background: previewLoading || !selectedPreviewFile ? "#94a3b8" : "#0f172a",
               color: "white",
               border: "none",
-              cursor: previewLoading ? "not-allowed" : "pointer",
+              cursor: previewLoading || !selectedPreviewFile ? "not-allowed" : "pointer",
               fontWeight: 600,
             }}
           >
             {previewLoading ? "Loading Preview..." : "Load Preview"}
           </button>
         </div>
-      )}
+      </div>
 
       {previewError && (
         <div
@@ -99,96 +121,53 @@ export default function PreviewPanel({
               gap: 16,
             }}
           >
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 16,
-                padding: 16,
-                background: "#f8fafc",
-              }}
-            >
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc" }}>
               <div style={{ fontWeight: 700, marginBottom: 10 }}>Preview Summary</div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <tbody>
                   <tr>
-                    <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>
-                      detected_input_type
-                    </td>
-                    <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
-                      {detectedInputType}
-                    </td>
+                    <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>detected_input_type</td>
+                    <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>{detectedInputType}</td>
                   </tr>
                   {Object.entries(summary).map(([key, value]) => (
                     <tr key={key}>
-                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>
-                        {key}
-                      </td>
-                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
-                        {formatValue(value)}
-                      </td>
+                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>{key}</td>
+                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>{formatValue(value)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 16,
-                padding: 16,
-                background: "#f8fafc",
-              }}
-            >
-              <div style={{ fontWeight: 700, marginBottom: 10 }}>What happens next</div>
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc" }}>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>Preview Status</div>
               <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14 }}>
                 {mode === "light"
                   ? hasLight
-                    ? "Light data were detected. Continue to cleaning and masking."
-                    : "No light channel was detected in the loaded data. You can continue to cleaning and masking."
-                  : "Continue to the light preview page, then proceed to masking and diary/start-stop configuration."}
+                    ? "Light preview is available."
+                    : "No light preview is available for the current file(s)."
+                  : "Activity preview is available below."}
               </div>
             </div>
           </div>
 
           {mode === "light" && !hasLight ? (
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 16,
-                padding: 16,
-                background: "#f8fafc",
-                marginBottom: 20,
-                color: "#475569",
-              }}
-            >
-              No light preview is available for the currently loaded file(s).
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", color: "#475569" }}>
+              No light channel could be previewed from the selected file or optional light file.
             </div>
           ) : (
             <>
-              <div
-                style={{
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 16,
-                  padding: 16,
-                  background: "#f8fafc",
-                  marginBottom: 20,
-                }}
-              >
+              <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 20 }}>
                 <div style={{ fontWeight: 700, marginBottom: 10 }}>{previewTitle} Sample</div>
                 {points.length === 0 ? (
-                  <div style={{ color: "#64748b" }}>No preview points were returned for this file.</div>
+                  <div style={{ color: "#64748b" }}>No preview points were returned.</div>
                 ) : (
                   <div style={{ overflowX: "auto", maxHeight: 320, overflowY: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr>
-                          <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>
-                            Timestamp
-                          </th>
-                          <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #cbd5e1" }}>
-                            {yLabel}
-                          </th>
+                          <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>Timestamp</th>
+                          <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #cbd5e1" }}>{yLabel}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -206,19 +185,10 @@ export default function PreviewPanel({
                 )}
               </div>
 
-              <div
-                style={{
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 16,
-                  padding: 16,
-                  background: "#f8fafc",
-                  marginBottom: 20,
-                }}
-              >
+              <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc" }}>
                 <div style={{ fontWeight: 700, marginBottom: 10 }}>{previewTitle} Plot</div>
-
                 {points.length === 0 ? (
-                  <div style={{ color: "#64748b" }}>No preview points were returned for this file.</div>
+                  <div style={{ color: "#64748b" }}>No preview points were returned.</div>
                 ) : (
                   <div style={{ width: "100%", height: 320 }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -226,16 +196,8 @@ export default function PreviewPanel({
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="timestamp" tick={false} minTickGap={40} />
                         <YAxis />
-                        <Tooltip
-                          formatter={(value) => [value, yLabel]}
-                          labelFormatter={(label) => `Time: ${label}`}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey={mode === "light" ? "light" : "activity"}
-                          dot={false}
-                          strokeWidth={2}
-                        />
+                        <Tooltip formatter={(value) => [value, yLabel]} labelFormatter={(label) => `Time: ${label}`} />
+                        <Line type="monotone" dataKey={mode === "light" ? "light" : "activity"} dot={false} strokeWidth={2} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -243,24 +205,6 @@ export default function PreviewPanel({
               </div>
             </>
           )}
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={onContinue}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 12,
-                background: "#0f172a",
-                color: "white",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Continue
-            </button>
-          </div>
         </>
       )}
     </div>

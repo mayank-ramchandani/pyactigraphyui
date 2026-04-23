@@ -1,5 +1,3 @@
-import pandas as pd
-
 DEFAULT_MEAN_FREQS = [
     "1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min",
     "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min",
@@ -14,6 +12,15 @@ ALGO_TO_SRI_KEY = {
     "crespo": "Crespo",
     "roenneberg": "Roenneberg",
 }
+
+IMPLEMENTED_FAMILY_METRICS = {
+    "amplitude": ["ra", "rap"],
+    "rhythm": ["is", "iv", "ism", "ivm", "isp", "ivp"],
+    "sleep": ["sri", "tst", "waso", "sleep_efficiency"],
+    "fragmentation": ["kra", "kar"],
+}
+
+ADVANCED_FAMILY_IDS = {"cosinor", "flm", "mfdfa", "ssa", "clustering"}
 
 
 def _safe_float(value):
@@ -39,11 +46,6 @@ def _resolve_series_to_numeric(value):
         return value
 
 
-def attach_sleep_diary(raw, diary_path: str):
-    raw.read_sleep_diary(diary_path, header_size=2)
-    return raw
-
-
 def _score_algorithm(raw, algorithm, algorithm_params=None):
     algorithm_params = algorithm_params or {}
     params = algorithm_params.get(algorithm, {}) if isinstance(algorithm_params, dict) else {}
@@ -64,7 +66,7 @@ def _score_algorithm(raw, algorithm, algorithm_params=None):
     if algorithm == "crespo":
         alpha_mode = params.get("alphaMode", "default")
         if alpha_mode == "manual":
-            alpha = f"{params.get('alpha', 8)}h"
+            alpha = "{}h".format(params.get("alpha", 8))
             return _safe_call(raw.Crespo, alpha=alpha)
         if alpha_mode == "auto":
             return _safe_call(raw.Crespo, estimate_zeta=True)
@@ -93,89 +95,31 @@ def compute_metric(raw, metric_id, params=None):
         return _safe_call(raw.RA, binarize=params.get("binarize", True), threshold=params.get("threshold", 4))
 
     if metric_id == "is":
-        return _safe_call(
-            raw.IS,
-            freq=params.get("freq", "1min"),
-            binarize=params.get("binarize", True),
-            threshold=params.get("threshold", 4),
-        )
+        return _safe_call(raw.IS, freq=params.get("freq", "1min"), binarize=params.get("binarize", True), threshold=params.get("threshold", 4))
 
     if metric_id == "iv":
-        return _safe_call(
-            raw.IV,
-            freq=params.get("freq", "1min"),
-            binarize=params.get("binarize", True),
-            threshold=params.get("threshold", 4),
-        )
+        return _safe_call(raw.IV, freq=params.get("freq", "1min"), binarize=params.get("binarize", True), threshold=params.get("threshold", 4))
 
     if metric_id == "ism":
-        return _safe_call(
-            raw.ISm,
-            freqs=params.get("freqs") or DEFAULT_MEAN_FREQS,
-            binarize=params.get("binarize", True),
-            threshold=params.get("threshold", 4),
-        )
+        return _safe_call(raw.ISm, freqs=params.get("freqs") or DEFAULT_MEAN_FREQS, binarize=params.get("binarize", True), threshold=params.get("threshold", 4))
 
     if metric_id == "ivm":
-        return _safe_call(
-            raw.IVm,
-            freqs=params.get("freqs") or DEFAULT_MEAN_FREQS,
-            binarize=params.get("binarize", True),
-            threshold=params.get("threshold", 4),
-        )
+        return _safe_call(raw.IVm, freqs=params.get("freqs") or DEFAULT_MEAN_FREQS, binarize=params.get("binarize", True), threshold=params.get("threshold", 4))
 
     if metric_id == "isp":
-        return _safe_call(
-            raw.ISp,
-            period=params.get("period", "7D"),
-            freq=params.get("freq", "1min"),
-            binarize=params.get("binarize", True),
-            threshold=params.get("threshold", 4),
-            verbose=params.get("verbose", False),
-        )
+        return _safe_call(raw.ISp, period=params.get("period", "7D"), freq=params.get("freq", "1min"), binarize=params.get("binarize", True), threshold=params.get("threshold", 4), verbose=params.get("verbose", False))
 
     if metric_id == "ivp":
-        return _safe_call(
-            raw.IVp,
-            period=params.get("period", "7D"),
-            freq=params.get("freq", "1min"),
-            binarize=params.get("binarize", True),
-            threshold=params.get("threshold", 4),
-            verbose=params.get("verbose", False),
-        )
+        return _safe_call(raw.IVp, period=params.get("period", "7D"), freq=params.get("freq", "1min"), binarize=params.get("binarize", True), threshold=params.get("threshold", 4), verbose=params.get("verbose", False))
 
     if metric_id == "rap":
-        return _safe_call(
-            raw.RAp,
-            period=params.get("period", "7D"),
-            binarize=params.get("binarize", True),
-            threshold=params.get("threshold", 4),
-            verbose=params.get("verbose", False),
-        )
+        return _safe_call(raw.RAp, period=params.get("period", "7D"), binarize=params.get("binarize", True), threshold=params.get("threshold", 4), verbose=params.get("verbose", False))
 
     if metric_id == "kra":
-        return _safe_call(
-            raw.kRA,
-            threshold=params.get("threshold", 4),
-            start=params.get("start") or None,
-            period=params.get("period") or None,
-            frac=params.get("frac", 0.3),
-            it=params.get("it", 0),
-            logit=params.get("logit", False),
-            freq=params.get("freq", "1min"),
-        )
+        return _safe_call(raw.kRA, threshold=params.get("threshold", 4), start=params.get("start") or None, period=params.get("period") or None, frac=params.get("frac", 0.3), it=params.get("it", 0), logit=params.get("logit", False), freq=params.get("freq", "1min"))
 
     if metric_id == "kar":
-        return _safe_call(
-            raw.kAR,
-            threshold=params.get("threshold", 4),
-            start=params.get("start") or None,
-            period=params.get("period") or None,
-            frac=params.get("frac", 0.3),
-            it=params.get("it", 0),
-            logit=params.get("logit", False),
-            freq=params.get("freq", "1min"),
-        )
+        return _safe_call(raw.kAR, threshold=params.get("threshold", 4), start=params.get("start") or None, period=params.get("period") or None, frac=params.get("frac", 0.3), it=params.get("it", 0), logit=params.get("logit", False), freq=params.get("freq", "1min"))
 
     return None
 
@@ -211,9 +155,34 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None):
     return results
 
 
-def run_basic_pyactigraphy_analysis(raw, metric_requests=None, algorithm_request=None):
+def _build_metric_requests_from_families(family_requests):
+    metric_requests = []
+    for family in family_requests or []:
+        family_id = family.get("id")
+        for metric_id in IMPLEMENTED_FAMILY_METRICS.get(family_id, []):
+            metric_requests.append({"id": metric_id, "params": {}})
+    return metric_requests
+
+
+def _run_advanced_family_placeholder(family_id):
+    return {
+        "status": "planned",
+        "family": family_id,
+        "message": "{} is selected, but full backend execution is not yet implemented in this UI.".format(family_id),
+    }
+
+
+def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=None, analysis_scope="metric", algorithm_request=None):
     metric_requests = metric_requests or []
+    family_requests = family_requests or []
     results = {}
+
+    if analysis_scope == "family":
+        metric_requests = _build_metric_requests_from_families(family_requests)
+        for family in family_requests:
+            family_id = family.get("id")
+            if family_id in ADVANCED_FAMILY_IDS:
+                results[family_id] = _run_advanced_family_placeholder(family_id)
 
     rest_and_fragmentation_ids = {"ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap", "kra", "kar"}
     sleep_ids = {"sri", "tst", "waso", "sleep_efficiency"}
@@ -223,20 +192,13 @@ def run_basic_pyactigraphy_analysis(raw, metric_requests=None, algorithm_request
     for item in metric_requests:
         metric_id = item.get("id")
         params = item.get("params", {}) or {}
-
         if metric_id in rest_and_fragmentation_ids:
             value = compute_metric(raw, metric_id, params=params)
             results[metric_id] = _resolve_series_to_numeric(value)
 
     sleep_selected = [metric_id for metric_id in selected_metric_ids if metric_id in sleep_ids]
     if sleep_selected:
-        results.update(
-            compute_sleep_metrics(
-                raw,
-                selected_metrics=sleep_selected,
-                algorithm_request=algorithm_request,
-            )
-        )
+        results.update(compute_sleep_metrics(raw, selected_metrics=sleep_selected, algorithm_request=algorithm_request))
 
     for metric_id in selected_metric_ids:
         if metric_id not in results:
@@ -253,53 +215,13 @@ def _sample_full_recording(series, max_points=2000, value_key="activity"):
     step = max(1, total // max_points)
     sampled = series.iloc[::step]
 
-    return [
-        {
-            "timestamp": str(index),
-            value_key: _safe_float(value),
-        }
-        for index, value in sampled.items()
-    ]
-
-
-def build_basic_preview(
-    df,
-    activity_channel="VM",
-    resample_freq="1min",
-):
-    if activity_channel not in df.columns:
-        raise ValueError(f"Selected activity channel '{activity_channel}' not found in CSV.")
-
-    work = df.copy()
-    work["Timestamp"] = pd.to_datetime(work["Timestamp"], errors="coerce")
-    work = work.dropna(subset=["Timestamp"]).sort_values("Timestamp")
-    work = work.set_index("Timestamp")
-
-    if resample_freq:
-        work = work.resample(resample_freq).mean(numeric_only=True)
-
-    full_series = work[activity_channel].dropna()
-
-    summary = {
-        "rows": int(len(full_series)),
-        "start": str(full_series.index.min()) if len(full_series) else None,
-        "end": str(full_series.index.max()) if len(full_series) else None,
-        "activity_channel": activity_channel,
-        "resample_freq": resample_freq,
-        "preview_mode": "full_recording",
-    }
-
-    return {
-        "preview_available": True,
-        "summary": summary,
-        "full_recording_preview": _sample_full_recording(full_series, value_key="activity"),
-    }
+    return [{"timestamp": str(index), value_key: _safe_float(value)} for index, value in sampled.items()]
 
 
 def build_native_preview(raw, activity_channel="data", resample_freq=None):
     series = getattr(raw, "data", None)
     if series is None:
-        raise ValueError("Unable to read the native activity signal for preview.")
+        raise ValueError("Unable to read the activity signal for preview.")
 
     preview_series = series.dropna()
     if resample_freq:
@@ -325,17 +247,11 @@ def build_native_preview(raw, activity_channel="data", resample_freq=None):
 def build_light_preview(raw, resample_freq=None):
     light_series = getattr(raw, "light", None)
     if light_series is None:
-        return {
-            "light_preview_available": False,
-            "light_preview": [],
-        }
+        return {"light_preview_available": False, "light_preview": []}
 
     preview_series = light_series.dropna()
     if len(preview_series) == 0:
-        return {
-            "light_preview_available": False,
-            "light_preview": [],
-        }
+        return {"light_preview_available": False, "light_preview": []}
 
     if resample_freq:
         preview_series = preview_series.resample(resample_freq).mean()

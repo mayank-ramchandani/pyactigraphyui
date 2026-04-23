@@ -14,9 +14,7 @@ function formatResultValue(value, schema) {
     const rounded = Number.isInteger(value) ? String(value) : value.toFixed(4);
     return schema?.unit ? `${rounded} ${schema.unit}` : rounded;
   }
-  if (typeof value === "object") {
-    return JSON.stringify(value);
-  }
+  if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 
@@ -48,17 +46,10 @@ export default function ResultsPanel({
   const selectableMetricIds = [...new Set([...(selectedMetrics || []), ...resultKeys])];
 
   return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #e2e8f0",
-        borderRadius: 20,
-        padding: 20,
-      }}
-    >
+    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        Generate summary metrics and method-aware outputs from the currently selected pyActigraphy workflow.
+        Generate summary metrics and family-aware outputs from the selected actigraphy workflow.
       </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
@@ -83,8 +74,7 @@ export default function ResultsPanel({
         </div>
 
         <div style={{ color: "#64748b", fontSize: 14 }}>
-          Selected algorithm:{" "}
-          <strong>{selectedAlgorithm ? getAlgorithmLabel(algorithmRegistry, selectedAlgorithm) : "Not selected"}</strong>
+          Selected algorithm: <strong>{selectedAlgorithm ? getAlgorithmLabel(algorithmRegistry, selectedAlgorithm) : "Not selected"}</strong>
         </div>
       </div>
 
@@ -110,39 +100,28 @@ export default function ResultsPanel({
             <select
               value={selectedResultMetric}
               onChange={(e) => setSelectedResultMetric(e.target.value)}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid #cbd5e1",
-                background: "white",
-              }}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}
             >
-              <option value="">Select metric to inspect</option>
+              <option value="">Select result to inspect</option>
               {selectableMetricIds.map((metricId) => (
                 <option key={metricId} value={metricId}>
                   {getMetricLabel(metricRegistry, metricId)}
                 </option>
               ))}
+              {Object.keys(summaryResults || {})
+                .filter((key) => !selectableMetricIds.includes(key))
+                .map((key) => (
+                  <option key={key} value={key}>
+                    {key}
+                  </option>
+                ))}
             </select>
           </div>
 
           {activeMetricDefinition && (
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 16,
-                padding: 16,
-                background: "#f8fafc",
-                marginBottom: 16,
-              }}
-            >
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                {activeMetricDefinition.label}
-              </div>
-              <div style={{ color: "#475569", lineHeight: 1.6, marginBottom: 8 }}>
-                {activeMetricDefinition.description}
-              </div>
-
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>{activeMetricDefinition.label}</div>
+              <div style={{ color: "#475569", lineHeight: 1.6, marginBottom: 8 }}>{activeMetricDefinition.description}</div>
               {(activeMetricDefinition.references || []).length > 0 && (
                 <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
                   <strong>References:</strong> {activeMetricDefinition.references.join("; ")}
@@ -151,15 +130,7 @@ export default function ResultsPanel({
             </div>
           )}
 
-          <div
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 16,
-              padding: 16,
-              background: "#f8fafc",
-              marginBottom: 16,
-            }}
-          >
+          <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Summary Table</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <tbody>
@@ -180,19 +151,14 @@ export default function ResultsPanel({
             </table>
           </div>
 
-          <div
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 16,
-              padding: 16,
-              background: "#f8fafc",
-              marginBottom: 16,
-            }}
-          >
+          <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Methods Summary</div>
             <div style={{ color: "#475569", lineHeight: 1.7, fontSize: 14 }}>
-              Metrics requested:{" "}
-              {(selectedMetrics || []).map((metricId) => getMetricLabel(metricRegistry, metricId)).join(", ") || "None"}
+              Analysis scope: <strong>{analysisConfig?.analysisScope || "metric"}</strong>
+              <br />
+              Families requested: {(analysisConfig?.families || []).map((family) => family.label || family.id).join(", ") || "None"}
+              <br />
+              Metrics requested: {(analysisConfig?.metrics || []).map((metric) => getMetricLabel(metricRegistry, metric.id)).join(", ") || "None"}
               <br />
               Sleep/rest algorithm: {selectedAlgorithm ? getAlgorithmLabel(algorithmRegistry, selectedAlgorithm) : "None"}
               <br />
@@ -203,29 +169,10 @@ export default function ResultsPanel({
                   Algorithm citation: {activeAlgorithm.citationText}
                 </>
               )}
-              {analysisConfig?.metrics?.length > 0 && (
-                <>
-                  <br />
-                  Metric parameters: {JSON.stringify(analysisConfig.metrics)}
-                </>
-              )}
-              {analysisConfig?.algorithm && (
-                <>
-                  <br />
-                  Algorithm parameters: {JSON.stringify(analysisConfig.algorithm)}
-                </>
-              )}
             </div>
           </div>
 
-          <div
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 16,
-              padding: 16,
-              background: "#fff7ed",
-            }}
-          >
+          <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#fff7ed" }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Quick QC</div>
             {qcWarnings.length === 0 ? (
               <div style={{ color: "#475569" }}>No QC warnings.</div>

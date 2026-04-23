@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any, Tuple, List
 
 import pandas as pd
 import pyActigraphy
@@ -22,112 +22,198 @@ READERS = {
     "tal": "read_raw_tal",
 }
 
+COMMON_TIMESTAMP_COLUMNS = [
+    "Timestamp", "timestamp", "DateTime", "datetime", "time", "Time", "date_time", "DATE/TIME", "Data", "Hora"
+]
+
+COMMON_ACTIVITY_COLUMNS = [
+    "VM", "vm", "activity", "Activity", "Axis1", "AxisXCounts", "activity_counts", "counts",
+    "Atividade", "PIM", "TAT", "ZCM"
+]
+
+COMMON_LIGHT_COLUMNS = [
+    "light", "Light", "Lux", "lux", "Illuminance", "illuminance",
+    "LIGHT", "AMB LIGHT", "Luminosidade", "RED LIGHT", "GREEN LIGHT", "BLUE LIGHT",
+    "IR LIGHT", "UVA LIGHT", "UVB LIGHT", "MELANOPIC_LUX", "CLEAR"
+]
+
+COMMON_TEMPERATURE_COLUMNS = [
+    "temperature", "Temperature", "temp", "Temp", "TEMPERATURE", "EXT TEMPERATURE"
+]
+
+COMMON_NONWEAR_COLUMNS = [
+    "nonwear", "NonWear", "mask", "Mask", "wear", "Wear"
+]
+
+PREFERRED_ACTIVITY_ORDER = ["VM", "activity", "Atividade", "PIM", "TAT", "ZCM"]
+PREFERRED_LIGHT_ORDER = ["LIGHT", "AMB LIGHT", "Luminosidade", "Lux", "light", "MELANOPIC_LUX", "CLEAR"]
+
 
 def infer_reader_type(file_path: str):
     suffix = Path(file_path).suffix.lower().replace(".", "")
     if suffix in READERS:
-      return suffix
-    if suffix == "csv":
-      return "csv"
-    raise ValueError(f"Unsupported file type: {suffix}")
+        return suffix
+    if suffix in ("csv", "txt", "gz", "json", "xls", "xlsx", "ods"):
+        return suffix
+    raise ValueError("Unsupported file type: {}".format(suffix))
 
 
 def load_native_file(file_path: str, reader_type: str):
     method_name = READERS.get(reader_type)
     if method_name is None:
-        raise ValueError(f"Unsupported reader type: {reader_type}")
-
-    if reader_type == "gt3x":
-        reader = getattr(pyActigraphy.io, "read_gt3x", None)
-        if reader is None:
-            raise ValueError("This pyActigraphy installation does not expose 'read_gt3x'.")
-        return reader(file_path)
+        raise ValueError("Unsupported native reader type: {}".format(reader_type))
 
     reader = getattr(pyActigraphy.io, method_name, None)
     if reader is None:
-        raise ValueError(f"This pyActigraphy installation does not expose '{method_name}'.")
+        raise ValueError("This pyActigraphy installation does not expose '{}'.".format(method_name))
 
     return reader(file_path)
 
 
-def read_csv_columns(file_path: str, sep: str = ","):
-    df = pd.read_csv(file_path, sep=sep, nrows=5)
-    return list(df.columns)
+def _find_first_existing(columns, candidates):
+    lookup = {str(c).strip().lower(): c for c in columns}
+    for candidate in candidates:
+        found = lookup.get(candidate.lower())
+        if found is not None:
+            return found
+    return None
 
 
-def validate_csv_file(file_path: str):
-    return pd.read_csv(file_path)
+def _choose_preferred_column(columns: List[str], preferred_order: List[str], fallback_candidates: List[str]):
+    lookup = {str(c).strip().lower(): c for c in columns}
+    for name in preferred_order:
+        found = lookup.get(name.lower())
+        if found is not None:
+            return found
+    return _find_first_existing(columns, fallback_candidates)
 
 
-def validate_custom_csv_file(file_path: str, sep: str = ","):
-    return pd.read_csv(file_path, sep=sep)
+def read_tabular_file(file_path: str, sep: Optional[str] = None) -> pd.DataFrame:
+    suffix = Path(file_path).suffix.lower()
+
+    if suffix == ".csv":
+        return pd.read_csv(file_path, sep=sep or ",")
+    if suffix == ".txt":
+        return pd.read_csv(file_path, sep=sep or ";")
+    if suffix == ".gz":
+        return pd.read_csv(file_path, compression="gzip")
+    if suffix in (".xls", ".xlsx", ".ods"):
+        return pd.read_excel(file_path)
+
+    raise ValueError("Unsupported tabular file type: {}".format(suffix))
 
 
-def load_custom_csv(
+def detect_csv_mapping(df: pd.DataFrame) -> Dict[str, Any]:
+    cols = list(df.columns)
+
+    mapping = {
+        "timestamp_col": _find_first_existing(cols, COMMON_TIMESTAMP_COLUMNS),
+        "activity_col": _choose_preferred_column(cols, PREFERRED_ACTIVITY_ORDER, COMMON_ACTIVITY_COLUMNS),
+        "light_col": _choose_preferred_column(cols, PREFERRED_LIGHT_ORDER, COMMON_LIGHT_COLUMNS),
+        "temperature_col": _find_first_existing(cols, COMMON_TEMPERATURE_COLUMNS),
+        "nonwear_col": _find_first_existing(cols, COMMON_NONWEAR_COLUMNS),
+    }
+
+    return mapping
+
+
+def load_custom_tabular(
     file_path: str,
-    timestamp_col: str = "Timestamp",
+    timestamp_col: str,
     activity_col: Optional[str] = None,
     light_col: Optional[str] = None,
     temperature_col: Optional[str] = None,
     nonwear_col: Optional[str] = None,
     sep: str = ",",
 ):
-    df = pd.read_csv(file_path, sep=sep)
+    df = read_tabular_file(file_path, sep=sep)
 
     if timestamp_col not in df.columns:
-        raise ValueError(f"Timestamp column '{timestamp_col}' not found in CSV.")
+        raise ValueError("Timestamp column '{}' not found.".format(timestamp_col))
 
-    df[timestamp_col] = pd.to_datetime(df[timestamp_col], errors="coerce")
-    df = df.dropna(subset=[timestamp_col]).sort_values(timestamp_col)
+    work = df.copy()
 
-    out = pd.DataFrame(index=df[timestamp_col])
+    if timestamp_col == "Data" and "Hora" in work.columns:
+        work["_combined_timestamp"] = (
+            work["Data"].astype(str).str.strip() + " " + work["Hora"].astype(str).str.strip()
+        )
+        time_source = "_combined_timestamp"
+    else:
+        time_source = timestamp_col
+
+    work[time_source] = pd.to_datetime(work[time_source], errors="coerce", dayfirst=True)
+    work = work.dropna(subset=[time_source]).sort_values(time_source)
+
+    out = pd.DataFrame(index=work[time_source])
 
     if activity_col:
-        if activity_col not in df.columns:
-            raise ValueError(f"Activity column '{activity_col}' not found in CSV.")
-        out["activity"] = pd.to_numeric(df[activity_col], errors="coerce")
+        if activity_col not in work.columns:
+            raise ValueError("Activity column '{}' not found.".format(activity_col))
+        out["activity"] = pd.to_numeric(work[activity_col], errors="coerce")
 
     if light_col:
-        if light_col not in df.columns:
-            raise ValueError(f"Light column '{light_col}' not found in CSV.")
-        out["light"] = pd.to_numeric(df[light_col], errors="coerce")
+        if light_col not in work.columns:
+            raise ValueError("Light column '{}' not found.".format(light_col))
+        out["light"] = pd.to_numeric(work[light_col], errors="coerce")
 
     if temperature_col:
-        if temperature_col not in df.columns:
-            raise ValueError(f"Temperature column '{temperature_col}' not found in CSV.")
-        out["temperature"] = pd.to_numeric(df[temperature_col], errors="coerce")
+        if temperature_col not in work.columns:
+            raise ValueError("Temperature column '{}' not found.".format(temperature_col))
+        out["temperature"] = pd.to_numeric(work[temperature_col], errors="coerce")
 
     if nonwear_col:
-        if nonwear_col not in df.columns:
-            raise ValueError(f"Non-wear column '{nonwear_col}' not found in CSV.")
-        out["nonwear"] = pd.to_numeric(df[nonwear_col], errors="coerce")
+        if nonwear_col not in work.columns:
+            raise ValueError("Non-wear column '{}' not found.".format(nonwear_col))
+        out["nonwear"] = pd.to_numeric(work[nonwear_col], errors="coerce")
 
     out = out.dropna(how="all")
-
     return out
+
+
+def load_auto_tabular(file_path: str, sep: str = ",") -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    df = read_tabular_file(file_path, sep=sep)
+    mapping = detect_csv_mapping(df)
+
+    if not mapping.get("timestamp_col") or not mapping.get("activity_col"):
+        raise ValueError(
+            "Could not automatically detect timestamp/activity columns. Please use manual mapping."
+        )
+
+    return load_custom_tabular(
+        file_path=file_path,
+        timestamp_col=mapping["timestamp_col"],
+        activity_col=mapping.get("activity_col"),
+        light_col=mapping.get("light_col"),
+        temperature_col=mapping.get("temperature_col"),
+        nonwear_col=mapping.get("nonwear_col"),
+        sep=sep,
+    ), mapping
 
 
 def build_baseraw_from_dataframe(
     df: pd.DataFrame,
-    name: str = "Mapped CSV",
-    uuid: str = "csv-device",
+    name: str = "Mapped File",
+    uuid: str = "mapped-device",
 ):
     if BaseRaw is None:
         raise ValueError("BaseRaw is not available in this pyActigraphy installation.")
 
     if "activity" not in df.columns:
-        raise ValueError("Mapped CSV must contain an 'activity' column before conversion to BaseRaw.")
+        raise ValueError("Mapped table must contain an 'activity' column before conversion to BaseRaw.")
 
-    work = df.copy()
-    work = work.sort_index()
+    work = df.copy().sort_index()
 
     if work.index.freq is None:
         inferred = pd.infer_freq(work.index)
-        if inferred is None:
-            if len(work.index) < 2:
-                raise ValueError("Could not infer recording frequency from CSV timestamps.")
-            inferred = work.index[1] - work.index[0]
-        work = work.asfreq(inferred)
+        if inferred is not None:
+            work = work.asfreq(inferred)
+
+    if work.index.freq is None and len(work.index) >= 2:
+        delta = work.index[1] - work.index[0]
+        work = work.asfreq(delta)
+
+    if work.index.freq is None:
+        raise ValueError("Could not infer recording frequency from timestamps.")
 
     raw = BaseRaw(
         name=name,
@@ -142,13 +228,9 @@ def build_baseraw_from_dataframe(
     )
 
     if "nonwear" in work.columns:
-        raw.mask = (1 - work["nonwear"].fillna(0)).clip(lower=0, upper=1)
+        try:
+            raw.mask = (1 - work["nonwear"].fillna(0)).clip(lower=0, upper=1)
+        except Exception:
+            pass
 
     return raw
-
-
-def load_selected_actigraphy_file(file_path: str):
-    reader_type = infer_reader_type(file_path)
-    if reader_type == "csv":
-        return validate_custom_csv_file(file_path)
-    return load_native_file(file_path, reader_type)
