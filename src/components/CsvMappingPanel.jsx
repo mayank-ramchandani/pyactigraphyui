@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-function parseCsvHeader(text) {
-  const firstLine = text.split(/\r?\n/)[0] || "";
-  return firstLine.split(",").map((item) => item.trim()).filter(Boolean);
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
+
+function buildApiUrl(path) {
+  const base = API_BASE_URL.endsWith("/") ? API_BASE_URL : `${API_BASE_URL}/`;
+  const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+  return `${base}${cleanPath}`;
 }
 
 export default function CsvMappingPanel({
@@ -15,39 +18,80 @@ export default function CsvMappingPanel({
   onContinue,
 }) {
   const [columns, setColumns] = useState([]);
+  const [detectedMapping, setDetectedMapping] = useState({});
+  const [detectedInputType, setDetectedInputType] = useState("");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const availableColumns = useMemo(() => ["", ...columns], [columns]);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function readHeader() {
+    async function fetchColumns() {
       if (!csvFile) {
         setColumns([]);
+        setDetectedMapping({});
+        setDetectedInputType("");
         return;
       }
 
       try {
-        const text = await csvFile.text();
-        if (cancelled) return;
-        const detectedColumns = parseCsvHeader(text);
-        setColumns(detectedColumns);
+        setLoading(true);
         setError("");
+
+        const formData = new FormData();
+        formData.append("file", csvFile);
+        formData.append("csvSeparator", csvSeparator);
+
+        const res = await fetch(buildApiUrl("api/tabular/columns"), {
+          method: "POST",
+          body: formData,
+        });
+
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : {};
+
+        if (!res.ok) {
+          throw new Error(data?.detail || "Failed to detect columns.");
+        }
+
+        if (cancelled) return;
+
+        const detectedColumns = data?.columns || [];
+        const mapping = data?.detected_mapping || {};
+
+        setColumns(detectedColumns);
+        setDetectedMapping(mapping);
+        setDetectedInputType(data?.detected_input_type || "");
+
+        setCsvMapping((prev) => ({
+          timestamp_col: prev.timestamp_col || mapping.timestamp_col || "",
+          time_col: prev.time_col || mapping.time_col || "",
+          activity_col: prev.activity_col || mapping.activity_col || "",
+          light_col: prev.light_col || mapping.light_col || "",
+          temperature_col: prev.temperature_col || mapping.temperature_col || "",
+          nonwear_col: prev.nonwear_col || mapping.nonwear_col || "",
+        }));
       } catch (err) {
         if (!cancelled) {
-          setError("Failed to read CSV header.");
+          setError(err.message || "Failed to detect columns.");
           setColumns([]);
+          setDetectedMapping({});
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
       }
     }
 
-    readHeader();
+    fetchColumns();
 
     return () => {
       cancelled = true;
     };
-  }, [csvFile]);
-
-  const availableColumns = useMemo(() => ["", ...columns], [columns]);
+  }, [csvFile, csvSeparator, setCsvMapping]);
 
   const updateField = (field, value) => {
     setCsvMapping((prev) => ({
@@ -69,8 +113,7 @@ export default function CsvMappingPanel({
     >
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16, lineHeight: 1.6 }}>
-        Map the uploaded CSV columns to the data fields used for preview and pyActigraphy processing.
-        Timestamp and activity are required. Light and temperature are optional.
+        Manual mapping is optional. The backend inspects the uploaded file and suggests the most likely timestamp, activity, and light columns.
       </p>
 
       <div
@@ -82,9 +125,30 @@ export default function CsvMappingPanel({
           marginBottom: 16,
         }}
       >
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Current CSV</div>
-        <div style={{ color: "#475569", fontSize: 14 }}>{csvFile?.name || "No CSV selected"}</div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Current file</div>
+        <div style={{ color: "#475569", fontSize: 14 }}>{csvFile?.name || "No file selected"}</div>
+        {detectedInputType && (
+          <div style={{ color: "#64748b", fontSize: 13, marginTop: 6 }}>
+            Detected type: {detectedInputType}
+          </div>
+        )}
       </div>
+
+      {loading && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid #cbd5e1",
+            background: "#f8fafc",
+            color: "#334155",
+            fontSize: 14,
+          }}
+        >
+          Detecting columns...
+        </div>
+      )}
 
       {error && (
         <div
@@ -113,11 +177,13 @@ export default function CsvMappingPanel({
             <option value=",">Comma (,)</option>
             <option value=";">Semicolon (;)</option>
             <option value="\t">Tab</option>
+            <option value="|">Pipe (|)</option>
           </select>
         </div>
 
         {[
           ["timestamp_col", "Timestamp column *"],
+          ["time_col", "Optional time column"],
           ["activity_col", "Activity column *"],
           ["light_col", "Light column"],
           ["temperature_col", "Temperature column"],
@@ -128,7 +194,7 @@ export default function CsvMappingPanel({
             <select
               value={csvMapping[field] || ""}
               onChange={(e) => updateField(field, e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", minWidth: 280 }}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", minWidth: 320 }}
             >
               {availableColumns.map((column) => (
                 <option key={`${field}-${column || "none"}`} value={column}>
@@ -136,6 +202,12 @@ export default function CsvMappingPanel({
                 </option>
               ))}
             </select>
+
+            {detectedMapping[field] && (
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
+                Suggested: {detectedMapping[field]}
+              </div>
+            )}
           </div>
         ))}
       </div>

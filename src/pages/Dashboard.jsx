@@ -78,6 +78,7 @@ export default function Dashboard() {
 
   const [csvMapping, setCsvMapping] = useState({
     timestamp_col: "",
+    time_col:"",
     activity_col: "",
     light_col: "",
     temperature_col: "",
@@ -194,6 +195,7 @@ export default function Dashboard() {
     setShowManualMapping(false);
     setCsvMapping({
       timestamp_col: "",
+      time_col:"",
       activity_col: "",
       light_col: "",
       temperature_col: "",

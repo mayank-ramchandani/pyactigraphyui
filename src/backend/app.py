@@ -14,6 +14,8 @@ from .io_helpers import (
     load_custom_tabular,
     load_auto_tabular,
     build_baseraw_from_dataframe,
+    read_tabular_file,
+    detect_csv_mapping,
 )
 
 app = FastAPI()
@@ -82,10 +84,45 @@ def _load_light_raw_with_fallback(file_path, original_name, csv_separator):
         raw = load_native_file(file_path, reader_type)
         return raw, reader_type, {}
     except Exception:
-        # fallback path for brittle native readers like some RPX light-enabled exports
         mapped_df, resolved_mapping = load_auto_tabular(file_path, sep=csv_separator)
         raw = build_baseraw_from_dataframe(mapped_df, name=original_name)
         return raw, "tabular_fallback", resolved_mapping
+
+
+@app.post("/api/tabular/columns")
+async def tabular_columns(
+    file: UploadFile = File(...),
+    csvSeparator: str = Form(","),
+):
+    try:
+        tmp_path = _write_upload_to_temp(file)
+        reader_type = infer_reader_type(tmp_path)
+
+        if reader_type not in ("tabular", "rpx", "dqt", "tal", "mesa"):
+            return JSONResponse(
+                content={
+                    "columns": [],
+                    "detected_input_type": reader_type,
+                    "detected_mapping": {},
+                    "message": "This file is handled by a native reader and does not require manual tabular mapping.",
+                }
+            )
+
+        df = read_tabular_file(tmp_path, sep=csvSeparator)
+        mapping = detect_csv_mapping(df)
+
+        return JSONResponse(
+            content={
+                "columns": [str(col) for col in df.columns],
+                "detected_input_type": reader_type,
+                "detected_mapping": mapping,
+            }
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": "Server error: {}".format(str(e))})
 
 
 @app.post("/api/preview/basic")
