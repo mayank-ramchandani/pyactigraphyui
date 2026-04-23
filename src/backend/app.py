@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +8,6 @@ from pathlib import Path
 
 from .analysis import (
     run_basic_pyactigraphy_analysis,
-    build_basic_preview,
     build_native_preview,
     build_light_preview,
 )
@@ -36,7 +36,8 @@ app.add_middleware(
 def _write_upload_to_temp(upload: UploadFile):
     suffix = Path(upload.filename).suffix.lower()
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(upload.file.read())
+        content = upload.file.read()
+        tmp.write(content)
         return tmp.name
 
 
@@ -54,6 +55,8 @@ async def analyze_basic(
     try:
         analysis_config = json.loads(analysisConfig or "{}")
         metric_requests = analysis_config.get("metrics", [])
+        family_requests = analysis_config.get("families", [])
+        analysis_scope = analysis_config.get("analysisScope", "metric")
         algorithm_request = analysis_config.get("algorithm")
         csv_mapping = json.loads(csvMapping or "{}")
 
@@ -80,6 +83,8 @@ async def analyze_basic(
         results = run_basic_pyactigraphy_analysis(
             raw=raw,
             metric_requests=metric_requests,
+            family_requests=family_requests,
+            analysis_scope=analysis_scope,
             algorithm_request=algorithm_request,
         )
 
@@ -101,7 +106,7 @@ async def analyze_basic(
 @app.post("/api/preview/basic")
 async def preview_basic(
     file: UploadFile = File(...),
-    lightFile: UploadFile | None = File(None),
+    lightFile: Optional[UploadFile] = File(None),
     activityChannel: str = Form("VM"),
     resampleFreq: str = Form("1min"),
     csvMapping: str = Form("{}"),
@@ -145,8 +150,14 @@ async def preview_basic(
         if (not light_preview.get("light_preview_available")) and lightFile is not None:
             light_tmp_path = _write_upload_to_temp(lightFile)
             light_reader_type = infer_reader_type(light_tmp_path)
-            light_raw = load_native_file(light_tmp_path, light_reader_type)
-            light_preview = build_light_preview(raw=light_raw, resample_freq=resampleFreq)
+            if light_reader_type == "csv":
+                light_preview = {
+                    "light_preview_available": False,
+                    "light_preview": [],
+                }
+            else:
+                light_raw = load_native_file(light_tmp_path, light_reader_type)
+                light_preview = build_light_preview(raw=light_raw, resample_freq=resampleFreq)
 
         merged = {
             **preview,

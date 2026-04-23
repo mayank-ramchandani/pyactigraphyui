@@ -125,14 +125,19 @@ export default function Dashboard() {
         metricRegistry,
         sharedRegistry: sharedParamRegistry,
         algorithmRegistry,
-        selectedMetrics: resolvedSelectedMetrics,
+        analysisFamilyRegistry,
+        selectedMetrics,
+        selectedFamilies,
+        analysisScope,
         selectedAlgorithm,
         sharedValues,
         metricOverrides,
         algorithmParams,
       }),
     [
-      resolvedSelectedMetrics,
+      selectedMetrics,
+      selectedFamilies,
+      analysisScope,
       selectedAlgorithm,
       sharedValues,
       metricOverrides,
@@ -178,9 +183,10 @@ export default function Dashboard() {
         temperature_col: "",
         nonwear_col: "",
       });
+      setCurrentStep("3");
+    } else {
+      setCurrentStep("2");
     }
-
-    setCurrentStep("1");
   };
 
   const handleCsvNeedsMapping = () => {
@@ -201,8 +207,8 @@ export default function Dashboard() {
       formData.append("file", actigraphyFile);
       formData.append("activityChannel", activityChannel);
       formData.append("resampleFreq", "1min");
-      formData.append("csvSeparator", csvSeparator);
       formData.append("csvMapping", JSON.stringify(csvMapping));
+      formData.append("csvSeparator", csvSeparator);
 
       if (lightFile) {
         formData.append("lightFile", lightFile);
@@ -245,8 +251,8 @@ export default function Dashboard() {
       formData.append("lightTransform", lightTransform);
       formData.append("analysisMode", analysisMode);
       formData.append("analysisConfig", JSON.stringify(resolvedAnalysisConfig));
-      formData.append("csvSeparator", csvSeparator);
       formData.append("csvMapping", JSON.stringify(csvMapping));
+      formData.append("csvSeparator", csvSeparator);
 
       const res = await fetch(buildApiUrl("api/analyze/basic"), {
         method: "POST",
@@ -308,10 +314,7 @@ export default function Dashboard() {
           setCsvMapping={setCsvMapping}
           csvSeparator={csvSeparator}
           setCsvSeparator={setCsvSeparator}
-          onContinue={() => {
-            setCsvNeedsMapping(false);
-            onPreview();
-          }}
+          onContinue={onPreview}
         />
       );
     }
