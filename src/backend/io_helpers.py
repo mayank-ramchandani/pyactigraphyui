@@ -24,35 +24,104 @@ READERS = {
 }
 
 COMMON_TIMESTAMP_COLUMNS = [
-    "Timestamp", "timestamp", "DateTime", "datetime", "time", "Time",
-    "date_time", "DATE/TIME", "Data", "Hora", "Date", "DATE", "Datum", "Zeit"
+    "DATE/TIME",
+    "Timestamp",
+    "timestamp",
+    "DateTime",
+    "datetime",
+    "time",
+    "Time",
+    "date_time",
+    "Data",
+    "Hora",
+    "Date",
+    "DATE",
+    "Datum",
+    "Zeit",
 ]
 
 COMMON_ACTIVITY_COLUMNS = [
-    "VM", "vm", "activity", "Activity", "Axis1", "AxisXCounts",
-    "activity_counts", "counts", "Atividade", "PIM", "TAT", "ZCM",
-    "Activity Marker", "Aktivität"
+    "PIM",
+    "TAT",
+    "ZCM",
+    "VM",
+    "vm",
+    "activity",
+    "Activity",
+    "Axis1",
+    "AxisXCounts",
+    "activity_counts",
+    "counts",
+    "Atividade",
+    "Activity Marker",
+    "Aktivität",
 ]
 
 COMMON_LIGHT_COLUMNS = [
-    "light", "Light", "Lux", "lux", "Illuminance", "illuminance",
-    "LIGHT", "AMB LIGHT", "Luminosidade", "RED LIGHT", "GREEN LIGHT",
-    "BLUE LIGHT", "IR LIGHT", "UVA LIGHT", "UVB LIGHT",
-    "MELANOPIC_LUX", "CLEAR", "whitelight", "Weißes Licht"
+    "LIGHT",
+    "AMB LIGHT",
+    "Luminosidade",
+    "Lux",
+    "light",
+    "Light",
+    "lux",
+    "Illuminance",
+    "illuminance",
+    "RED LIGHT",
+    "GREEN LIGHT",
+    "BLUE LIGHT",
+    "IR LIGHT",
+    "UVA LIGHT",
+    "UVB LIGHT",
+    "MELANOPIC_LUX",
+    "CLEAR",
+    "whitelight",
+    "Weißes Licht",
 ]
 
 COMMON_TEMPERATURE_COLUMNS = [
-    "temperature", "Temperature", "temp", "Temp", "TEMPERATURE",
-    "EXT TEMPERATURE"
+    "temperature",
+    "Temperature",
+    "temp",
+    "Temp",
+    "TEMPERATURE",
+    "EXT TEMPERATURE",
 ]
 
 COMMON_NONWEAR_COLUMNS = [
-    "nonwear", "NonWear", "mask", "Mask", "wear", "Wear", "offwrist",
-    "Status „Nicht am Handgelenk“"
+    "nonwear",
+    "NonWear",
+    "mask",
+    "Mask",
+    "wear",
+    "Wear",
+    "offwrist",
+    "Status „Nicht am Handgelenk“",
 ]
 
-PREFERRED_ACTIVITY_ORDER = ["VM", "activity", "Atividade", "PIM", "TAT", "ZCM", "Axis1", "Aktivität"]
-PREFERRED_LIGHT_ORDER = ["LIGHT", "AMB LIGHT", "Luminosidade", "Lux", "light", "whitelight", "MELANOPIC_LUX", "CLEAR", "Weißes Licht"]
+PREFERRED_ACTIVITY_ORDER = [
+    "PIM",
+    "TAT",
+    "ZCM",
+    "Atividade",
+    "Activity",
+    "activity",
+    "VM",
+    "Axis1",
+    "Aktivität",
+]
+
+PREFERRED_LIGHT_ORDER = [
+    "LIGHT",
+    "AMB LIGHT",
+    "Luminosidade",
+    "Lux",
+    "light",
+    "Weißes Licht",
+    "whitelight",
+    "MELANOPIC_LUX",
+    "CLEAR",
+]
 
 COMMON_SEPARATORS = [",", ";", "\t", "|"]
 
@@ -77,7 +146,7 @@ def infer_reader_type(file_path: str):
         if "serial number:" in head and "sample rate:" in head and "store rate:" in head:
             return "dqt"
 
-        if "luminosidade" in head and "atividade" in head and "data; hora;" in head:
+        if "luminosidade" in head and "atividade" in head and ("data; hora;" in head or "data;hora;" in head):
             return "tal"
 
         if "mesaid,line,linetime" in head:
@@ -165,9 +234,11 @@ def _read_delimited_with_header_detection(file_path: str, preferred_sep: Optiona
     seps = []
     if preferred_sep:
         seps.append(preferred_sep)
+
     sniffed = _sniff_separator(file_path, fallback=",")
     if sniffed not in seps:
         seps.append(sniffed)
+
     for sep in COMMON_SEPARATORS:
         if sep not in seps:
             seps.append(sep)
@@ -218,8 +289,7 @@ def _read_rpx_epoch_table(file_path: str) -> pd.DataFrame:
 
     from io import StringIO
     table_text = "".join(lines[header_idx:])
-    df = pd.read_csv(StringIO(table_text), engine="python")
-    return df
+    return pd.read_csv(StringIO(table_text), engine="python")
 
 
 def read_tabular_file(file_path: str, sep: Optional[str] = None) -> pd.DataFrame:
@@ -241,10 +311,58 @@ def detect_csv_mapping(df: pd.DataFrame) -> Dict[str, Any]:
     cols = list(df.columns)
 
     mapping = {
-        "timestamp_col": _find_first_existing(cols, ["Timestamp", "DateTime", "datetime", "Data", "Date", "Datum"]),
-        "time_col": _find_first_existing(cols, ["Time", "Hora", "Zeit"]),
-        "activity_col": _choose_preferred_column(cols, PREFERRED_ACTIVITY_ORDER, COMMON_ACTIVITY_COLUMNS),
-        "light_col": _choose_preferred_column(cols, PREFERRED_LIGHT_ORDER, COMMON_LIGHT_COLUMNS),
+        "timestamp_col": _find_first_existing(
+            cols,
+            [
+                "DATE/TIME",
+                "Timestamp",
+                "timestamp",
+                "DateTime",
+                "datetime",
+                "Data",
+                "Date",
+                "DATE",
+                "Datum",
+            ],
+        ),
+        "time_col": _find_first_existing(
+            cols,
+            [
+                "Time",
+                "Hora",
+                "Zeit",
+            ],
+        ),
+        "activity_col": _choose_preferred_column(
+            cols,
+            [
+                "PIM",
+                "TAT",
+                "ZCM",
+                "Atividade",
+                "Activity",
+                "activity",
+                "VM",
+                "Axis1",
+                "Aktivität",
+            ],
+            COMMON_ACTIVITY_COLUMNS,
+        ),
+        "light_col": _choose_preferred_column(
+            cols,
+            [
+                "LIGHT",
+                "AMB LIGHT",
+                "Luminosidade",
+                "Lux",
+                "light",
+                "Weißes Licht",
+                "whitelight",
+                "MELANOPIC_LUX",
+                "CLEAR",
+            ],
+            COMMON_LIGHT_COLUMNS,
+        ),
         "temperature_col": _find_first_existing(cols, COMMON_TEMPERATURE_COLUMNS),
         "nonwear_col": _find_first_existing(cols, COMMON_NONWEAR_COLUMNS),
     }
