@@ -36,8 +36,8 @@
       "showAsPlannedByDefault": true
     },
     "registryMode": {
-      "enabled": false,
-      "description": "Reserved for future pyActigraphy registry-based metric discovery."
+      "enabled": true,
+      "description": "Metric and algorithm configuration is driven by registry metadata and per-metric parameter resolution."
     }
   },
   "workflow": [

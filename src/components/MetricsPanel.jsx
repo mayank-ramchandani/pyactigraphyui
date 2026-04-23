@@ -6,6 +6,9 @@ import {
   getMetricCategories,
   getMetricSummary,
 } from "../services/configUtils";
+import {
+  getSharedParamsForSelectedMetrics,
+} from "../services/analysisConfigUtils";
 
 const INPUT_TYPE_LABELS = {
   agd: "ActiGraph AGD",
@@ -47,6 +50,7 @@ export default function MetricsPanel({
   title,
   metricRegistry,
   algorithmRegistry,
+  sharedParamRegistry,
   selectedMetrics,
   setSelectedMetrics,
   selectedAlgorithm,
@@ -58,26 +62,10 @@ export default function MetricsPanel({
   setActivityTransform,
   lightTransform,
   setLightTransform,
-  resampleFreq,
-  setResampleFreq,
-  meanResampleFreqs = [],
-  setMeanResampleFreqs = () => {},
-  binarize,
-  setBinarize,
-  threshold,
-  setThreshold,
-  period = "7D",
-  setPeriod = () => {},
-  fragmentationStart = "",
-  setFragmentationStart = () => {},
-  fragmentationPeriod = "",
-  setFragmentationPeriod = () => {},
-  lowessFrac = 0.3,
-  setLowessFrac = () => {},
-  lowessIt = 0,
-  setLowessIt = () => {},
-  logitTransform = false,
-  setLogitTransform = () => {},
+  sharedValues = {},
+  setSharedValues = () => {},
+  metricOverrides = {},
+  setMetricOverrides = () => {},
   analysisMode,
   inputType,
   algorithmParams = {},
@@ -99,48 +87,14 @@ export default function MetricsPanel({
     );
   }, [metricRegistry, allMetrics]);
 
-  const freqOptions = useMemo(
-    () => [
-      "1min",
-      "2min",
-      "3min",
-      "4min",
-      "5min",
-      "6min",
-      "8min",
-      "9min",
-      "10min",
-      "12min",
-      "15min",
-      "16min",
-      "18min",
-      "20min",
-      "24min",
-      "30min",
-      "32min",
-      "36min",
-      "40min",
-      "45min",
-      "48min",
-      "60min",
-    ],
-    []
-  );
-
-  const showBinarizeOptions = selectedMetrics.some((metricId) =>
-    ["ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap", "l5", "m10", "l5p", "m10p", "adat", "adatp"].includes(metricId)
-  );
-
-  const showPeriodOptions = selectedMetrics.some((metricId) =>
-    ["adatp", "l5p", "m10p", "rap", "isp", "ivp"].includes(metricId)
-  );
-
-  const showMeanResampleOptions = selectedMetrics.some((metricId) =>
-    ["ism", "ivm"].includes(metricId)
-  );
-
-  const showFragmentationOptions = selectedMetrics.some((metricId) =>
-    ["kra", "kar"].includes(metricId)
+  const sharedParamsForSelection = useMemo(
+    () =>
+      getSharedParamsForSelectedMetrics(
+        metricRegistry,
+        sharedParamRegistry,
+        selectedMetrics
+      ),
+    [metricRegistry, sharedParamRegistry, selectedMetrics]
   );
 
   const toggleMetric = (metricId) => {
@@ -150,6 +104,23 @@ export default function MetricsPanel({
         ? prev.filter((item) => item !== metricId)
         : [...prev, metricId]
     );
+  };
+
+  const updateSharedValue = (sharedParamId, value) => {
+    setSharedValues((prev) => ({
+      ...prev,
+      [sharedParamId]: value,
+    }));
+  };
+
+  const updateMetricOverride = (metricId, paramName, value) => {
+    setMetricOverrides((prev) => ({
+      ...prev,
+      [metricId]: {
+        ...(prev[metricId] || {}),
+        [paramName]: value,
+      },
+    }));
   };
 
   const updateAlgorithmParam = (algorithmId, name, value) => {
@@ -162,21 +133,28 @@ export default function MetricsPanel({
     }));
   };
 
-  const renderAlgorithmParameter = (algorithm, param) => {
-    const current = algorithmParams?.[algorithm.id]?.[param.name] ?? param.default;
+  const renderParamInput = (param, value, onChange) => {
+    const current = value ?? param.default;
 
     if (param.type === "select") {
       return (
         <select
-          value={current}
-          onChange={(e) => updateAlgorithmParam(algorithm.id, param.name, e.target.value)}
+          value={current ?? ""}
+          onChange={(e) => onChange(e.target.value)}
           style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
         >
-          {(param.options || []).map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
+          {(param.options || []).map((option) => {
+            const optionValue =
+              typeof option === "string" ? option : option.value;
+            const optionLabel =
+              typeof option === "string" ? option : option.label;
+
+            return (
+              <option key={optionValue} value={optionValue}>
+                {optionLabel}
+              </option>
+            );
+          })}
         </select>
       );
     }
@@ -186,16 +164,21 @@ export default function MetricsPanel({
       return (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {(param.options || []).map((option) => {
-            const isSelected = selectedValues.includes(option);
+            const optionValue =
+              typeof option === "string" ? option : option.value;
+            const optionLabel =
+              typeof option === "string" ? option : option.label;
+            const isSelected = selectedValues.includes(optionValue);
+
             return (
               <button
-                key={option}
+                key={optionValue}
                 type="button"
                 onClick={() => {
                   const next = isSelected
-                    ? selectedValues.filter((item) => item !== option)
-                    : [...selectedValues, option];
-                  updateAlgorithmParam(algorithm.id, param.name, next);
+                    ? selectedValues.filter((item) => item !== optionValue)
+                    : [...selectedValues, optionValue];
+                  onChange(next);
                 }}
                 style={{
                   padding: "8px 12px",
@@ -206,7 +189,7 @@ export default function MetricsPanel({
                   cursor: "pointer",
                 }}
               >
-                {option}
+                {optionLabel}
               </button>
             );
           })}
@@ -219,7 +202,7 @@ export default function MetricsPanel({
       return (
         <input
           value={displayValue}
-          onChange={(e) => updateAlgorithmParam(algorithm.id, param.name, e.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           placeholder="Comma-separated values"
           style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
         />
@@ -242,29 +225,44 @@ export default function MetricsPanel({
           <input
             type="checkbox"
             checked={Boolean(current)}
-            onChange={(e) => updateAlgorithmParam(algorithm.id, param.name, e.target.checked)}
+            onChange={(e) => onChange(e.target.checked)}
           />
           <span>{param.label}</span>
         </label>
       );
     }
 
+    if (param.type === "number" || param.type === "integer") {
+      return (
+        <input
+          type="number"
+          value={current ?? ""}
+          min={param.min}
+          max={param.max}
+          step={param.step || 1}
+          onChange={(e) =>
+            onChange(e.target.value === "" ? "" : Number(e.target.value))
+          }
+          style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
+        />
+      );
+    }
+
     return (
       <input
-        type="number"
+        type="text"
         value={current ?? ""}
-        min={param.min}
-        max={param.max}
-        step={param.step || 1}
-        onChange={(e) =>
-          updateAlgorithmParam(
-            algorithm.id,
-            param.name,
-            e.target.value === "" ? "" : Number(e.target.value)
-          )
-        }
-        style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={param.placeholder || ""}
+        style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", width: "100%" }}
       />
+    );
+  };
+
+  const renderAlgorithmParameter = (algorithm, param) => {
+    const current = algorithmParams?.[algorithm.id]?.[param.name] ?? param.default;
+    return renderParamInput(param, current, (value) =>
+      updateAlgorithmParam(algorithm.id, param.name, value)
     );
   };
 
@@ -339,7 +337,7 @@ export default function MetricsPanel({
                           <div
                             style={{
                               fontWeight: 1000,
-                              fontsize: 17,
+                              fontSize: 17,
                               lineHeight: 1.3,
                               minHeight: 40,
                               display: "flex",
@@ -453,18 +451,6 @@ export default function MetricsPanel({
               </select>
 
               <select
-                value={resampleFreq}
-                onChange={(e) => setResampleFreq(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-              >
-                {freqOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-
-              <select
                 value={activityTransform}
                 onChange={(e) => setActivityTransform(e.target.value)}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
@@ -484,158 +470,77 @@ export default function MetricsPanel({
             </div>
           </div>
 
-          {showMeanResampleOptions && (
-            <div style={{ marginTop: 20 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Mean-metric frequencies</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {freqOptions.map((option) => {
-                  const isSelected = meanResampleFreqs.includes(option);
+          {sharedParamsForSelection.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Common metric settings</div>
+              <div style={{ display: "grid", gap: 12 }}>
+                {sharedParamsForSelection.map((param) => (
+                  <div key={param.id}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>{param.label}</div>
+                    {renderParamInput(
+                      param,
+                      sharedValues?.[param.id],
+                      (value) => updateSharedValue(param.id, value)
+                    )}
+                    {param.description && (
+                      <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+                        {param.description}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedMetrics.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Metric-specific overrides</div>
+              <div style={{ display: "grid", gap: 14 }}>
+                {selectedMetrics.map((metricId) => {
+                  const metric = allMetrics.find((m) => m.id === metricId);
+                  if (!metric) return null;
+
+                  const params = metric.parameterSchema || [];
+                  if (params.length === 0) return null;
+
                   return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setMeanResampleFreqs((prev) =>
-                          prev.includes(option)
-                            ? prev.filter((item) => item !== option)
-                            : [...prev, option]
-                        );
-                      }}
+                    <div
+                      key={`override-${metricId}`}
                       style={{
-                        padding: "8px 12px",
-                        borderRadius: 10,
-                        border: isSelected ? "1px solid #0f172a" : "1px solid #cbd5e1",
-                        background: isSelected ? "#0f172a" : "white",
-                        color: isSelected ? "white" : "#0f172a",
-                        cursor: "pointer",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 14,
+                        padding: 14,
+                        background: "#f8fafc",
                       }}
                     >
-                      {option}
-                    </button>
+                      <div style={{ fontWeight: 700, marginBottom: 10 }}>{metric.label}</div>
+
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {params.map((param) => (
+                          <div key={`${metricId}-${param.name}`}>
+                            <div style={{ fontWeight: 600, marginBottom: 6 }}>{param.label}</div>
+                            {renderParamInput(
+                              param,
+                              metricOverrides?.[metricId]?.[param.name],
+                              (value) => updateMetricOverride(metricId, param.name, value)
+                            )}
+                            {param.sharedParamId && (
+                              <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                                Leave blank to inherit the common setting.
+                              </div>
+                            )}
+                            {param.description && (
+                              <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+                                {param.description}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {showBinarizeOptions && (
-            <div style={{ marginTop: 20 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Binarization options</div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: 12,
-                }}
-              >
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #cbd5e1",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={binarize}
-                    onChange={(e) => setBinarize(e.target.checked)}
-                  />
-                  <span>Binarize activity signal</span>
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={threshold}
-                  disabled={!binarize}
-                  onChange={(e) => setThreshold(Number(e.target.value))}
-                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-                />
-              </div>
-            </div>
-          )}
-
-          {showPeriodOptions && (
-            <div style={{ marginTop: 20 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Per-period options</div>
-              <input
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-                placeholder="e.g. 7D"
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #cbd5e1",
-                  width: "100%",
-                }}
-              />
-            </div>
-          )}
-
-          {showFragmentationOptions && (
-            <div style={{ marginTop: 20 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                Fragmentation / state-transition options
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: 12,
-                }}
-              >
-                <input
-                  value={fragmentationStart}
-                  onChange={(e) => setFragmentationStart(e.target.value)}
-                  placeholder="Start time or keyword (e.g. 00:00:00, AonT)"
-                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-                />
-                <input
-                  value={fragmentationPeriod}
-                  onChange={(e) => setFragmentationPeriod(e.target.value)}
-                  placeholder="Period (e.g. 8H)"
-                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={lowessFrac}
-                  onChange={(e) => setLowessFrac(Number(e.target.value))}
-                  placeholder="LOWESS fraction"
-                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={lowessIt}
-                  onChange={(e) => setLowessIt(Number(e.target.value))}
-                  placeholder="LOWESS iterations"
-                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-                />
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #cbd5e1",
-                    gridColumn: "span 2",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={logitTransform}
-                    onChange={(e) => setLogitTransform(e.target.checked)}
-                  />
-                  <span>Apply logit transform</span>
-                </label>
               </div>
             </div>
           )}
@@ -690,21 +595,21 @@ export default function MetricsPanel({
                   }}
                 >
                   <div>
-  <div
-    style={{
-      fontWeight: 700,
-      fontSize: 16,
-      display: "flex",
-      gap: 8,
-      alignItems: "center",
-      justifyContent: "center",
-      flexWrap: "wrap",
-      textAlign: "center",
-      width: "100%",
-    }}
-  >
-    <span>{algo.label}</span>
-    
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        fontSize: 16,
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexWrap: "wrap",
+                        textAlign: "center",
+                        width: "100%",
+                      }}
+                    >
+                      <span>{algo.label}</span>
+
                       {isPlanned && (
                         <span
                           style={{
@@ -720,9 +625,11 @@ export default function MetricsPanel({
                         </span>
                       )}
                     </div>
+
                     <div style={{ fontSize: 14, color: "#64748b", marginTop: 1 }}>
                       {getAlgorithmDescription(algorithmRegistry, algo.id)}
                     </div>
+
                     <button
                       type="button"
                       onClick={(e) => {

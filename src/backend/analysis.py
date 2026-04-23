@@ -105,53 +105,110 @@ def _score_algorithm(raw, algorithm, algorithm_params=None):
     return None
 
 
-def compute_metric(raw, metric_id, *, resample_freq="1min", binarize=True, threshold=4, period="7D", mean_resample_freqs=None, fragmentation_start=None, fragmentation_period=None, lowess_frac=0.3, lowess_it=0, logit_transform=False):
-    mean_resample_freqs = mean_resample_freqs or DEFAULT_MEAN_FREQS
+def compute_metric(raw, metric_id, params=None):
+    params = params or {}
 
     if metric_id == "ra":
-        return _safe_call(raw.RA, binarize=binarize, threshold=threshold)
+        return _safe_call(
+            raw.RA,
+            binarize=params.get("binarize", True),
+            threshold=params.get("threshold", 4),
+        )
+
     if metric_id == "is":
-        return _safe_call(raw.IS, freq=resample_freq, binarize=binarize, threshold=threshold)
+        return _safe_call(
+            raw.IS,
+            freq=params.get("freq", "1min"),
+            binarize=params.get("binarize", True),
+            threshold=params.get("threshold", 4),
+        )
+
     if metric_id == "iv":
-        return _safe_call(raw.IV, freq=resample_freq, binarize=binarize, threshold=threshold)
+        return _safe_call(
+            raw.IV,
+            freq=params.get("freq", "1min"),
+            binarize=params.get("binarize", True),
+            threshold=params.get("threshold", 4),
+        )
+
     if metric_id == "ism":
-        return _safe_call(raw.ISm, freqs=mean_resample_freqs, binarize=binarize, threshold=threshold)
+        return _safe_call(
+            raw.ISm,
+            freqs=params.get("freqs") or DEFAULT_MEAN_FREQS,
+            binarize=params.get("binarize", True),
+            threshold=params.get("threshold", 4),
+        )
+
     if metric_id == "ivm":
-        return _safe_call(raw.IVm, freqs=mean_resample_freqs, binarize=binarize, threshold=threshold)
+        return _safe_call(
+            raw.IVm,
+            freqs=params.get("freqs") or DEFAULT_MEAN_FREQS,
+            binarize=params.get("binarize", True),
+            threshold=params.get("threshold", 4),
+        )
+
     if metric_id == "isp":
-        return _safe_call(raw.ISp, period=period, freq=resample_freq, binarize=binarize, threshold=threshold, verbose=False)
+        return _safe_call(
+            raw.ISp,
+            period=params.get("period", "7D"),
+            freq=params.get("freq", "1min"),
+            binarize=params.get("binarize", True),
+            threshold=params.get("threshold", 4),
+            verbose=params.get("verbose", False),
+        )
+
     if metric_id == "ivp":
-        return _safe_call(raw.IVp, period=period, freq=resample_freq, binarize=binarize, threshold=threshold, verbose=False)
+        return _safe_call(
+            raw.IVp,
+            period=params.get("period", "7D"),
+            freq=params.get("freq", "1min"),
+            binarize=params.get("binarize", True),
+            threshold=params.get("threshold", 4),
+            verbose=params.get("verbose", False),
+        )
+
     if metric_id == "rap":
-        return _safe_call(raw.RAp, period=period, binarize=binarize, threshold=threshold, verbose=False)
+        return _safe_call(
+            raw.RAp,
+            period=params.get("period", "7D"),
+            binarize=params.get("binarize", True),
+            threshold=params.get("threshold", 4),
+            verbose=params.get("verbose", False),
+        )
+
     if metric_id == "kra":
         return _safe_call(
             raw.kRA,
-            threshold=threshold,
-            start=fragmentation_start or None,
-            period=fragmentation_period or None,
-            frac=lowess_frac,
-            it=lowess_it,
-            logit=logit_transform,
-            freq=resample_freq,
+            threshold=params.get("threshold", 4),
+            start=params.get("start") or None,
+            period=params.get("period") or None,
+            frac=params.get("frac", 0.3),
+            it=params.get("it", 0),
+            logit=params.get("logit", False),
+            freq=params.get("freq", "1min"),
         )
+
     if metric_id == "kar":
         return _safe_call(
             raw.kAR,
-            threshold=threshold,
-            start=fragmentation_start or None,
-            period=fragmentation_period or None,
-            frac=lowess_frac,
-            it=lowess_it,
-            logit=logit_transform,
-            freq=resample_freq,
+            threshold=params.get("threshold", 4),
+            start=params.get("start") or None,
+            period=params.get("period") or None,
+            frac=params.get("frac", 0.3),
+            it=params.get("it", 0),
+            logit=params.get("logit", False),
+            freq=params.get("freq", "1min"),
         )
+
     return None
 
 
-def compute_sleep_metrics(raw, selected_metrics=None, algorithm="cole_kripke", algorithm_params=None):
+def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None):
     results = {}
     selected_metrics = selected_metrics or []
+    algorithm_request = algorithm_request or {}
+    algorithm = algorithm_request.get("id", "cole_kripke")
+    algorithm_params = {algorithm: algorithm_request.get("params", {})}
 
     scorer = _score_algorithm(raw, algorithm, algorithm_params=algorithm_params)
 
@@ -177,51 +234,34 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm="cole_kripke", a
     return results
 
 
-def run_basic_pyactigraphy_analysis(
-    raw,
-    selected_metrics,
-    selected_algorithm="cole_kripke",
-    binarize=True,
-    threshold=4,
-    advanced_metric_params=None,
-    algorithm_params=None,
-):
-    advanced_metric_params = advanced_metric_params or {}
+def run_basic_pyactigraphy_analysis(raw, metric_requests=None, algorithm_request=None):
+    metric_requests = metric_requests or []
     results = {}
 
     rest_and_fragmentation_ids = {"ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap", "kra", "kar"}
     sleep_ids = {"sri", "tst", "waso", "sleep_efficiency"}
 
-    for metric_id in selected_metrics:
+    selected_metric_ids = [item.get("id") for item in metric_requests if item.get("id")]
+
+    for item in metric_requests:
+        metric_id = item.get("id")
+        params = item.get("params", {}) or {}
+
         if metric_id in rest_and_fragmentation_ids:
-            value = compute_metric(
-                raw,
-                metric_id,
-                resample_freq=advanced_metric_params.get("resampleFreq") or advanced_metric_params.get("resample_freq") or advanced_metric_params.get("freq") or "1min",
-                binarize=binarize,
-                threshold=threshold,
-                period=advanced_metric_params.get("period", "7D"),
-                mean_resample_freqs=advanced_metric_params.get("meanResampleFreqs") or DEFAULT_MEAN_FREQS,
-                fragmentation_start=advanced_metric_params.get("fragmentationStart"),
-                fragmentation_period=advanced_metric_params.get("fragmentationPeriod"),
-                lowess_frac=advanced_metric_params.get("lowessFrac", 0.3),
-                lowess_it=advanced_metric_params.get("lowessIt", 0),
-                logit_transform=advanced_metric_params.get("logitTransform", False),
-            )
+            value = compute_metric(raw, metric_id, params=params)
             results[metric_id] = _resolve_series_to_numeric(value)
 
-    sleep_selected = [metric for metric in selected_metrics if metric in sleep_ids]
+    sleep_selected = [metric_id for metric_id in selected_metric_ids if metric_id in sleep_ids]
     if sleep_selected:
         results.update(
             compute_sleep_metrics(
                 raw,
                 selected_metrics=sleep_selected,
-                algorithm=selected_algorithm,
-                algorithm_params=algorithm_params,
+                algorithm_request=algorithm_request,
             )
         )
 
-    for metric_id in selected_metrics:
+    for metric_id in selected_metric_ids:
         if metric_id not in results:
             results[metric_id] = None
 
@@ -271,7 +311,10 @@ def run_basic_csv_analysis(
         else None
     )
 
-    unsupported_for_csv = ["ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap", "kra", "kar", "sri", "tst", "waso", "sleep_efficiency"]
+    unsupported_for_csv = [
+        "ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap",
+        "kra", "kar", "sri", "tst", "waso", "sleep_efficiency"
+    ]
     for metric_id in selected_metrics:
         if metric_id in unsupported_for_csv:
             results[metric_id] = None

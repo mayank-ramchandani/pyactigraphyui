@@ -5,6 +5,7 @@ import metricRegistry from "../config/metricRegistry.json";
 import algorithmRegistry from "../config/algorithmRegistry.json";
 import exportRegistry from "../config/exportRegistry.json";
 import previewRegistry from "../config/previewRegistry.json";
+import sharedParamRegistry from "../config/sharedParamRegistry.json";
 
 import WorkflowSidebar from "../components/WorkflowSidebar";
 import FileSelectionPanel from "../components/FileSelectionPanel";
@@ -13,13 +14,20 @@ import MetricsPanel from "../components/MetricsPanel";
 import ResultsPanel from "../components/ResultsPanel";
 import ExportPanel from "../components/ExportPanel";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
 import {
   getDefaultAlgorithm,
   getDefaultSelectedMetrics,
   getVisibleWorkflowSteps,
 } from "../services/configUtils";
+import { buildAnalysisPayload } from "../services/analysisConfigUtils";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
+
+function buildApiUrl(path) {
+  const base = API_BASE_URL.endsWith("/") ? API_BASE_URL : `${API_BASE_URL}/`;
+  const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+  return `${base}${cleanPath}`;
+}
 
 export default function Dashboard() {
   const [currentStep, setCurrentStep] = useState("1");
@@ -54,10 +62,10 @@ export default function Dashboard() {
   const [activityChannel, setActivityChannel] = useState("VM");
   const [activityTransform, setActivityTransform] = useState("none");
   const [lightTransform, setLightTransform] = useState("none");
-  const [resampleFreq, setResampleFreq] = useState("1min");
 
-  const [binarize, setBinarize] = useState(true);
-  const [threshold, setThreshold] = useState(4);
+  const [sharedValues, setSharedValues] = useState({});
+  const [metricOverrides, setMetricOverrides] = useState({});
+  const [algorithmParams, setAlgorithmParams] = useState({});
 
   const [resultsGenerated, setResultsGenerated] = useState(false);
   const [selectedResultMetric, setSelectedResultMetric] = useState("");
@@ -72,6 +80,27 @@ export default function Dashboard() {
     }
     return selectedMetrics;
   }, [analysisMode, selectedMetrics]);
+
+  const resolvedAnalysisConfig = useMemo(
+    () =>
+      buildAnalysisPayload({
+        metricRegistry,
+        sharedRegistry: sharedParamRegistry,
+        algorithmRegistry,
+        selectedMetrics: resolvedSelectedMetrics,
+        selectedAlgorithm,
+        sharedValues,
+        metricOverrides,
+        algorithmParams,
+      }),
+    [
+      resolvedSelectedMetrics,
+      selectedAlgorithm,
+      sharedValues,
+      metricOverrides,
+      algorithmParams,
+    ]
+  );
 
   const workflowSteps = useMemo(
     () =>
@@ -131,9 +160,9 @@ export default function Dashboard() {
       formData.append("file", actigraphyFile);
       formData.append("previewDayMode", previewDayMode);
       formData.append("activityChannel", activityChannel);
-      formData.append("resampleFreq", resampleFreq);
+      formData.append("resampleFreq", "1min");
 
-      const res = await fetch(`${API_BASE_URL}/api/preview/basic`, {
+      const res = await fetch(buildApiUrl("api/preview/basic"), {
         method: "POST",
         body: formData,
       });
@@ -164,24 +193,15 @@ export default function Dashboard() {
       setAnalysisError("");
       setResultsGenerated(false);
 
-      const metricsToUse =
-        analysisMode === "standard"
-          ? getDefaultSelectedMetrics(metricRegistry)
-          : selectedMetrics;
-
       const formData = new FormData();
       formData.append("file", actigraphyFile);
-      formData.append("selectedMetrics", JSON.stringify(metricsToUse));
-      formData.append("selectedAlgorithm", selectedAlgorithm || "cole_kripke");
-      formData.append("binarize", JSON.stringify(binarize));
-      formData.append("threshold", String(threshold));
       formData.append("activityChannel", activityChannel);
       formData.append("activityTransform", activityTransform);
       formData.append("lightTransform", lightTransform);
-      formData.append("resampleFreq", resampleFreq);
       formData.append("analysisMode", analysisMode);
+      formData.append("analysisConfig", JSON.stringify(resolvedAnalysisConfig));
 
-      const res = await fetch(`${API_BASE_URL}/api/analyze/basic`, {
+      const res = await fetch(buildApiUrl("api/analyze/basic"), {
         method: "POST",
         body: formData,
       });
@@ -269,175 +289,206 @@ export default function Dashboard() {
               uiText={appConfig.uiText}
             />
 
-{appConfig.panels.cleaning?.enabled && (
-  <div
-    style={{
-      background: "white",
-      border: "1px solid #e2e8f0",
-      borderRadius: 20,
-      padding: 20,
-    }}
-  >
-    <h2 style={{ marginTop: 0, marginBottom: 8 }}>
-      {appConfig.panels.cleaning.title}
-    </h2>
-    <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16, lineHeight: 1.6 }}>
-      Choose how non-wear or inactive periods should be handled.
-    </p>
+            {appConfig.panels.cleaning?.enabled && (
+              <div
+                style={{
+                  background: "white",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 20,
+                  padding: 20,
+                }}
+              >
+                <h2 style={{ marginTop: 0, marginBottom: 8 }}>
+                  {appConfig.panels.cleaning.title}
+                </h2>
+                <p
+                  style={{
+                    color: "#64748b",
+                    marginTop: 0,
+                    marginBottom: 16,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Choose how non-wear or inactive periods should be handled.
+                </p>
 
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ fontWeight: 700 }}>Masking mode</div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {["none", "manual", "automatic", "file"].map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            style={{
-              padding: "10px 14px",
-              borderRadius: 12,
-              border: "1px solid #cbd5e1",
-              background: "white",
-              cursor: "pointer",
-            }}
-          >
-            {mode === "none"
-              ? "No masking"
-              : mode === "manual"
-              ? "Manual masking"
-              : mode === "automatic"
-              ? "Automatic masking"
-              : "File-based masking"}
-          </button>
-        ))}
-      </div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <div style={{ fontWeight: 700 }}>Masking mode</div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {["none", "manual", "automatic", "file"].map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        style={{
+                          padding: "10px 14px",
+                          borderRadius: 12,
+                          border: "1px solid #cbd5e1",
+                          background: "white",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {mode === "none"
+                          ? "No masking"
+                          : mode === "manual"
+                          ? "Manual masking"
+                          : mode === "automatic"
+                          ? "Automatic masking"
+                          : "File-based masking"}
+                      </button>
+                    ))}
+                  </div>
 
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 14,
-          padding: 14,
-          background: "#f8fafc",
-          color: "#475569",
-          fontSize: 14,
-          lineHeight: 1.6,
-        }}
-      >
-        {appConfig.uiText?.maskingHelp}
-      </div>
+                  <div
+                    style={{
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 14,
+                      padding: 14,
+                      background: "#f8fafc",
+                      color: "#475569",
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {appConfig.uiText?.maskingHelp}
+                  </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <button
-          type="button"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            border: "1px solid #cbd5e1",
-            background: "white",
-            cursor: "pointer",
-          }}
-        >
-          Upload mask file
-        </button>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <button
+                      type="button"
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: 12,
+                        border: "1px solid #cbd5e1",
+                        background: "white",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Upload mask file
+                    </button>
 
-        <button
-          type="button"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            border: "1px solid #cbd5e1",
-            background: "white",
-            cursor: "pointer",
-          }}
-        >
-          Apply selected masking
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+                    <button
+                      type="button"
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: 12,
+                        border: "1px solid #cbd5e1",
+                        background: "white",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Apply selected masking
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
-{appConfig.panels.diaryAndLogs?.enabled && (
-  <div
-    style={{
-      background: "white",
-      border: "1px solid #e2e8f0",
-      borderRadius: 20,
-      padding: 20,
-    }}
-  >
-    <h2 style={{ marginTop: 0, marginBottom: 8 }}>
-      {appConfig.panels.diaryAndLogs.title}
-    </h2>
-    <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16, lineHeight: 1.6 }}>
-      Add optional files that help define sleep periods and true recording boundaries.
-    </p>
+            {appConfig.panels.diaryAndLogs?.enabled && (
+              <div
+                style={{
+                  background: "white",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 20,
+                  padding: 20,
+                }}
+              >
+                <h2 style={{ marginTop: 0, marginBottom: 8 }}>
+                  {appConfig.panels.diaryAndLogs.title}
+                </h2>
+                <p
+                  style={{
+                    color: "#64748b",
+                    marginTop: 0,
+                    marginBottom: 16,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Add optional files that help define sleep periods and true recording boundaries.
+                </p>
 
-    <div style={{ display: "grid", gap: 14 }}>
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 14,
-          padding: 14,
-          background: "#f8fafc",
-        }}
-      >
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Sleep diary</div>
-        <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.6, marginBottom: 10 }}>
-          {appConfig.uiText?.diaryHelp}
-        </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            style={{
-              padding: "10px 14px",
-              borderRadius: 12,
-              border: "1px solid #cbd5e1",
-              background: "white",
-              cursor: "pointer",
-            }}
-          >
-            Upload sleep diary
-          </button>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
-            <input type="checkbox" />
-            Include awake-in-bed state
-          </label>
-        </div>
-      </div>
+                <div style={{ display: "grid", gap: 14 }}>
+                  <div
+                    style={{
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 14,
+                      padding: 14,
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Sleep diary</div>
+                    <div
+                      style={{
+                        color: "#475569",
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                        marginBottom: 10,
+                      }}
+                    >
+                      {appConfig.uiText?.diaryHelp}
+                    </div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        style={{
+                          padding: "10px 14px",
+                          borderRadius: 12,
+                          border: "1px solid #cbd5e1",
+                          background: "white",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Upload sleep diary
+                      </button>
+                      <label
+                        style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}
+                      >
+                        <input type="checkbox" />
+                        Include awake-in-bed state
+                      </label>
+                    </div>
+                  </div>
 
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 14,
-          padding: 14,
-          background: "#f8fafc",
-        }}
-      >
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Start / Stop time file</div>
-        <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.6, marginBottom: 10 }}>
-          {appConfig.uiText?.sstHelp}
-        </div>
-        <button
-          type="button"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 12,
-            border: "1px solid #cbd5e1",
-            background: "white",
-            cursor: "pointer",
-          }}
-        >
-          Upload start / stop file
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+                  <div
+                    style={{
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 14,
+                      padding: 14,
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Start / Stop time file</div>
+                    <div
+                      style={{
+                        color: "#475569",
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                        marginBottom: 10,
+                      }}
+                    >
+                      {appConfig.uiText?.sstHelp}
+                    </div>
+                    <button
+                      type="button"
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: 12,
+                        border: "1px solid #cbd5e1",
+                        background: "white",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Upload start / stop file
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <MetricsPanel
               title={appConfig.panels.metrics.title}
               metricRegistry={metricRegistry}
               algorithmRegistry={algorithmRegistry}
+              sharedParamRegistry={sharedParamRegistry}
               selectedMetrics={selectedMetrics}
               setSelectedMetrics={setSelectedMetrics}
               selectedAlgorithm={selectedAlgorithm}
@@ -449,18 +500,20 @@ export default function Dashboard() {
               setActivityTransform={setActivityTransform}
               lightTransform={lightTransform}
               setLightTransform={setLightTransform}
-              resampleFreq={resampleFreq}
-              setResampleFreq={setResampleFreq}
-              binarize={binarize}
-              setBinarize={setBinarize}
-              threshold={threshold}
-              setThreshold={setThreshold}
+              sharedValues={sharedValues}
+              setSharedValues={setSharedValues}
+              metricOverrides={metricOverrides}
+              setMetricOverrides={setMetricOverrides}
+              algorithmParams={algorithmParams}
+              setAlgorithmParams={setAlgorithmParams}
               analysisMode={analysisMode}
+              inputType={
+                actigraphyFiles?.[0]?.name?.split(".").pop()?.toLowerCase() || "csv"
+              }
             />
 
             <ResultsPanel
               title={appConfig.panels.results.title}
-              resultCards={previewRegistry.resultCards}
               resultsGenerated={resultsGenerated}
               onGenerate={handleGenerateResults}
               selectedResultMetric={selectedResultMetric}
@@ -469,6 +522,9 @@ export default function Dashboard() {
               summaryResults={summaryResults}
               qcWarnings={qcWarnings}
               metricRegistry={metricRegistry}
+              algorithmRegistry={algorithmRegistry}
+              selectedAlgorithm={selectedAlgorithm}
+              analysisConfig={resolvedAnalysisConfig}
               analysisError={analysisError}
               analysisLoading={analysisLoading}
               analysisMode={analysisMode}
@@ -476,9 +532,9 @@ export default function Dashboard() {
 
             <ExportPanel
               title={appConfig.panels.export.title}
-              exportRegistry={exportRegistry}
-              setCurrentStep={setCurrentStep}
-              resultsGenerated={resultsGenerated}
+              exports={exportRegistry.exports}
+              enabled={resultsGenerated}
+              summaryResults={summaryResults}
             />
           </div>
         </div>

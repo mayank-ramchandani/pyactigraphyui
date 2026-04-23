@@ -88,6 +88,7 @@
           "type": "multiselect",
           "default": ["auto"],
           "options": ["auto", "manual"],
+          "backendArgName": "thresholdMode",
           "description": "Run Oakley with automatically determined threshold, user-defined threshold, or both."
         },
         {
@@ -97,6 +98,7 @@
           "default": 40,
           "min": 0,
           "step": 1,
+          "backendArgName": "manualThreshold",
           "description": "Note. A value of 40 is commonly described as a medium wake threshold in Actiware-style contexts."
         }
       ]
@@ -159,7 +161,8 @@
           "type": "select",
           "default": "default",
           "options": ["default", "auto", "manual"],
-          "description": "Run Crespo using tutorial-like defaults, automatic behavior, or a user-specified alpha."
+          "description": "Run Crespo using tutorial-like defaults, automatic behavior, or a user-specified alpha.",
+          "backendArgName":"alphaMode"
         },
         {
           "name": "alpha",
@@ -168,7 +171,8 @@
           "default": 8,
           "min": 0,
           "step": 0.5,
-          "description": "User-defined alpha in hours when manual alpha mode is selected."
+          "description": "User-defined alpha in hours when manual alpha mode is selected.",
+          "backendArgName":"alpha"
         }
       ]
     },
@@ -202,7 +206,8 @@
           "label": "Threshold factor(s)",
           "type": "number_list",
           "default": [0.15],
-          "description": "One or more threshold-factor values to run and compare."
+          "description": "One or more threshold-factor values to run and compare.",
+          "backendArgName":"thresholdFactors"
         }
       ]
     }

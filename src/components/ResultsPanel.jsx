@@ -32,6 +32,7 @@ export default function ResultsPanel({
   metricRegistry,
   algorithmRegistry,
   selectedAlgorithm,
+  analysisConfig,
   analysisError,
   analysisLoading,
   analysisMode,
@@ -44,7 +45,7 @@ export default function ResultsPanel({
     ? getAlgorithmDefinition(algorithmRegistry, selectedAlgorithm)
     : null;
 
-  const selectableMetricIds = [...new Set([...selectedMetrics, ...resultKeys])];
+  const selectableMetricIds = [...new Set([...(selectedMetrics || []), ...resultKeys])];
 
   return (
     <div
@@ -191,7 +192,7 @@ export default function ResultsPanel({
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Methods Summary</div>
             <div style={{ color: "#475569", lineHeight: 1.7, fontSize: 14 }}>
               Metrics requested:{" "}
-              {selectedMetrics.map((metricId) => getMetricLabel(metricRegistry, metricId)).join(", ") || "None"}
+              {(selectedMetrics || []).map((metricId) => getMetricLabel(metricRegistry, metricId)).join(", ") || "None"}
               <br />
               Sleep/rest algorithm: {selectedAlgorithm ? getAlgorithmLabel(algorithmRegistry, selectedAlgorithm) : "None"}
               <br />
@@ -200,6 +201,18 @@ export default function ResultsPanel({
                 <>
                   <br />
                   Algorithm citation: {activeAlgorithm.citationText}
+                </>
+              )}
+              {analysisConfig?.metrics?.length > 0 && (
+                <>
+                  <br />
+                  Metric parameters: {JSON.stringify(analysisConfig.metrics)}
+                </>
+              )}
+              {analysisConfig?.algorithm && (
+                <>
+                  <br />
+                  Algorithm parameters: {JSON.stringify(analysisConfig.algorithm)}
                 </>
               )}
             </div>

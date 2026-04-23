@@ -155,3 +155,13 @@ export function getVisibleWorkflowSteps(appConfig, { enableCleaning = true, enab
     return true;
   });
 }
+
+export function getSharedMetricParameters(metricRegistry, metricId) {
+  const found = getMetricDefinition(metricRegistry, metricId);
+  return (found?.parameterSchema || []).filter((param) => Boolean(param.sharedParamId));
+}
+
+export function getLocalMetricParameters(metricRegistry, metricId) {
+  const found = getMetricDefinition(metricRegistry, metricId);
+  return (found?.parameterSchema || []).filter((param) => !param.sharedParamId);
+}

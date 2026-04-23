@@ -18,37 +18,29 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://actigraphy-ui.vercel.app",
-],
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://actigraphy-ui.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 @app.post("/api/analyze/basic")
 async def analyze_basic(
     file: UploadFile = File(...),
-    selectedMetrics: str = Form(...),
-    selectedAlgorithm: str = Form("cole_kripke"),
-    binarize: str = Form("true"),
-    threshold: str = Form("4"),
     activityChannel: str = Form("VM"),
     activityTransform: str = Form("none"),
     lightTransform: str = Form("none"),
-    resampleFreq: str = Form("1min"),
     analysisMode: str = Form("standard"),
-    advancedMetricParams: str = Form("{}"),
-    algorithmParams: str = Form("{}"),
+    analysisConfig: str = Form("{}"),
 ):
     try:
-        metrics = json.loads(selectedMetrics)
-        binarize_value = json.loads(binarize)
-        threshold_value = float(threshold)
-        advanced_metric_params = json.loads(advancedMetricParams or "{}")
-        algorithm_params = json.loads(algorithmParams or "{}")
-        advanced_metric_params.setdefault("resampleFreq", resampleFreq)
+        analysis_config = json.loads(analysisConfig or "{}")
+        metric_requests = analysis_config.get("metrics", [])
+        algorithm_request = analysis_config.get("algorithm")
 
         suffix = Path(file.filename).suffix.lower().replace(".", "")
 
@@ -61,24 +53,21 @@ async def analyze_basic(
 
         if reader_type == "csv":
             df = validate_csv_file(tmp_path)
+            selected_metric_ids = [item.get("id") for item in metric_requests if item.get("id")]
             results = run_basic_csv_analysis(
                 df=df,
-                selected_metrics=metrics,
+                selected_metrics=selected_metric_ids,
                 activity_channel=activityChannel,
-                resample_freq=resampleFreq,
+                resample_freq="1min",
                 analysis_mode=analysisMode,
-                advanced_metric_params=advanced_metric_params,
+                advanced_metric_params={},
             )
         else:
             raw = load_native_file(tmp_path, reader_type)
             results = run_basic_pyactigraphy_analysis(
                 raw=raw,
-                selected_metrics=metrics,
-                selected_algorithm=selectedAlgorithm,
-                binarize=binarize_value,
-                threshold=threshold_value,
-                advanced_metric_params=advanced_metric_params,
-                algorithm_params=algorithm_params,
+                metric_requests=metric_requests,
+                algorithm_request=algorithm_request,
             )
 
         warnings = quick_qc(results)

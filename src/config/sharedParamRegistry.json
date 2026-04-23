@@ -1,0 +1,40 @@
+{
+    "schemaVersion": 1,
+    "sharedParams": [
+      {
+        "id": "activity_binarize",
+        "label": "Binarize activity signal",
+        "type": "boolean",
+        "default": true,
+        "description": "Shared binarization setting for metrics that support binary active/inactive conversion."
+      },
+      {
+        "id": "activity_threshold",
+        "label": "Threshold",
+        "type": "number",
+        "default": 4,
+        "min": 0,
+        "step": 1,
+        "description": "Threshold used when binarization is enabled."
+      },
+      {
+        "id": "analysis_resample_freq",
+        "label": "Resampling frequency",
+        "type": "select",
+        "default": "1min",
+        "options": [
+          "1min","2min","3min","4min","5min","6min","8min","9min","10min","12min",
+          "15min","16min","18min","20min","24min","30min","32min","36min","40min",
+          "45min","48min","60min"
+        ],
+        "description": "Shared resampling frequency for metrics that support a frequency parameter."
+      },
+      {
+        "id": "analysis_period",
+        "label": "Period length",
+        "type": "duration",
+        "default": "7D",
+        "description": "Shared period setting for metrics that compute values across consecutive periods."
+      }
+    ]
+  }
