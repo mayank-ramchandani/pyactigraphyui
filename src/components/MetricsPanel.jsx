@@ -6,17 +6,16 @@ import {
   getMetricCategories,
   getMetricSummary,
 } from "../services/configUtils";
-import {
-  getSharedParamsForSelectedMetrics,
-} from "../services/analysisConfigUtils";
+import { getSharedParamsForSelectedMetrics } from "../services/analysisConfigUtils";
 
 const INPUT_TYPE_LABELS = {
   agd: "ActiGraph AGD",
   atr: "ActTrust ATR",
   awd: "Actiwatch AWD",
   bba: "BBA / accelerometer",
-  csv: "CSV",
+  csv: "CSV / mapped to Pandas",
   dqt: "Daqtometer",
+  gt3x: "ActiGraph GT3X",
   mesa: "MESA",
   mtn: "MotionWatch MTN",
   rpx: "Respironics RPX",
@@ -28,21 +27,21 @@ function normalizeMultiselectValue(value) {
   return value ? [value] : [];
 }
 
-function metricCardStyle(selected, planned) {
+function cardStyle(selected, planned) {
   return {
     padding: 12,
     borderRadius: 14,
     border: selected ? "1px solid #0f172a" : "1px solid #cbd5e1",
     background: selected ? "#0f172a" : "white",
     color: selected ? "white" : "#0f172a",
-    cursor: "pointer",
+    cursor: planned ? "not-allowed" : "pointer",
     textAlign: "left",
     width: "100%",
-    minHeight: 148,
+    minHeight: 130,
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
-    opacity: planned ? 0.86 : 1,
+    opacity: planned ? 0.7 : 1,
   };
 }
 
@@ -50,18 +49,17 @@ export default function MetricsPanel({
   title,
   metricRegistry,
   algorithmRegistry,
+  analysisFamilyRegistry,
   sharedParamRegistry,
   selectedMetrics,
   setSelectedMetrics,
+  selectedFamilies,
+  setSelectedFamilies,
+  analysisScope,
+  setAnalysisScope,
   selectedAlgorithm,
   setSelectedAlgorithm,
   setCurrentStep,
-  activityChannel,
-  setActivityChannel,
-  activityTransform,
-  setActivityTransform,
-  lightTransform,
-  setLightTransform,
   sharedValues = {},
   setSharedValues = () => {},
   metricOverrides = {},
@@ -79,6 +77,7 @@ export default function MetricsPanel({
 
   const allMetrics = useMemo(() => metricRegistry.metrics || [], [metricRegistry]);
   const allAlgorithms = useMemo(() => algorithmRegistry.algorithms || [], [algorithmRegistry]);
+  const allFamilies = useMemo(() => analysisFamilyRegistry.families || [], [analysisFamilyRegistry]);
 
   const visibleCategories = useMemo(() => {
     const categories = getMetricCategories(metricRegistry);
@@ -98,11 +97,21 @@ export default function MetricsPanel({
   );
 
   const toggleMetric = (metricId) => {
-    setCurrentStep("5");
+    setCurrentStep("8");
     setSelectedMetrics((prev) =>
       prev.includes(metricId)
         ? prev.filter((item) => item !== metricId)
         : [...prev, metricId]
+    );
+  };
+
+  const toggleFamily = (familyId, planned) => {
+    if (planned) return;
+    setCurrentStep("8");
+    setSelectedFamilies((prev) =>
+      prev.includes(familyId)
+        ? prev.filter((item) => item !== familyId)
+        : [...prev, familyId]
     );
   };
 
@@ -144,11 +153,8 @@ export default function MetricsPanel({
           style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
         >
           {(param.options || []).map((option) => {
-            const optionValue =
-              typeof option === "string" ? option : option.value;
-            const optionLabel =
-              typeof option === "string" ? option : option.label;
-
+            const optionValue = typeof option === "string" ? option : option.value;
+            const optionLabel = typeof option === "string" ? option : option.label;
             return (
               <option key={optionValue} value={optionValue}>
                 {optionLabel}
@@ -164,10 +170,8 @@ export default function MetricsPanel({
       return (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {(param.options || []).map((option) => {
-            const optionValue =
-              typeof option === "string" ? option : option.value;
-            const optionLabel =
-              typeof option === "string" ? option : option.label;
+            const optionValue = typeof option === "string" ? option : option.value;
+            const optionLabel = typeof option === "string" ? option : option.label;
             const isSelected = selectedValues.includes(optionValue);
 
             return (
@@ -253,16 +257,8 @@ export default function MetricsPanel({
         type="text"
         value={current ?? ""}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={param.placeholder || ""}
         style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", width: "100%" }}
       />
-    );
-  };
-
-  const renderAlgorithmParameter = (algorithm, param) => {
-    const current = algorithmParams?.[algorithm.id]?.[param.name] ?? param.default;
-    return renderParamInput(param, current, (value) =>
-      updateAlgorithmParam(algorithm.id, param.name, value)
     );
   };
 
@@ -277,7 +273,7 @@ export default function MetricsPanel({
     >
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        Select pyActigraphy-backed metrics and algorithms.
+        Choose the sleep/rest algorithm first, then select either family-level analysis or metric-level analysis.
       </p>
 
       <div
@@ -295,259 +291,7 @@ export default function MetricsPanel({
         Detected input type: <strong>{detectedInputLabel}</strong>.
       </div>
 
-      {visibleCategories.map((category) => {
-        const categoryMetrics = allMetrics.filter((metric) => metric.category === category.id);
-        if (categoryMetrics.length === 0) return null;
-
-        return (
-          <div key={category.id} style={{ marginBottom: 24 }}>
-            <div style={{ fontWeight: 700, marginBottom: 4 }}>{category.label}</div>
-            <div style={{ color: "#64748b", fontSize: 16, marginBottom: 12 }}>
-              {category.description}
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 12,
-              }}
-            >
-              {categoryMetrics.map((metric) => {
-                const isSelected = selectedMetrics.includes(metric.id);
-                const isPlanned = Boolean(metric?.uiExposure?.planned);
-
-                return (
-                  <div key={metric.id}>
-                    <button
-                      type="button"
-                      onClick={() => toggleMetric(metric.id)}
-                      style={metricCardStyle(isSelected, isPlanned)}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: 8,
-                            alignItems: "flex-start",
-                            marginBottom: 8,
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontWeight: 1000,
-                              fontSize: 17,
-                              lineHeight: 1.3,
-                              minHeight: 40,
-                              display: "flex",
-                              alignItems: "flex-start",
-                            }}
-                          >
-                            {metric.label}
-                          </div>
-
-                          {isPlanned && (
-                            <span
-                              style={{
-                                fontSize: 15,
-                                padding: "2px 8px",
-                                borderRadius: 999,
-                                background: isSelected ? "rgba(255,255,255,0.2)" : "#e2e8f0",
-                                color: isSelected ? "white" : "#334155",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              Planned
-                            </span>
-                          )}
-                        </div>
-
-                        <div
-                          style={{
-                            fontSize: 15,
-                            lineHeight: 1.45,
-                            color: isSelected ? "rgba(255,255,255,0.92)" : "#475569",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                            minHeight: 38,
-                          }}
-                        >
-                          {getMetricSummary(metricRegistry, metric.id)}
-                        </div>
-                      </div>
-
-                      <div style={{ marginTop: 10 }}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedMetric(expandedMetric === metric.id ? null : metric.id);
-                          }}
-                          style={{
-                            padding: 0,
-                            border: "none",
-                            background: "transparent",
-                            color: isSelected ? "white" : "#2563eb",
-                            cursor: "pointer",
-                            fontSize: 15,
-                          }}
-                        >
-                          {expandedMetric === metric.id ? "Hide details" : "Show details"}
-                        </button>
-
-                        {expandedMetric === metric.id && (
-                          <div
-                            style={{
-                              marginTop: 10,
-                              fontSize: 15,
-                              lineHeight: 1.55,
-                              opacity: 0.95,
-                            }}
-                          >
-                            <div style={{ marginBottom: 6 }}>{metric.description}</div>
-                            {(metric.references || []).length > 0 && (
-                              <div>
-                                <strong>References:</strong> {metric.references.join("; ")}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-
-      {analysisMode !== "standard" && (
-        <>
-          <div style={{ marginTop: 24 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Shared preprocessing</div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 12,
-              }}
-            >
-              <select
-                value={activityChannel}
-                onChange={(e) => setActivityChannel(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-              >
-                <option value="VM">Vector Magnitude (VM)</option>
-                <option value="activity_counts">Activity Counts</option>
-                <option value="ENMO">ENMO</option>
-                <option value="MAD">MAD</option>
-                <option value="PIM">PIM</option>
-                <option value="TAT">TAT</option>
-                <option value="ZCM">ZCM</option>
-              </select>
-
-              <select
-                value={activityTransform}
-                onChange={(e) => setActivityTransform(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-              >
-                <option value="none">No activity transform</option>
-                <option value="zscore">Z-score activity</option>
-              </select>
-
-              <select
-                value={lightTransform}
-                onChange={(e) => setLightTransform(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-              >
-                <option value="none">No light transform</option>
-                <option value="log">Log-transform light</option>
-              </select>
-            </div>
-          </div>
-
-          {sharedParamsForSelection.length > 0 && (
-            <div style={{ marginTop: 24 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Common metric settings</div>
-              <div style={{ display: "grid", gap: 12 }}>
-                {sharedParamsForSelection.map((param) => (
-                  <div key={param.id}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>{param.label}</div>
-                    {renderParamInput(
-                      param,
-                      sharedValues?.[param.id],
-                      (value) => updateSharedValue(param.id, value)
-                    )}
-                    {param.description && (
-                      <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
-                        {param.description}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {selectedMetrics.length > 0 && (
-            <div style={{ marginTop: 24 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Metric-specific overrides</div>
-              <div style={{ display: "grid", gap: 14 }}>
-                {selectedMetrics.map((metricId) => {
-                  const metric = allMetrics.find((m) => m.id === metricId);
-                  if (!metric) return null;
-
-                  const params = metric.parameterSchema || [];
-                  if (params.length === 0) return null;
-
-                  return (
-                    <div
-                      key={`override-${metricId}`}
-                      style={{
-                        border: "1px solid #e2e8f0",
-                        borderRadius: 14,
-                        padding: 14,
-                        background: "#f8fafc",
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, marginBottom: 10 }}>{metric.label}</div>
-
-                      <div style={{ display: "grid", gap: 10 }}>
-                        {params.map((param) => (
-                          <div key={`${metricId}-${param.name}`}>
-                            <div style={{ fontWeight: 600, marginBottom: 6 }}>{param.label}</div>
-                            {renderParamInput(
-                              param,
-                              metricOverrides?.[metricId]?.[param.name],
-                              (value) => updateMetricOverride(metricId, param.name, value)
-                            )}
-                            {param.sharedParamId && (
-                              <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                                Leave blank to inherit the common setting.
-                              </div>
-                            )}
-                            {param.description && (
-                              <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
-                                {param.description}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      <div style={{ marginTop: 24 }}>
+      <div style={{ marginTop: 8, marginBottom: 24 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Sleep / rest-detection algorithms</div>
         <div
           style={{
@@ -595,41 +339,10 @@ export default function MetricsPanel({
                   }}
                 >
                   <div>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: 16,
-                        display: "flex",
-                        gap: 8,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexWrap: "wrap",
-                        textAlign: "center",
-                        width: "100%",
-                      }}
-                    >
-                      <span>{algo.label}</span>
-
-                      {isPlanned && (
-                        <span
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 700,
-                            padding: "4px 8px",
-                            borderRadius: 999,
-                            background: "#e2e8f0",
-                            color: "#334155",
-                          }}
-                        >
-                          Planned
-                        </span>
-                      )}
-                    </div>
-
-                    <div style={{ fontSize: 14, color: "#64748b", marginTop: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 16 }}>{algo.label}</div>
+                    <div style={{ fontSize: 14, color: "#64748b", marginTop: 2 }}>
                       {getAlgorithmDescription(algorithmRegistry, algo.id)}
                     </div>
-
                     <button
                       type="button"
                       onClick={(e) => {
@@ -657,10 +370,7 @@ export default function MetricsPanel({
                       type="radio"
                       name="sleepAlgorithm"
                       checked={selectedAlgorithm === algo.id}
-                      onChange={() => {
-                        setSelectedAlgorithm(algo.id);
-                        setCurrentStep("5");
-                      }}
+                      onChange={() => setSelectedAlgorithm(algo.id)}
                     />
                   </div>
                 </label>
@@ -694,7 +404,11 @@ export default function MetricsPanel({
                         {(getAlgorithmParameters(algorithmRegistry, algo.id) || []).map((param) => (
                           <div key={`${algo.id}-${param.name}`}>
                             <div style={{ fontWeight: 600, marginBottom: 6 }}>{param.label}</div>
-                            {renderAlgorithmParameter(algo, param)}
+                            {renderParamInput(
+                              param,
+                              algorithmParams?.[algo.id]?.[param.name],
+                              (value) => updateAlgorithmParam(algo.id, param.name, value)
+                            )}
                             {param.description && (
                               <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
                                 {param.description}
@@ -711,6 +425,246 @@ export default function MetricsPanel({
           })}
         </div>
       </div>
+
+      {analysisMode !== "standard" && (
+        <div
+          style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: 16,
+            padding: 16,
+            background: "#f8fafc",
+            marginBottom: 24,
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>Analysis scope</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {[
+              { id: "family", label: "Family-level analysis" },
+              { id: "metric", label: "Metric-level analysis" },
+            ].map((option) => {
+              const selected = analysisScope === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setAnalysisScope(option.id)}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 12,
+                    border: selected ? "1px solid #0f172a" : "1px solid #cbd5e1",
+                    background: selected ? "#0f172a" : "white",
+                    color: selected ? "white" : "#0f172a",
+                    cursor: "pointer",
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {analysisScope === "family" && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Analysis families</div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 12,
+            }}
+          >
+            {allFamilies.map((family) => {
+              const selected = selectedFamilies.includes(family.id);
+              return (
+                <button
+                  key={family.id}
+                  type="button"
+                  onClick={() => toggleFamily(family.id, family.planned)}
+                  style={cardStyle(selected, family.planned)}
+                >
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 17 }}>{family.label}</div>
+                    <div
+                      style={{
+                        marginTop: 8,
+                        color: selected ? "rgba(255,255,255,0.9)" : "#475569",
+                        fontSize: 14,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {family.description}
+                    </div>
+                  </div>
+                  {family.planned && (
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>Planned</div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {analysisScope === "metric" &&
+        visibleCategories.map((category) => {
+          const categoryMetrics = allMetrics.filter((metric) => metric.category === category.id);
+          if (categoryMetrics.length === 0) return null;
+
+          return (
+            <div key={category.id} style={{ marginBottom: 24 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{category.label}</div>
+              <div style={{ color: "#64748b", fontSize: 16, marginBottom: 12 }}>
+                {category.description}
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 12,
+                }}
+              >
+                {categoryMetrics.map((metric) => {
+                  const isSelected = selectedMetrics.includes(metric.id);
+                  const isPlanned = Boolean(metric?.uiExposure?.planned);
+
+                  return (
+                    <div key={metric.id}>
+                      <button
+                        type="button"
+                        onClick={() => !isPlanned && toggleMetric(metric.id)}
+                        style={cardStyle(isSelected, isPlanned)}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 1000, fontSize: 17 }}>{metric.label}</div>
+                          <div
+                            style={{
+                              marginTop: 8,
+                              fontSize: 15,
+                              lineHeight: 1.45,
+                              color: isSelected ? "rgba(255,255,255,0.92)" : "#475569",
+                              minHeight: 38,
+                            }}
+                          >
+                            {getMetricSummary(metricRegistry, metric.id)}
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: 10 }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedMetric(expandedMetric === metric.id ? null : metric.id);
+                            }}
+                            style={{
+                              padding: 0,
+                              border: "none",
+                              background: "transparent",
+                              color: isSelected ? "white" : "#2563eb",
+                              cursor: "pointer",
+                              fontSize: 15,
+                            }}
+                          >
+                            {expandedMetric === metric.id ? "Hide details" : "Show details"}
+                          </button>
+
+                          {expandedMetric === metric.id && (
+                            <div style={{ marginTop: 10, fontSize: 15, lineHeight: 1.55 }}>
+                              <div style={{ marginBottom: 6 }}>{metric.description}</div>
+                              {(metric.references || []).length > 0 && (
+                                <div>
+                                  <strong>References:</strong> {metric.references.join("; ")}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+      {analysisScope === "metric" && analysisMode !== "standard" && sharedParamsForSelection.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Common metric settings</div>
+          <div style={{ display: "grid", gap: 12 }}>
+            {sharedParamsForSelection.map((param) => (
+              <div key={param.id}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{param.label}</div>
+                {renderParamInput(
+                  param,
+                  sharedValues?.[param.id],
+                  (value) => updateSharedValue(param.id, value)
+                )}
+                {param.description && (
+                  <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+                    {param.description}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {analysisScope === "metric" && analysisMode !== "standard" && selectedMetrics.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Metric-specific overrides</div>
+          <div style={{ display: "grid", gap: 14 }}>
+            {selectedMetrics.map((metricId) => {
+              const metric = allMetrics.find((m) => m.id === metricId);
+              if (!metric) return null;
+
+              const params = metric.parameterSchema || [];
+              if (params.length === 0) return null;
+
+              return (
+                <div
+                  key={`override-${metricId}`}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 14,
+                    padding: 14,
+                    background: "#f8fafc",
+                  }}
+                >
+                  <div style={{ fontWeight: 700, marginBottom: 10 }}>{metric.label}</div>
+
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {params.map((param) => (
+                      <div key={`${metricId}-${param.name}`}>
+                        <div style={{ fontWeight: 600, marginBottom: 6 }}>{param.label}</div>
+                        {renderParamInput(
+                          param,
+                          metricOverrides?.[metricId]?.[param.name],
+                          (value) => updateMetricOverride(metricId, param.name, value)
+                        )}
+                        {param.sharedParamId && (
+                          <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                            Leave blank to inherit the common setting.
+                          </div>
+                        )}
+                        {param.description && (
+                          <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+                            {param.description}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

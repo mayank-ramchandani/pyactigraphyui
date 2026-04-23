@@ -6,9 +6,12 @@
     "sidebarPosition": "left",
     "panelOrder": [
       "fileSelection",
+      "csvMapping",
       "preview",
+      "lightPreview",
       "cleaning",
-      "diaryAndLogs",
+      "sleepDiary",
+      "startStop",
       "metrics",
       "results",
       "export"
@@ -41,83 +44,33 @@
     }
   },
   "workflow": [
-    {
-      "id": "1",
-      "key": "fileSelection",
-      "title": "Select Files",
-      "description": "Upload actigraphy and optional supporting files."
-    },
-    {
-      "id": "2",
-      "key": "preview",
-      "title": "Preview Full Recording",
-      "description": "Inspect the full recording before cleaning and analysis."
-    },
-    {
-      "id": "3",
-      "key": "cleaning",
-      "title": "Cleaning & Masking",
-      "description": "Optionally apply masking and recording-bound cleaning."
-    },
-    {
-      "id": "4",
-      "key": "diaryAndLogs",
-      "title": "Sleep Diary / Logs",
-      "description": "Attach sleep diary or start-stop-time files when available."
-    },
-    {
-      "id": "5",
-      "key": "metrics",
-      "title": "Choose Metrics & Algorithms",
-      "description": "Select metrics, rest-detection algorithms, and parameter settings."
-    },
-    {
-      "id": "6",
-      "key": "results",
-      "title": "Generate Results",
-      "description": "Create summaries, overlays, and analysis outputs."
-    },
-    {
-      "id": "7",
-      "key": "export",
-      "title": "Export Outputs",
-      "description": "Save tables, overlays, and report-ready outputs."
-    }
+    { "id": "1", "key": "fileSelection", "title": "Select Files", "description": "Upload actigraphy and optional supporting files." },
+    { "id": "2", "key": "csvMapping", "title": "Map CSV Columns", "description": "Assign timestamp, activity, light, temperature, and non-wear columns for CSV uploads." },
+    { "id": "3", "key": "preview", "title": "Preview Activity", "description": "Inspect the loaded activity recording before cleaning and analysis." },
+    { "id": "4", "key": "lightPreview", "title": "Preview Light", "description": "Inspect light data if present in the recording or separate light file." },
+    { "id": "5", "key": "cleaning", "title": "Cleaning & Masking", "description": "Exclude invalid or non-wear periods before analysis." },
+    { "id": "6", "key": "sleepDiary", "title": "Sleep Diary", "description": "Attach reported sleep timing and naps if available." },
+    { "id": "7", "key": "startStop", "title": "Start / Stop Files", "description": "Attach files defining the true effective recording interval." },
+    { "id": "8", "key": "metrics", "title": "Algorithms & Analysis Setup", "description": "Choose algorithms first, then family-level or metric-level analysis." },
+    { "id": "9", "key": "results", "title": "Generate Results", "description": "Create summaries and output tables." },
+    { "id": "10", "key": "export", "title": "Export Outputs", "description": "Save tables and report-ready outputs." }
   ],
   "panels": {
-    "fileSelection": {
-      "enabled": true,
-      "title": "1. File Selection"
-    },
-    "preview": {
-      "enabled": true,
-      "title": "2. Full Recording Preview"
-    },
-    "cleaning": {
-      "enabled": true,
-      "title": "3. Cleaning & Masking"
-    },
-    "diaryAndLogs": {
-      "enabled": true,
-      "title": "4. Sleep Diary / Start-Stop Files"
-    },
-    "metrics": {
-      "enabled": true,
-      "title": "5. Choose Metrics & Algorithms"
-    },
-    "results": {
-      "enabled": true,
-      "title": "6. Generate Results"
-    },
-    "export": {
-      "enabled": true,
-      "title": "7. Export Outputs"
-    }
+    "fileSelection": { "enabled": true, "title": "1. File Selection" },
+    "csvMapping": { "enabled": true, "title": "2. CSV Column Mapping" },
+    "preview": { "enabled": true, "title": "3. Activity Preview" },
+    "lightPreview": { "enabled": true, "title": "4. Light Preview" },
+    "cleaning": { "enabled": true, "title": "5. Cleaning & Masking" },
+    "sleepDiary": { "enabled": true, "title": "6. Sleep Diary" },
+    "startStop": { "enabled": true, "title": "7. Start / Stop Files" },
+    "metrics": { "enabled": true, "title": "8. Sleep Algorithms, Families, and Metrics" },
+    "results": { "enabled": true, "title": "9. Generate Results" },
+    "export": { "enabled": true, "title": "10. Export Outputs" }
   },
   "uiText": {
-    "maskingHelp": "Masking is used to exclude spurious inactivity or non-wear periods, such as times when the watch was removed.",
-    "diaryHelp": "Sleep diary overlays should show nocturnal sleep and naps distinctly. Provide diary-format help directly in the upload area.",
-    "sstHelp": "Start/Stop Time files define the effective recording interval (i.e., when watch was actually worn by participant, instead of for demonstration purposes, etc.) and is optional.",
-    "algorithmHelp": "All scoring algorithms return a binary rest/activity time series and can be previewed as overlays."
+    "maskingHelp": "Masking excludes invalid or non-wear periods so they do not influence analysis.",
+    "diaryHelp": "Sleep diary files contain reported sleep timing, naps, or in-bed intervals.",
+    "sstHelp": "Start/Stop files define the actual effective recording interval, such as when the device was really worn.",
+    "algorithmHelp": "All scoring algorithms return a binary rest/activity time series and should be selected before sleep-family metrics."
   }
 }

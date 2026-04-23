@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from "react";
-
+import React from "react";
 import {
   LineChart,
   Line,
@@ -11,9 +10,7 @@ import {
 } from "recharts";
 
 function formatValue(value) {
-  if (value == null || Number.isNaN(value)) {
-    return "Not available";
-  }
+  if (value == null || Number.isNaN(value)) return "Not available";
   if (typeof value === "number") {
     return Number.isInteger(value) ? String(value) : value.toFixed(2);
   }
@@ -22,30 +19,23 @@ function formatValue(value) {
 
 export default function PreviewPanel({
   title,
-  previewCards,
+  mode = "activity",
   previewLoaded,
   previewLoading,
   previewError,
   previewData,
-  actigraphyFiles,
-  selectedPreviewFile,
-  setSelectedPreviewFile,
   onPreview,
+  onContinue,
 }) {
-  const [search, setSearch] = useState("");
-
-  const filteredFiles = useMemo(() => {
-    return actigraphyFiles.filter((file) =>
-      file.name.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [actigraphyFiles, search]);
-
-  const previewPoints = previewData?.full_recording_preview || [];
   const summary = previewData?.summary || {};
+  const detectedInputType = previewData?.detected_input_type || "unknown";
+  const activityPoints = previewData?.full_recording_preview || [];
+  const lightPoints = previewData?.light_preview || [];
+  const hasLight = Boolean(previewData?.light_preview_available);
 
-  const visiblePreviewCards = (previewCards || []).filter(
-    (card) => !["mask_overlay_preview", "sleep_diary_overlay_preview"].includes(card.id)
-  );
+  const points = mode === "light" ? lightPoints : activityPoints;
+  const yLabel = mode === "light" ? "Light" : "Activity";
+  const previewTitle = mode === "light" ? "Light Preview" : "Activity Preview";
 
   return (
     <div
@@ -58,58 +48,30 @@ export default function PreviewPanel({
     >
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        Load a full-recording preview before moving to cleaning, masking, sleep diary, or algorithm overlay steps.
+        {mode === "light"
+          ? "Inspect light data after the activity preview. If no light channel is available, this step will explain that."
+          : "Load a full-recording activity preview before moving to cleaning, sleep diary, and start/stop pages."}
       </p>
 
-      <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
-        <input
-          type="text"
-          placeholder="Search uploaded actigraphy files"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #cbd5e1",
-          }}
-        />
-
-        <select
-          value={selectedPreviewFile}
-          onChange={(e) => setSelectedPreviewFile(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #cbd5e1",
-            background: "white",
-          }}
-        >
-          <option value="">Select a file to preview</option>
-          {filteredFiles.map((file, idx) => (
-            <option key={`${file.name}-${idx}`} value={file.name}>
-              {file.name}
-            </option>
-          ))}
-        </select>
-
-        <div>
+      {mode === "activity" && (
+        <div style={{ marginBottom: 16 }}>
           <button
             onClick={onPreview}
-            disabled={!selectedPreviewFile || previewLoading}
+            disabled={previewLoading}
             style={{
               padding: "10px 16px",
               borderRadius: 12,
-              background: selectedPreviewFile && !previewLoading ? "#0f172a" : "#94a3b8",
+              background: previewLoading ? "#94a3b8" : "#0f172a",
               color: "white",
               border: "none",
-              cursor: selectedPreviewFile && !previewLoading ? "pointer" : "not-allowed",
+              cursor: previewLoading ? "not-allowed" : "pointer",
               fontWeight: 600,
             }}
           >
-            {previewLoading ? "Loading Preview..." : "Load Full Recording Preview"}
+            {previewLoading ? "Loading Preview..." : "Load Preview"}
           </button>
         </div>
-      </div>
+      )}
 
       {previewError && (
         <div
@@ -148,6 +110,14 @@ export default function PreviewPanel({
               <div style={{ fontWeight: 700, marginBottom: 10 }}>Preview Summary</div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <tbody>
+                  <tr>
+                    <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>
+                      detected_input_type
+                    </td>
+                    <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
+                      {detectedInputType}
+                    </td>
+                  </tr>
                   {Object.entries(summary).map(([key, value]) => (
                     <tr key={key}>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>
@@ -172,111 +142,127 @@ export default function PreviewPanel({
             >
               <div style={{ fontWeight: 700, marginBottom: 10 }}>What happens next</div>
               <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14 }}>
-                Use the next workflow step for masking / cleaning options, and the step after that for sleep diary and start-stop file settings.
+                {mode === "light"
+                  ? hasLight
+                    ? "Light data were detected. Continue to cleaning and masking."
+                    : "No light channel was detected in the loaded data. You can continue to cleaning and masking."
+                  : "Continue to the light preview page, then proceed to masking and diary/start-stop configuration."}
               </div>
             </div>
           </div>
 
-          <div
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 16,
-              padding: 16,
-              background: "#f8fafc",
-              marginBottom: 20,
-            }}
-          >
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>Full Recording Sample</div>
-            {previewPoints.length === 0 ? (
-              <div style={{ color: "#64748b" }}>No preview points were returned for this file.</div>
-            ) : (
-              <div style={{ overflowX: "auto", maxHeight: 320, overflowY: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>
-                        Timestamp
-                      </th>
-                      <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #cbd5e1" }}>
-                        Activity
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewPoints.slice(0, 200).map((row, index) => (
-                      <tr key={`${row.timestamp}-${index}`}>
-                        <td style={{ padding: 8, borderTop: "1px solid #e2e8f0" }}>{row.timestamp}</td>
-                        <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
-                          {formatValue(row.activity)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {mode === "light" && !hasLight ? (
+            <div
+              style={{
+                border: "1px solid #e2e8f0",
+                borderRadius: 16,
+                padding: 16,
+                background: "#f8fafc",
+                marginBottom: 20,
+                color: "#475569",
+              }}
+            >
+              No light preview is available for the currently loaded file(s).
+            </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 16,
+                  padding: 16,
+                  background: "#f8fafc",
+                  marginBottom: 20,
+                }}
+              >
+                <div style={{ fontWeight: 700, marginBottom: 10 }}>{previewTitle} Sample</div>
+                {points.length === 0 ? (
+                  <div style={{ color: "#64748b" }}>No preview points were returned for this file.</div>
+                ) : (
+                  <div style={{ overflowX: "auto", maxHeight: 320, overflowY: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>
+                            Timestamp
+                          </th>
+                          <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #cbd5e1" }}>
+                            {yLabel}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {points.slice(0, 200).map((row, index) => (
+                          <tr key={`${row.timestamp}-${index}`}>
+                            <td style={{ padding: 8, borderTop: "1px solid #e2e8f0" }}>{row.timestamp}</td>
+                            <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
+                              {formatValue(mode === "light" ? row.light : row.activity)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            )}
+
+              <div
+                style={{
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 16,
+                  padding: 16,
+                  background: "#f8fafc",
+                  marginBottom: 20,
+                }}
+              >
+                <div style={{ fontWeight: 700, marginBottom: 10 }}>{previewTitle} Plot</div>
+
+                {points.length === 0 ? (
+                  <div style={{ color: "#64748b" }}>No preview points were returned for this file.</div>
+                ) : (
+                  <div style={{ width: "100%", height: 320 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={points}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="timestamp" tick={false} minTickGap={40} />
+                        <YAxis />
+                        <Tooltip
+                          formatter={(value) => [value, yLabel]}
+                          labelFormatter={(label) => `Time: ${label}`}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey={mode === "light" ? "light" : "activity"}
+                          dot={false}
+                          strokeWidth={2}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={onContinue}
+              style={{
+                padding: "10px 16px",
+                borderRadius: 12,
+                background: "#0f172a",
+                color: "white",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Continue
+            </button>
           </div>
-
-          <div
-  style={{
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
-    padding: 16,
-    background: "#f8fafc",
-    marginBottom: 20,
-  }}
->
-  <div style={{ fontWeight: 700, marginBottom: 10 }}>Full Recording Preview Plot</div>
-
-  {previewPoints.length === 0 ? (
-    <div style={{ color: "#64748b" }}>No preview points were returned for this file.</div>
-  ) : (
-    <div style={{ width: "100%", height: 320 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={previewPoints}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis
-            dataKey="timestamp"
-            tick={false}
-            minTickGap={40}
-          />
-          <YAxis />
-          <Tooltip
-            formatter={(value) => [value, "Activity"]}
-            labelFormatter={(label) => `Time: ${label}`}
-          />
-          <Line
-            type="monotone"
-            dataKey="activity"
-            dot={false}
-            strokeWidth={2}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  )}
-</div>
         </>
       )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 }}>
-        {visiblePreviewCards.map((card) => (
-          <div
-            key={card.id}
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 16,
-              padding: 16,
-              background: "#f8fafc",
-            }}
-          >
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>{card.title}</div>
-            <div style={{ color: "#64748b", fontSize: 14, lineHeight: 1.5 }}>
-              {card.description}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

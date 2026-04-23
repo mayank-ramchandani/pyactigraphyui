@@ -28,13 +28,13 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
 
       <div
         style={{
-          fontSize: 13,
+          fontSize: 12,
           color: "#64748b",
           lineHeight: 1.5,
           marginBottom: 16,
         }}
       >
-        Follow the analysis steps from file upload through export.
+        This workflow is sequential. Completed steps are shown for reference, but earlier steps are locked once you move forward.
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
@@ -105,6 +105,7 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
                   borderRadius: 16,
                   padding: 14,
                   background: isActive ? "#f8fafc" : isCompleted ? "#f8fafc" : "white",
+                  opacity: isUpcoming ? 0.9 : 1,
                 }}
               >
                 <div
@@ -145,7 +146,7 @@ export default function WorkflowSidebar({ workflow, currentStep }) {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {isActive ? "Current" : isCompleted ? "Done" : isUpcoming ? "Pending" : ""}
+                    {isActive ? "Current" : isCompleted ? "Done" : "Pending"}
                   </div>
                 </div>
 

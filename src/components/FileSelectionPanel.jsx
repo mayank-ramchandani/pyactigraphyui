@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
 const acceptedActigraphyExtensions = [
   ".agd",
@@ -7,40 +7,70 @@ const acceptedActigraphyExtensions = [
   ".bba",
   ".csv",
   ".dqt",
+  ".gt3x",
   ".mesa",
   ".mtn",
   ".rpx",
   ".tal",
 ];
 
-const requiredCsvColumns = [
-  "subject_id",
-  "Date",
-  "Time",
-  "Timestamp",
-  "AxisXCounts",
-  "AxisYCounts",
-  "AxisZCounts",
-  "VM",
-];
+const acceptedCsvDescription = [
+  "Any CSV is allowed",
+  "You will map timestamp / activity / light / temperature columns after upload",
+].join(". ");
 
-const validateCsvHeader = async (file) => {
-  const text = await file.text();
-  const firstLine = text.split(/\r?\n/)[0]?.trim() || "";
-  const headers = firstLine.split(",").map((header) => header.trim());
+function BubbleInfo({ label, content }) {
+  const [open, setOpen] = useState(false);
 
-  const missing = requiredCsvColumns.filter((column) => !headers.includes(column));
-  if (missing.length > 0) {
-    return `Missing required CSV columns: ${missing.join(", ")}`;
-  }
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6 }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span>{label}</span>
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#e2e8f0",
+          color: "#0f172a",
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: "default",
+        }}
+      >
+        i
+      </span>
 
-  const ordered = requiredCsvColumns.every((column, index) => headers[index] === column);
-  if (!ordered) {
-    return `CSV columns must begin in this order: ${requiredCsvColumns.join(", ")}`;
-  }
-
-  return "";
-};
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "120%",
+            left: 0,
+            zIndex: 50,
+            width: 320,
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid #cbd5e1",
+            background: "white",
+            color: "#334155",
+            fontSize: 13,
+            lineHeight: 1.5,
+            boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+          }}
+        >
+          {content}
+        </div>
+      )}
+    </span>
+  );
+}
 
 export default function FileSelectionPanel({
   title,
@@ -57,15 +87,43 @@ export default function FileSelectionPanel({
   fileError,
   setFileError,
   onActigraphyFilesChange,
+  onCsvNeedsMapping,
 }) {
   const [uploadError, setUploadError] = useState("");
 
-  const fileInputs = [
-    { key: "actigraphy", title: "Actigraphy Files", button: "Choose Files" },
-    { key: "sleepDiary", title: "Sleep Diary", button: "Optional Upload" },
-    { key: "light", title: "Light Data", button: "Optional Upload" },
-    { key: "temperature", title: "Temperature Data", button: "Optional Upload" },
-  ];
+  const fileInputs = useMemo(
+    () => [
+      {
+        key: "actigraphy",
+        title: "Actigraphy Files",
+        button: "Choose Files",
+        help: "Primary activity files. Native pyActigraphy formats and CSV are supported.",
+      },
+      {
+        key: "light",
+        title: "Light Data",
+        button: "Optional Upload",
+        help: "Optional additional light-exposure file if light is stored separately.",
+      },
+      {
+        key: "temperature",
+        title: "Temperature Data",
+        button: "Optional Upload",
+        help: "Optional additional temperature file if temperature is stored separately.",
+      },
+    ],
+    []
+  );
+
+  const resetDownstreamState = () => {
+    setPreviewLoaded?.(false);
+    setPreviewData?.(null);
+    setPreviewError?.("");
+    setAnalysisError?.("");
+    setResultsGenerated?.(false);
+  };
+
+  const detectLikelyCsv = (file) => file.name.toLowerCase().endsWith(".csv");
 
   const handleFiles = async (key, fileList) => {
     const files = Array.from(fileList || []);
@@ -79,21 +137,10 @@ export default function FileSelectionPanel({
       });
 
       if (invalid) {
-        const message = `Unsupported file format: ${invalid.name}. Accepted actigraphy files currently enabled in this UI: ${acceptedActigraphyExtensions.join(", ")}`;
+        const message = `Unsupported file format: ${invalid.name}. Accepted actigraphy files: ${acceptedActigraphyExtensions.join(", ")}`;
         setUploadError(message);
         setFileError?.(message);
         return;
-      }
-
-      for (const file of files) {
-        if (file.name.toLowerCase().endsWith(".csv")) {
-          const csvError = await validateCsvHeader(file);
-          if (csvError) {
-            setUploadError(csvError);
-            setFileError?.(csvError);
-            return;
-          }
-        }
       }
     }
 
@@ -106,12 +153,15 @@ export default function FileSelectionPanel({
       }));
     }
 
-    setPreviewLoaded?.(false);
-    setPreviewData?.(null);
-    setPreviewError?.("");
-    setAnalysisError?.("");
-    setResultsGenerated?.(false);
+    resetDownstreamState();
     setCurrentStep("1");
+
+    if (key === "actigraphy" && files.length > 0) {
+      const first = files[0];
+      if (detectLikelyCsv(first) && onCsvNeedsMapping) {
+        onCsvNeedsMapping(first);
+      }
+    }
   };
 
   const hasActigraphyFile = (uploadedFiles.actigraphy || []).length > 0;
@@ -137,17 +187,26 @@ export default function FileSelectionPanel({
           padding: 16,
           background: "#f8fafc",
           marginBottom: 16,
+          display: "grid",
+          gap: 10,
         }}
       >
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Accepted actigraphy files</div>
+        <div style={{ fontWeight: 700 }}>
+          <BubbleInfo
+            label="Accepted actigraphy files"
+            content={`Supported file types currently enabled in the UI: ${acceptedActigraphyExtensions.join(", ")}`}
+          />
+        </div>
+
+        <div style={{ fontWeight: 700 }}>
+          <BubbleInfo
+            label="CSV uploads"
+            content={acceptedCsvDescription}
+          />
+        </div>
+
         <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.6 }}>
-          Native formats currently enabled: {acceptedActigraphyExtensions.join(", ")}.
-          <br />
-          For CSV uploads, the file must begin with these columns in order:
-          <br />
-          <span style={{ fontFamily: "monospace", fontSize: 13 }}>
-            {requiredCsvColumns.join(", ")}
-          </span>
+          Masking excludes invalid or non-wear periods from analysis. Sleep diary files describe reported sleep timing and naps. Start/stop files define the effective recording interval when the device was actually worn.
         </div>
       </div>
 
@@ -191,6 +250,9 @@ export default function FileSelectionPanel({
                 ? `${uploadedFiles[item.key].length} file(s) selected`
                 : "No files selected"}
             </div>
+            <div style={{ fontSize: 13, color: "#475569", marginTop: 8, lineHeight: 1.5 }}>
+              {item.help}
+            </div>
 
             <input
               type="file"
@@ -232,12 +294,12 @@ export default function FileSelectionPanel({
               {
                 id: "standard",
                 label: "Standard / Default Analysis",
-                description: "Uses default preprocessing, but still shows all metric and algorithm choices.",
+                description: "Uses default preprocessing and standard metric defaults.",
               },
               {
                 id: "custom",
                 label: "Customized Analysis",
-                description: "Lets the user manually choose preprocessing, metrics, algorithms, and parameters.",
+                description: "Lets the user manually choose algorithms, families, metrics, mappings, and parameters.",
               },
             ].map((mode) => {
               const selected = analysisMode === mode.id;
@@ -250,19 +312,24 @@ export default function FileSelectionPanel({
                     setCurrentStep("1");
                   }}
                   style={{
-                    flex: 1,
-                    minWidth: 260,
-                    textAlign: "left",
-                    padding: 14,
+                    padding: "12px 14px",
                     borderRadius: 14,
                     border: selected ? "1px solid #0f172a" : "1px solid #cbd5e1",
                     background: selected ? "#0f172a" : "white",
                     color: selected ? "white" : "#0f172a",
                     cursor: "pointer",
+                    textAlign: "left",
+                    maxWidth: 340,
                   }}
                 >
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>{mode.label}</div>
-                  <div style={{ fontSize: 13, opacity: selected ? 0.9 : 0.75 }}>
+                  <div style={{ fontWeight: 700 }}>{mode.label}</div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      marginTop: 6,
+                      color: selected ? "rgba(255,255,255,0.9)" : "#475569",
+                    }}
+                  >
                     {mode.description}
                   </div>
                 </button>

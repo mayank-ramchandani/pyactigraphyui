@@ -1,28 +1,9 @@
 import pandas as pd
 
 DEFAULT_MEAN_FREQS = [
-    "1min",
-    "2min",
-    "3min",
-    "4min",
-    "5min",
-    "6min",
-    "8min",
-    "9min",
-    "10min",
-    "12min",
-    "15min",
-    "16min",
-    "18min",
-    "20min",
-    "24min",
-    "30min",
-    "32min",
-    "36min",
-    "40min",
-    "45min",
-    "48min",
-    "60min",
+    "1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min",
+    "12min", "15min", "16min", "18min", "20min", "24min", "30min", "32min",
+    "36min", "40min", "45min", "48min", "60min",
 ]
 
 ALGO_TO_SRI_KEY = {
@@ -89,7 +70,7 @@ def _score_algorithm(raw, algorithm, algorithm_params=None):
             return _safe_call(raw.Crespo, estimate_zeta=True)
         return _safe_call(raw.Crespo)
     if algorithm == "roenneberg":
-        factors = params.get("thresholdFactors") or params.get("thresholdFactorsText") or [0.15]
+        factors = params.get("thresholdFactors") or [0.15]
         factor = 0.15
         if isinstance(factors, str):
             try:
@@ -109,11 +90,7 @@ def compute_metric(raw, metric_id, params=None):
     params = params or {}
 
     if metric_id == "ra":
-        return _safe_call(
-            raw.RA,
-            binarize=params.get("binarize", True),
-            threshold=params.get("threshold", 4),
-        )
+        return _safe_call(raw.RA, binarize=params.get("binarize", True), threshold=params.get("threshold", 4))
 
     if metric_id == "is":
         return _safe_call(
@@ -268,61 +245,7 @@ def run_basic_pyactigraphy_analysis(raw, metric_requests=None, algorithm_request
     return results
 
 
-def run_basic_csv_analysis(
-    df,
-    selected_metrics=None,
-    activity_channel="VM",
-    resample_freq="1min",
-    analysis_mode="standard",
-    advanced_metric_params=None,
-):
-    results = {}
-    selected_metrics = selected_metrics or []
-
-    if activity_channel not in df.columns:
-        raise ValueError(f"Selected activity channel '{activity_channel}' not found in CSV.")
-
-    work = df.copy()
-    work["Timestamp"] = pd.to_datetime(work["Timestamp"], errors="coerce")
-    work = work.dropna(subset=["Timestamp"]).sort_values("Timestamp")
-    work = work.set_index("Timestamp")
-
-    if resample_freq:
-        work = work.resample(resample_freq).mean(numeric_only=True)
-
-    work["day_type"] = work.index.dayofweek.map(lambda x: "weekend" if x >= 5 else "weekday")
-    work["date"] = work.index.date
-
-    daily = (
-        work.groupby(["date", "day_type"], as_index=False)[activity_channel]
-        .mean()
-        .rename(columns={activity_channel: "activity_mean"})
-    )
-
-    results["days_detected"] = int(daily["date"].nunique())
-    results["mean_weekday_activity"] = (
-        float(daily.loc[daily["day_type"] == "weekday", "activity_mean"].mean())
-        if not daily.loc[daily["day_type"] == "weekday"].empty
-        else None
-    )
-    results["mean_weekend_activity"] = (
-        float(daily.loc[daily["day_type"] == "weekend", "activity_mean"].mean())
-        if not daily.loc[daily["day_type"] == "weekend"].empty
-        else None
-    )
-
-    unsupported_for_csv = [
-        "ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap",
-        "kra", "kar", "sri", "tst", "waso", "sleep_efficiency"
-    ]
-    for metric_id in selected_metrics:
-        if metric_id in unsupported_for_csv:
-            results[metric_id] = None
-
-    return results
-
-
-def _sample_full_recording(series, max_points=2000):
+def _sample_full_recording(series, max_points=2000, value_key="activity"):
     if series is None or len(series) == 0:
         return []
 
@@ -333,7 +256,7 @@ def _sample_full_recording(series, max_points=2000):
     return [
         {
             "timestamp": str(index),
-            "activity": _safe_float(value),
+            value_key: _safe_float(value),
         }
         for index, value in sampled.items()
     ]
@@ -341,7 +264,6 @@ def _sample_full_recording(series, max_points=2000):
 
 def build_basic_preview(
     df,
-    preview_day_mode="all",
     activity_channel="VM",
     resample_freq="1min",
 ):
@@ -370,7 +292,7 @@ def build_basic_preview(
     return {
         "preview_available": True,
         "summary": summary,
-        "full_recording_preview": _sample_full_recording(full_series),
+        "full_recording_preview": _sample_full_recording(full_series, value_key="activity"),
     }
 
 
@@ -396,5 +318,29 @@ def build_native_preview(raw, activity_channel="data", resample_freq=None):
     return {
         "preview_available": True,
         "summary": summary,
-        "full_recording_preview": _sample_full_recording(preview_series),
+        "full_recording_preview": _sample_full_recording(preview_series, value_key="activity"),
+    }
+
+
+def build_light_preview(raw, resample_freq=None):
+    light_series = getattr(raw, "light", None)
+    if light_series is None:
+        return {
+            "light_preview_available": False,
+            "light_preview": [],
+        }
+
+    preview_series = light_series.dropna()
+    if len(preview_series) == 0:
+        return {
+            "light_preview_available": False,
+            "light_preview": [],
+        }
+
+    if resample_freq:
+        preview_series = preview_series.resample(resample_freq).mean()
+
+    return {
+        "light_preview_available": True,
+        "light_preview": _sample_full_recording(preview_series, value_key="light"),
     }
