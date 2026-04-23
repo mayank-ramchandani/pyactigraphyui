@@ -6,7 +6,9 @@ export default function ExportPanel({
   setCurrentStep,
   resultsGenerated,
 }) {
-  const enabledExports = exportRegistry.exports.filter((item) => item.enabled);
+  const enabledExports = (exportRegistry?.exports ?? []).filter(
+    (item) => item.enabled
+  );
 
   return (
     <div
