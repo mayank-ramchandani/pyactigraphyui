@@ -30,23 +30,25 @@ export default function PreviewPanel({
   selectedLightPreviewFile = "",
   setSelectedLightPreviewFile = () => {},
 }) {
-  const summary = previewData?.summary || {};
   const detectedInputType = previewData?.detected_input_type || "unknown";
   const activityPoints = previewData?.full_recording_preview || [];
   const lightPoints = previewData?.light_preview || [];
+  const activitySummary = previewData?.summary || {};
+  const lightSummary = previewData?.light_summary || {};
   const hasLight = Boolean(previewData?.light_preview_available);
 
   const points = mode === "light" ? lightPoints : activityPoints;
   const yLabel = mode === "light" ? "Light" : "Activity";
   const previewTitle = mode === "light" ? "Light Preview" : "Activity Preview";
+  const summary = mode === "light" ? lightSummary : activitySummary;
 
   return (
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
         {mode === "light"
-          ? "Inspect light data from the selected actigraphy file or selected optional light file."
-          : "Choose an uploaded actigraphy file and load its preview."}
+          ? "Load light preview independently from a selected light file."
+          : "Load activity preview independently from a selected actigraphy file."}
       </p>
 
       <div
@@ -57,61 +59,73 @@ export default function PreviewPanel({
           marginBottom: 16,
         }}
       >
-        <div>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Actigraphy preview file</div>
-          <select
-            value={selectedPreviewFile}
-            onChange={(e) => setSelectedPreviewFile(e.target.value)}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 10,
-              border: "1px solid #cbd5e1",
-              background: "white",
-              width: "100%",
-            }}
-          >
-            {actigraphyFiles.map((file) => (
-              <option key={file.name} value={file.name}>
-                {file.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Optional light preview file</div>
-          <select
-            value={selectedLightPreviewFile}
-            onChange={(e) => setSelectedLightPreviewFile(e.target.value)}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 10,
-              border: "1px solid #cbd5e1",
-              background: "white",
-              width: "100%",
-            }}
-          >
-            <option value="">Use embedded light from actigraphy file</option>
-            {lightFiles.map((file) => (
-              <option key={file.name} value={file.name}>
-                {file.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {mode === "activity" ? (
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Actigraphy preview file</div>
+            <select
+              value={selectedPreviewFile}
+              onChange={(e) => setSelectedPreviewFile(e.target.value)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid #cbd5e1",
+                background: "white",
+                width: "100%",
+              }}
+            >
+              {actigraphyFiles.map((file) => (
+                <option key={file.name} value={file.name}>
+                  {file.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Light preview file</div>
+            <select
+              value={selectedLightPreviewFile}
+              onChange={(e) => setSelectedLightPreviewFile(e.target.value)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid #cbd5e1",
+                background: "white",
+                width: "100%",
+              }}
+            >
+              {lightFiles.map((file) => (
+                <option key={file.name} value={file.name}>
+                  {file.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 16 }}>
         <button
           onClick={onPreview}
-          disabled={previewLoading || !selectedPreviewFile}
+          disabled={
+            previewLoading ||
+            (mode === "activity" ? !selectedPreviewFile : !selectedLightPreviewFile)
+          }
           style={{
             padding: "10px 16px",
             borderRadius: 12,
-            background: previewLoading || !selectedPreviewFile ? "#94a3b8" : "#0f172a",
+            background:
+              previewLoading ||
+              (mode === "activity" ? !selectedPreviewFile : !selectedLightPreviewFile)
+                ? "#94a3b8"
+                : "#0f172a",
             color: "white",
             border: "none",
-            cursor: previewLoading || !selectedPreviewFile ? "not-allowed" : "pointer",
+            cursor:
+              previewLoading ||
+              (mode === "activity" ? !selectedPreviewFile : !selectedLightPreviewFile)
+                ? "not-allowed"
+                : "pointer",
             fontWeight: 600,
           }}
         >
@@ -169,7 +183,7 @@ export default function PreviewPanel({
                 {mode === "light"
                   ? hasLight
                     ? "Light preview is available."
-                    : "No light preview is available for the selected actigraphy/light file combination."
+                    : "No light preview is available for the selected light file."
                   : "Activity preview is available below."}
               </div>
             </div>
@@ -177,7 +191,7 @@ export default function PreviewPanel({
 
           {mode === "light" && !hasLight ? (
             <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", color: "#475569" }}>
-              No light channel could be previewed from the selected actigraphy file or selected optional light file.
+              No light channel could be previewed from the selected light file.
             </div>
           ) : (
             <>

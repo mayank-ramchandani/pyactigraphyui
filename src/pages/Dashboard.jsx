@@ -210,38 +210,68 @@ export default function Dashboard() {
     unlockAndGoToStep("2");
   };
 
-  const onPreview = async () => {
+  const onActivityPreview = async () => {
     if (!actigraphyFile) return;
-
+  
     try {
       setPreviewLoading(true);
       setPreviewError("");
       setPreviewLoaded(false);
       setPreviewData(null);
-
+  
       const formData = new FormData();
       formData.append("file", actigraphyFile);
       formData.append("activityChannel", activityChannel);
       formData.append("resampleFreq", "1min");
       formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
       formData.append("csvSeparator", csvSeparator);
-
-      if (lightFile) formData.append("lightFile", lightFile);
-
+  
       const res = await fetch(buildApiUrl("api/preview/basic"), {
         method: "POST",
         body: formData,
       });
-
+  
       const data = await parseJsonResponse(res);
-
-      if (!res.ok) throw new Error(data?.detail || "Failed to load preview.");
-
+      if (!res.ok) throw new Error(data?.detail || "Failed to load activity preview.");
+  
       setPreviewData(data);
       setPreviewLoaded(true);
       unlockAndGoToStep("4");
     } catch (err) {
-      setPreviewError(err.message || "Failed to load preview.");
+      setPreviewError(err.message || "Failed to load activity preview.");
+      setPreviewLoaded(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+  
+  const onLightPreview = async () => {
+    if (!lightFile) return;
+  
+    try {
+      setPreviewLoading(true);
+      setPreviewError("");
+      setPreviewLoaded(false);
+      setPreviewData(null);
+  
+      const formData = new FormData();
+      formData.append("file", lightFile);
+      formData.append("resampleFreq", "1min");
+      formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
+      formData.append("csvSeparator", csvSeparator);
+  
+      const res = await fetch(buildApiUrl("api/light/preview"), {
+        method: "POST",
+        body: formData,
+      });
+  
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data?.detail || "Failed to load light preview.");
+  
+      setPreviewData(data);
+      setPreviewLoaded(true);
+    } catch (err) {
+      setPreviewError(err.message || "Failed to load light preview.");
       setPreviewLoaded(false);
     } finally {
       setPreviewLoading(false);
@@ -329,38 +359,38 @@ export default function Dashboard() {
   } else if (currentStep === "3") {
     content = (
       <PreviewPanel
-        title={appConfig.panels.preview.title}
-        mode="activity"
-        previewLoaded={previewLoaded}
-        previewLoading={previewLoading}
-        previewError={previewError}
-        previewData={previewData}
-        onPreview={onPreview}
-        actigraphyFiles={actigraphyFiles}
-        selectedPreviewFile={selectedPreviewFile}
-        setSelectedPreviewFile={setSelectedPreviewFile}
-        lightFiles={lightFiles}
-        selectedLightPreviewFile={selectedLightPreviewFile}
-        setSelectedLightPreviewFile={setSelectedLightPreviewFile}
-      />
+  title={appConfig.panels.preview.title}
+  mode="activity"
+  previewLoaded={previewLoaded}
+  previewLoading={previewLoading}
+  previewError={previewError}
+  previewData={previewData}
+  onPreview={onActivityPreview}
+  actigraphyFiles={actigraphyFiles}
+  selectedPreviewFile={selectedPreviewFile}
+  setSelectedPreviewFile={setSelectedPreviewFile}
+  lightFiles={lightFiles}
+  selectedLightPreviewFile={selectedLightPreviewFile}
+  setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+/>
     );
   } else if (currentStep === "4") {
     content = (
       <PreviewPanel
-        title={appConfig.panels.lightPreview.title}
-        mode="light"
-        previewLoaded={previewLoaded}
-        previewLoading={previewLoading}
-        previewError={previewError}
-        previewData={previewData}
-        onPreview={onPreview}
-        actigraphyFiles={actigraphyFiles}
-        selectedPreviewFile={selectedPreviewFile}
-        setSelectedPreviewFile={setSelectedPreviewFile}
-        lightFiles={lightFiles}
-        selectedLightPreviewFile={selectedLightPreviewFile}
-        setSelectedLightPreviewFile={setSelectedLightPreviewFile}
-      />
+  title={appConfig.panels.lightPreview.title}
+  mode="light"
+  previewLoaded={previewLoaded}
+  previewLoading={previewLoading}
+  previewError={previewError}
+  previewData={previewData}
+  onPreview={onLightPreview}
+  actigraphyFiles={actigraphyFiles}
+  selectedPreviewFile={selectedPreviewFile}
+  setSelectedPreviewFile={setSelectedPreviewFile}
+  lightFiles={lightFiles}
+  selectedLightPreviewFile={selectedLightPreviewFile}
+  setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+/>
     );
   } else {
       content = <div />;

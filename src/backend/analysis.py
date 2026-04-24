@@ -247,16 +247,33 @@ def build_native_preview(raw, activity_channel="data", resample_freq=None):
 def build_light_preview(raw, resample_freq=None):
     light_series = getattr(raw, "light", None)
     if light_series is None:
-        return {"light_preview_available": False, "light_preview": []}
+        return {
+            "light_preview_available": False,
+            "light_preview": [],
+            "light_summary": {},
+        }
 
     preview_series = light_series.dropna()
     if len(preview_series) == 0:
-        return {"light_preview_available": False, "light_preview": []}
+        return {
+            "light_preview_available": False,
+            "light_preview": [],
+            "light_summary": {},
+        }
 
     if resample_freq:
         preview_series = preview_series.resample(resample_freq).mean()
 
+    summary = {
+        "rows": int(len(preview_series)),
+        "start": str(preview_series.index.min()) if len(preview_series) else None,
+        "end": str(preview_series.index.max()) if len(preview_series) else None,
+        "mean_light": float(preview_series.mean()) if len(preview_series) else None,
+        "max_light": float(preview_series.max()) if len(preview_series) else None,
+    }
+
     return {
         "light_preview_available": True,
         "light_preview": _sample_full_recording(preview_series, value_key="light"),
+        "light_summary": summary,
     }
