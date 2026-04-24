@@ -7,6 +7,7 @@ import exportRegistry from "../config/exportRegistry.json";
 import sharedParamRegistry from "../config/sharedParamRegistry.json";
 import analysisFamilyRegistry from "../config/analysisFamilyRegistry.json";
 
+
 import WorkflowSidebar from "../components/WorkflowSidebar";
 import FileSelectionPanel from "../components/FileSelectionPanel";
 import CsvMappingPanel from "../components/CsvMappingPanel";
@@ -15,6 +16,7 @@ import MetricsPanel from "../components/MetricsPanel";
 import ResultsPanel from "../components/ResultsPanel";
 import ExportPanel from "../components/ExportPanel";
 import SupportFilesStep from "../components/SupportFilesStep";
+import LightMetricsPanel from "../components/LightMetricsPanel";
 
 import {
   getDefaultAlgorithm,
@@ -482,21 +484,25 @@ export default function Dashboard() {
     );
   } else if (currentStep === "4") {
     content = (
-      <PreviewPanel
-        title={appConfig.panels.lightPreview.title}
-        mode="light"
-        previewLoaded={lightPreviewLoaded}
-        previewLoading={previewLoading}
-        previewError={previewError}
-        previewData={lightPreviewData}
-        actigraphyFiles={actigraphyFiles}
-        selectedPreviewFile={selectedPreviewFile}
-        setSelectedPreviewFile={setSelectedPreviewFile}
-        lightFiles={lightFiles}
-        selectedLightPreviewFile={selectedLightPreviewFile}
-        setSelectedLightPreviewFile={setSelectedLightPreviewFile}
-        onPreview={onLightPreview}
-      />
+      <div style={{ display: "grid", gap: 16 }}>
+        <PreviewPanel
+          title={appConfig.panels.lightPreview.title}
+          mode="light"
+          previewLoaded={lightPreviewLoaded}
+          previewLoading={previewLoading}
+          previewError={previewError}
+          previewData={lightPreviewData}
+          actigraphyFiles={actigraphyFiles}
+          selectedPreviewFile={selectedPreviewFile}
+          setSelectedPreviewFile={setSelectedPreviewFile}
+          lightFiles={lightFiles}
+          selectedLightPreviewFile={selectedLightPreviewFile}
+          setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+          onPreview={onLightPreview}
+        />
+  
+        {lightFile && <LightMetricsPanel lightFile={lightFile} />}
+      </div>
     );
   } else if (currentStep === "5") {
     content = (

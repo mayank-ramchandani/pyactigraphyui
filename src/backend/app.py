@@ -10,6 +10,8 @@ from .analysis import (
     run_basic_pyactigraphy_analysis,
     build_native_preview,
     build_light_preview,
+    run_basic_pylight_analysis,
+    get_basic_light_channels,
 )
 from .qc import quick_qc
 from .io_helpers import (
@@ -124,6 +126,81 @@ async def preview_light(
         return JSONResponse(
             content={
                 **preview,
+                "detected_input_type": reader_type,
+                "native_reader_used": True,
+            }
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server error: {}".format(str(e))}
+        )
+
+@app.post("/api/light/channels")
+async def light_channels(
+    file: UploadFile = File(...),
+):
+    try:
+        tmp_path = _write_upload_to_temp(file)
+        raw, reader_type = _load_native_supported_file(tmp_path)
+
+        payload = get_basic_light_channels(raw)
+
+        return JSONResponse(
+            content={
+                **payload,
+                "detected_input_type": reader_type,
+                "native_reader_used": True,
+            }
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server error: {}".format(str(e))}
+        )
+
+
+@app.post("/api/light/analyze")
+async def analyze_light(
+    file: UploadFile = File(...),
+    metricId: str = Form(...),
+    channel: Optional[str] = Form(None),
+    thresholdLux: Optional[str] = Form(None),
+    startTime: Optional[str] = Form(None),
+    stopTime: Optional[str] = Form(None),
+    bins: str = Form("24h"),
+    agg: str = Form("mean"),
+    aggFuncs: str = Form(""),
+    outputFormat: str = Form("minute"),
+):
+    try:
+        tmp_path = _write_upload_to_temp(file)
+        raw, reader_type = _load_native_supported_file(tmp_path)
+
+        agg_funcs = [x.strip() for x in aggFuncs.split(",") if x.strip()] if aggFuncs else None
+
+        payload = run_basic_pylight_analysis(
+            raw=raw,
+            metric_id=metricId,
+            channel=channel or None,
+            threshold_lux=thresholdLux,
+            start_time=startTime,
+            stop_time=stopTime,
+            bins=bins,
+            agg=agg,
+            agg_funcs=agg_funcs,
+            oformat=outputFormat,
+        )
+
+        return JSONResponse(
+            content={
+                **payload,
                 "detected_input_type": reader_type,
                 "native_reader_used": True,
             }
