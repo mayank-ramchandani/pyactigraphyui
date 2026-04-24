@@ -110,6 +110,7 @@ export default function Dashboard() {
   const lightFile =
     lightFiles.find((file) => file.name === selectedLightPreviewFile) ||
     lightFiles[0] ||
+    actigraphyFile ||
     null;
 
   const workflowSteps = useMemo(
@@ -122,27 +123,6 @@ export default function Dashboard() {
   );
 
   const currentStepIndex = workflowSteps.findIndex((step) => step.id === currentStep);
-
-  const goToStep = (stepId) => {
-    if (Number(stepId) <= Number(maxUnlockedStep)) {
-      setCurrentStep(stepId);
-    }
-  };
-
-  const unlockAndGoToStep = (stepId) => {
-    const n = Number(stepId);
-    if (n > Number(maxUnlockedStep)) {
-      setMaxUnlockedStep(String(n));
-    }
-    setCurrentStep(String(stepId));
-  };
-
-  const goPrevious = () => {
-    if (currentStepIndex > 0) {
-      const prev = workflowSteps[currentStepIndex - 1];
-      goToStep(prev.id);
-    }
-  };
 
   const familyMetricIds = useMemo(() => {
     const familyLookup = Object.fromEntries(
@@ -196,12 +176,33 @@ export default function Dashboard() {
     return JSON.parse(text);
   };
 
+  const goToStep = (stepId) => {
+    if (Number(stepId) <= Number(maxUnlockedStep)) {
+      setCurrentStep(stepId);
+    }
+  };
+
+  const unlockAndGoToStep = (stepId) => {
+    const n = Number(stepId);
+    if (n > Number(maxUnlockedStep)) {
+      setMaxUnlockedStep(String(n));
+    }
+    setCurrentStep(String(stepId));
+  };
+
+  const goPrevious = () => {
+    if (currentStepIndex > 0) {
+      const prev = workflowSteps[currentStepIndex - 1];
+      goToStep(prev.id);
+    }
+  };
+
   const resetPreviewAndResults = () => {
     setPreviewLoaded(false);
     setPreviewData(null);
-    setPreviewError("");
     setLightPreviewLoaded(false);
     setLightPreviewData(null);
+    setPreviewError("");
     setResultsGenerated(false);
     setSummaryResults({});
     setQcWarnings([]);
@@ -211,6 +212,7 @@ export default function Dashboard() {
   const handleActigraphyFilesChange = (files) => {
     setUploadedFiles((prev) => ({ ...prev, actigraphy: files }));
     setSelectedPreviewFile(files?.[0]?.name || "");
+    setSelectedLightPreviewFile("");
     resetPreviewAndResults();
 
     setShowManualMapping(false);
@@ -367,15 +369,11 @@ export default function Dashboard() {
           message: previewLoaded ? "" : "Load the activity preview before continuing.",
         };
       case "4":
-        if (lightFiles.length === 0) {
-          return {
-            valid: true,
-            message: "No separate light file uploaded. You can continue.",
-          };
-        }
         return {
           valid: lightPreviewLoaded,
-          message: lightPreviewLoaded ? "" : "Load the light preview before continuing.",
+          message: lightPreviewLoaded
+            ? ""
+            : "Load the light preview before continuing.",
         };
       case "5":
       case "6":
@@ -473,13 +471,13 @@ export default function Dashboard() {
         previewLoading={previewLoading}
         previewError={previewError}
         previewData={previewData}
-        onPreview={onActivityPreview}
         actigraphyFiles={actigraphyFiles}
         selectedPreviewFile={selectedPreviewFile}
         setSelectedPreviewFile={setSelectedPreviewFile}
         lightFiles={lightFiles}
         selectedLightPreviewFile={selectedLightPreviewFile}
         setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+        onPreview={onActivityPreview}
       />
     );
   } else if (currentStep === "4") {
@@ -491,13 +489,13 @@ export default function Dashboard() {
         previewLoading={previewLoading}
         previewError={previewError}
         previewData={lightPreviewData}
-        onPreview={onLightPreview}
         actigraphyFiles={actigraphyFiles}
         selectedPreviewFile={selectedPreviewFile}
         setSelectedPreviewFile={setSelectedPreviewFile}
         lightFiles={lightFiles}
         selectedLightPreviewFile={selectedLightPreviewFile}
         setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+        onPreview={onLightPreview}
       />
     );
   } else if (currentStep === "5") {
@@ -610,7 +608,7 @@ export default function Dashboard() {
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <h1 style={{ fontSize: 32, marginBottom: 8 }}>{appConfig.appName}</h1>
         <p style={{ color: "#475569", marginBottom: 24, lineHeight: 1.5 }}>
-          Sequential actigraphy workflow with optional tabular mapping, separate light preview, support files, and family-aware analysis.
+          Sequential actigraphy workflow with separate activity and light preview, optional mapping, support files, and family-aware analysis.
         </p>
 
         <div
@@ -664,7 +662,14 @@ export default function Dashboard() {
                 Previous
               </button>
 
-              <div style={{ flex: 1, textAlign: "center", color: stepValidation.valid ? "#64748b" : "#b91c1c", fontSize: 14 }}>
+              <div
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  color: stepValidation.valid ? "#64748b" : "#b91c1c",
+                  fontSize: 14,
+                }}
+              >
                 {stepValidation.message}
               </div>
 
