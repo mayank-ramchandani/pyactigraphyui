@@ -15,11 +15,6 @@ from .qc import quick_qc
 from .io_helpers import (
     load_native_file,
     infer_reader_type,
-    load_custom_tabular,
-    load_auto_tabular,
-    build_baseraw_from_dataframe,
-    read_tabular_file,
-    detect_csv_mapping,
 )
 
 app = FastAPI()
@@ -50,95 +45,18 @@ def _json_or_empty(value):
         return {}
 
 
-def _load_file_for_activity(file_path, original_name, csv_mapping, csv_separator):
+def _load_native_supported_file(file_path: str):
     reader_type = infer_reader_type(file_path)
 
     if reader_type == "tabular":
-        has_manual_mapping = bool(csv_mapping.get("timestamp_col")) and bool(csv_mapping.get("activity_col"))
-        if has_manual_mapping:
-            mapped_df = load_custom_tabular(
-                file_path=file_path,
-                timestamp_col=csv_mapping.get("timestamp_col"),
-                time_col=csv_mapping.get("time_col"),
-                activity_col=csv_mapping.get("activity_col"),
-                light_col=csv_mapping.get("light_col") or None,
-                temperature_col=csv_mapping.get("temperature_col") or None,
-                nonwear_col=csv_mapping.get("nonwear_col") or None,
-                sep=csv_separator,
-            )
-        else:
-            mapped_df, csv_mapping = load_auto_tabular(file_path, sep=csv_separator)
-
-        raw = build_baseraw_from_dataframe(mapped_df, name=original_name)
-        return raw, reader_type, csv_mapping
-
-    raw = load_native_file(file_path, reader_type)
-    return raw, reader_type, {}
-
-
-def _load_file_for_light(file_path, original_name, csv_mapping, csv_separator):
-    reader_type = infer_reader_type(file_path)
-
-    if reader_type == "tabular":
-        has_manual_mapping = bool(csv_mapping.get("timestamp_col")) and bool(csv_mapping.get("light_col"))
-        if has_manual_mapping:
-            mapped_df = load_custom_tabular(
-                file_path=file_path,
-                timestamp_col=csv_mapping.get("timestamp_col"),
-                time_col=csv_mapping.get("time_col"),
-                activity_col=csv_mapping.get("activity_col") or "activity_placeholder",
-                light_col=csv_mapping.get("light_col"),
-                temperature_col=csv_mapping.get("temperature_col") or None,
-                nonwear_col=csv_mapping.get("nonwear_col") or None,
-                sep=csv_separator,
-            )
-        else:
-            mapped_df, csv_mapping = load_auto_tabular(file_path, sep=csv_separator)
-
-        if "activity" not in mapped_df.columns:
-            mapped_df["activity"] = 0.0
-
-        raw = build_baseraw_from_dataframe(mapped_df, name=original_name)
-        return raw, reader_type, csv_mapping
-
-    raw = load_native_file(file_path, reader_type)
-    return raw, reader_type, {}
-
-
-@app.post("/api/tabular/columns")
-async def tabular_columns(
-    file: UploadFile = File(...),
-    csvSeparator: str = Form(","),
-):
-    try:
-        tmp_path = _write_upload_to_temp(file)
-        reader_type = infer_reader_type(tmp_path)
-
-        if reader_type not in ("tabular", "rpx", "dqt", "tal", "mesa"):
-            return JSONResponse(
-                content={
-                    "columns": [],
-                    "detected_input_type": reader_type,
-                    "detected_mapping": {},
-                    "message": "This file is handled by a native reader and does not require manual tabular mapping.",
-                }
-            )
-
-        df = read_tabular_file(tmp_path, sep=csvSeparator)
-        mapping = detect_csv_mapping(df)
-
-        return JSONResponse(
-            content={
-                "columns": [str(col) for col in df.columns],
-                "detected_input_type": reader_type,
-                "detected_mapping": mapping,
-            }
+        raise ValueError(
+            "This file is currently being detected as a generic tabular file, not a native "
+            "pyActigraphy-supported format. For the simple tutorial-like path, the file must be "
+            "recognized by a native reader first."
         )
 
-    except ValueError as e:
-        return JSONResponse(status_code=400, content={"detail": str(e)})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": "Server error: {}".format(str(e))})
+    raw = load_native_file(file_path, reader_type)
+    return raw, reader_type
 
 
 @app.post("/api/preview/basic")
@@ -146,16 +64,14 @@ async def preview_basic(
     file: UploadFile = File(...),
     activityChannel: str = Form("VM"),
     resampleFreq: str = Form("1min"),
-    csvMapping: str = Form("{}"),
-    csvSeparator: str = Form(","),
+    csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
+    csvSeparator: str = Form(","),  # accepted for frontend compatibility, ignored here
 ):
     try:
-        csv_mapping = _json_or_empty(csvMapping)
+        _json_or_empty(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
-        raw, reader_type, resolved_mapping = _load_file_for_activity(
-            tmp_path, file.filename, csv_mapping, csvSeparator
-        )
+        raw, reader_type = _load_native_supported_file(tmp_path)
 
         preview = build_native_preview(
             raw=raw,
@@ -167,45 +83,59 @@ async def preview_basic(
             content={
                 **preview,
                 "detected_input_type": reader_type,
-                "resolved_csv_mapping": resolved_mapping,
+                "native_reader_used": True,
             }
         )
 
     except ValueError as e:
         return JSONResponse(status_code=400, content={"detail": str(e)})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": "Server error: {}".format(str(e))})
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server error: {}".format(str(e))}
+        )
 
 
 @app.post("/api/light/preview")
 async def preview_light(
     file: UploadFile = File(...),
     resampleFreq: str = Form("1min"),
-    csvMapping: str = Form("{}"),
-    csvSeparator: str = Form(","),
+    csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
+    csvSeparator: str = Form(","),  # accepted for frontend compatibility, ignored here
 ):
     try:
-        csv_mapping = _json_or_empty(csvMapping)
+        _json_or_empty(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
-        raw, reader_type, resolved_mapping = _load_file_for_light(
-            tmp_path, file.filename, csv_mapping, csvSeparator
-        )
+        raw, reader_type = _load_native_supported_file(tmp_path)
 
         preview = build_light_preview(raw=raw, resample_freq=resampleFreq)
+
+        if not preview.get("light_preview_available"):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": "The native reader loaded the file, but no embedded light channel was found.",
+                    "detected_input_type": reader_type,
+                    "native_reader_used": True,
+                },
+            )
 
         return JSONResponse(
             content={
                 **preview,
                 "detected_input_type": reader_type,
-                "resolved_csv_mapping": resolved_mapping,
+                "native_reader_used": True,
             }
         )
 
     except ValueError as e:
         return JSONResponse(status_code=400, content={"detail": str(e)})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": "Server error: {}".format(str(e))})
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server error: {}".format(str(e))}
+        )
 
 
 @app.post("/api/analyze/basic")
@@ -216,8 +146,8 @@ async def analyze_basic(
     lightTransform: str = Form("none"),
     analysisMode: str = Form("standard"),
     analysisConfig: str = Form("{}"),
-    csvMapping: str = Form("{}"),
-    csvSeparator: str = Form(","),
+    csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
+    csvSeparator: str = Form(","),  # accepted for frontend compatibility, ignored here
 ):
     try:
         analysis_config = json.loads(analysisConfig or "{}")
@@ -225,12 +155,10 @@ async def analyze_basic(
         family_requests = analysis_config.get("families", [])
         analysis_scope = analysis_config.get("analysisScope", "metric")
         algorithm_request = analysis_config.get("algorithm")
-        csv_mapping = _json_or_empty(csvMapping)
+        _json_or_empty(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
-        raw, reader_type, resolved_mapping = _load_file_for_activity(
-            tmp_path, file.filename, csv_mapping, csvSeparator
-        )
+        raw, reader_type = _load_native_supported_file(tmp_path)
 
         results = run_basic_pyactigraphy_analysis(
             raw=raw,
@@ -247,11 +175,14 @@ async def analyze_basic(
                 "results": results,
                 "qcWarnings": warnings,
                 "detected_input_type": reader_type,
-                "resolved_csv_mapping": resolved_mapping,
+                "native_reader_used": True,
             }
         )
 
     except ValueError as e:
         return JSONResponse(status_code=400, content={"detail": str(e)})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": "Server error: {}".format(str(e))})
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server error: {}".format(str(e))}
+        )
