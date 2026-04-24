@@ -132,6 +132,7 @@ def _read_text_head(file_path: str, n_chars: int = 20000) -> str:
 
 
 def infer_reader_type(file_path: str):
+    suffix = Path(file_path).suffix.lower().replace(".", "")
     if suffix in ("csv", "txt", "gz"):
         head = _read_text_head(file_path).lower()
 

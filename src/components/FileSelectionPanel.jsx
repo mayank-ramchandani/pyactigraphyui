@@ -1,5 +1,57 @@
 import React, { useState } from "react";
 
+function BubbleInfo({ label, content }) {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6 }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span>{label}</span>
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#e2e8f0",
+          color: "#0f172a",
+          fontSize: 12,
+          fontWeight: 700,
+        }}
+      >
+        i
+      </span>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "120%",
+            left: 0,
+            zIndex: 50,
+            width: 340,
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid #cbd5e1",
+            background: "white",
+            color: "#334155",
+            fontSize: 13,
+            lineHeight: 1.5,
+            boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+          }}
+        >
+          {content}
+        </div>
+      )}
+    </span>
+  );
+}
+
 const acceptedActigraphyExtensions = [
   ".agd",
   ".atr",
@@ -116,12 +168,35 @@ export default function FileSelectionPanel({
           marginBottom: 16,
         }}
       >
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Accepted actigraphy files</div>
-        <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.6 }}>
-          Native and tabular formats currently enabled: {acceptedActigraphyExtensions.join(", ")}.
-          <br />
-          Manual mapping is optional for generic CSV/TXT-style uploads.
-        </div>
+        <div
+  style={{
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    padding: 16,
+    background: "#f8fafc",
+    marginBottom: 16,
+    display: "grid",
+    gap: 10,
+  }}
+>
+  <div style={{ fontWeight: 700 }}>
+    <BubbleInfo
+      label="Accepted actigraphy files"
+      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}`}
+    />
+  </div>
+
+  <div style={{ fontWeight: 700 }}>
+    <BubbleInfo
+      label="Custom CSV / TXT mapping"
+      content="Manual mapping is optional. Native pyActigraphy-supported files should load directly. Generic CSV or TXT files can use manual mapping only when automatic detection does not match the file."
+    />
+  </div>
+
+  <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.6 }}>
+    Masking excludes invalid or non-wear periods. Sleep diary files describe reported sleep timing. Start/stop files define the intended analysis interval.
+  </div>
+</div>
       </div>
 
       {(uploadError || fileError) && (
