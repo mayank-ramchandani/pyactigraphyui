@@ -17,6 +17,7 @@ import ResultsPanel from "../components/ResultsPanel";
 import ExportPanel from "../components/ExportPanel";
 import SupportFilesStep from "../components/SupportFilesStep";
 import LightMetricsPanel from "../components/LightMetricsPanel";
+import LightRGBPanel from "../components/LightRGBPanel";
 
 import {
   getDefaultAlgorithm,
@@ -500,6 +501,8 @@ export default function Dashboard() {
           setSelectedLightPreviewFile={setSelectedLightPreviewFile}
           onPreview={onLightPreview}
         />
+  
+        {lightFile && <LightRGBPanel lightFile={lightFile} />}
   
         {lightFile && <LightMetricsPanel lightFile={lightFile} />}
       </div>

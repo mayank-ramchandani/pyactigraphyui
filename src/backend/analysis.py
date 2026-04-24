@@ -509,3 +509,127 @@ def build_light_preview(raw, resample_freq=None):
         "light_preview": _sample_full_recording(preview_series, value_key="light"),
         "light_summary": summary,
     }
+
+def _get_light_channel_series(raw, channel_name):
+    light_obj = _get_light_recording(raw)
+    if light_obj is None:
+        return None
+
+    try:
+        series = light_obj.get_channel(channel_name)
+    except Exception:
+        series = None
+
+    if series is None:
+        return None
+
+    if isinstance(series, pd.DataFrame):
+        if series.shape[1] == 0:
+            return None
+        series = series.iloc[:, 0]
+
+    if not isinstance(series, pd.Series):
+        return None
+
+    return series.dropna()
+
+
+def _sample_multichannel_dataframe(df, max_points=1200):
+    if df is None or df.empty:
+        return []
+
+    df = df.sort_index()
+
+    if len(df) > max_points:
+        step = max(1, len(df) // max_points)
+        df = df.iloc[::step]
+
+    rows = []
+    for idx, row in df.iterrows():
+        point = {"timestamp": str(idx)}
+        for col in df.columns:
+            value = row[col]
+            point[col] = None if pd.isna(value) else float(value)
+        rows.append(point)
+
+    return rows
+
+
+def build_light_rgb_preview(raw, resample_freq="5min"):
+    light_obj = _get_light_recording(raw)
+    if light_obj is None:
+        return {
+            "light_preview_available": False,
+            "channels": [],
+            "rgb_preview": [],
+            "rgb_summary": {},
+        }
+
+    available_channels = _get_light_channels(raw)
+
+    preferred_channels = [
+        "RED LIGHT",
+        "GREEN LIGHT",
+        "BLUE LIGHT",
+        "LIGHT",
+        "AMB LIGHT",
+        "IR LIGHT",
+        "UVA LIGHT",
+        "UVB LIGHT",
+    ]
+
+    selected_channels = [ch for ch in preferred_channels if ch in available_channels]
+
+    if not selected_channels and available_channels:
+        selected_channels = available_channels[:4]
+
+    channel_series = {}
+    for channel in selected_channels:
+        series = _get_light_channel_series(raw, channel)
+        if series is None or len(series) == 0:
+            continue
+
+        if resample_freq:
+            try:
+                series = series.resample(resample_freq).mean()
+            except Exception:
+                pass
+
+        series = series.dropna()
+        if len(series) == 0:
+            continue
+
+        channel_series[channel] = series.rename(channel)
+
+    if not channel_series:
+        return {
+            "light_preview_available": False,
+            "channels": available_channels,
+            "rgb_preview": [],
+            "rgb_summary": {},
+        }
+
+    preview_df = pd.concat(channel_series.values(), axis=1)
+
+    summary = {
+        "rows": int(len(preview_df)),
+        "start": str(preview_df.index.min()) if len(preview_df) else None,
+        "end": str(preview_df.index.max()) if len(preview_df) else None,
+        "channels_used": list(preview_df.columns),
+        "channel_stats": {},
+    }
+
+    for channel in preview_df.columns:
+        series = preview_df[channel].dropna()
+        summary["channel_stats"][channel] = {
+            "mean": float(series.mean()) if len(series) else None,
+            "max": float(series.max()) if len(series) else None,
+            "min": float(series.min()) if len(series) else None,
+        }
+
+    return {
+        "light_preview_available": True,
+        "channels": available_channels,
+        "rgb_preview": _sample_multichannel_dataframe(preview_df),
+        "rgb_summary": summary,
+    }

@@ -12,6 +12,7 @@ from .analysis import (
     build_light_preview,
     run_basic_pylight_analysis,
     get_basic_light_channels,
+    build_light_rgb_preview,
 )
 from .qc import quick_qc
 from .io_helpers import (
@@ -126,6 +127,33 @@ async def preview_light(
         return JSONResponse(
             content={
                 **preview,
+                "detected_input_type": reader_type,
+                "native_reader_used": True,
+            }
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Server error: {}".format(str(e))}
+        )
+
+@app.post("/api/light/rgb-preview")
+async def preview_light_rgb(
+    file: UploadFile = File(...),
+    resampleFreq: str = Form("5min"),
+):
+    try:
+        tmp_path = _write_upload_to_temp(file)
+        raw, reader_type = _load_native_supported_file(tmp_path)
+
+        payload = build_light_rgb_preview(raw=raw, resample_freq=resampleFreq)
+
+        return JSONResponse(
+            content={
+                **payload,
                 "detected_input_type": reader_type,
                 "native_reader_used": True,
             }
