@@ -245,7 +245,47 @@ def build_native_preview(raw, activity_channel="data", resample_freq=None):
 
 
 def build_light_preview(raw, resample_freq=None):
-    light_series = getattr(raw, "light", None)
+    light_series = None
+
+    # Native pyActigraphy readers like ATR/MTN expose LightRecording plus
+    # convenience properties such as white_light / amb_light.
+    if hasattr(raw, "white_light") and raw.white_light is not None:
+        light_series = raw.white_light
+    elif hasattr(raw, "amb_light") and raw.amb_light is not None:
+        light_series = raw.amb_light
+    else:
+        light_obj = getattr(raw, "light", None)
+
+        if light_obj is None:
+            return {
+                "light_preview_available": False,
+                "light_preview": [],
+                "light_summary": {},
+            }
+
+        # If light is already a pandas Series
+        if hasattr(light_obj, "dropna"):
+            light_series = light_obj
+
+        # If light is a LightRecording, try common channel names
+        elif hasattr(light_obj, "get_channel"):
+            for channel_name in ["LIGHT", "whitelight", "AMB LIGHT"]:
+                try:
+                    candidate = light_obj.get_channel(channel_name)
+                    if candidate is not None:
+                        light_series = candidate
+                        break
+                except Exception:
+                    pass
+
+            # Fall back to the first available column in the LightRecording dataframe
+            if light_series is None and hasattr(light_obj, "data") and light_obj.data is not None:
+                try:
+                    if len(light_obj.data.columns) > 0:
+                        light_series = light_obj.data.iloc[:, 0]
+                except Exception:
+                    pass
+
     if light_series is None:
         return {
             "light_preview_available": False,

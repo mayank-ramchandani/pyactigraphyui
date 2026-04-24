@@ -133,6 +133,10 @@ def _read_text_head(file_path: str, n_chars: int = 20000) -> str:
 
 def infer_reader_type(file_path: str):
     suffix = Path(file_path).suffix.lower().replace(".", "")
+
+    if suffix in ("awd", "agd", "atr", "bba", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
+        return suffix
+
     if suffix in ("csv", "txt", "gz"):
         head = _read_text_head(file_path).lower()
 
@@ -148,7 +152,6 @@ def infer_reader_type(file_path: str):
         if "mesaid,line,linetime" in head:
             return "mesa"
 
-        # Condor / ActTrust text exports used in pyActigraphy workflows
         if "date/time" in head and "pim" in head and "zcm" in head:
             return "atr"
 
