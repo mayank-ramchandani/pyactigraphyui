@@ -472,9 +472,19 @@ def build_baseraw_from_dataframe(
         raise ValueError("Mapped table must contain an 'activity' column before conversion to BaseRaw.")
 
     work = df.copy().sort_index()
+    work = work[~work.index.duplicated(keep="first")]
 
+    if len(work.index) < 2:
+        raise ValueError("Need at least 2 valid timestamps after parsing.")
+
+    inferred = None
     if work.index.freq is None:
-        inferred = pd.infer_freq(work.index)
+        try:
+            if len(work.index) >= 3:
+                inferred = pd.infer_freq(work.index)
+        except Exception:
+            inferred = None
+
         if inferred is not None:
             work = work.asfreq(inferred)
 
