@@ -9,6 +9,7 @@
       "csvMapping",
       "preview",
       "lightPreview",
+      "lightAnalysis",
       "cleaning",
       "sleepDiary",
       "startStop",
@@ -44,28 +45,118 @@
     }
   },
   "workflow": [
-    { "id": "1", "key": "fileSelection", "title": "Select Files", "description": "Upload actigraphy and optional supporting files." },
-    { "id": "2", "key": "csvMapping", "title": "Map CSV Columns", "description": "Assign timestamp, activity, light, temperature, and non-wear columns for CSV uploads." },
-    { "id": "3", "key": "preview", "title": "Preview Activity", "description": "Inspect the loaded activity recording before cleaning and analysis." },
-    { "id": "4", "key": "lightPreview", "title": "Preview Light", "description": "Inspect light data if present in the recording or separate light file." },
-    { "id": "5", "key": "cleaning", "title": "Cleaning & Masking", "description": "Exclude invalid or non-wear periods before analysis." },
-    { "id": "6", "key": "sleepDiary", "title": "Sleep Diary", "description": "Attach reported sleep timing and naps if available." },
-    { "id": "7", "key": "startStop", "title": "Start / Stop Files", "description": "Attach files defining the true effective recording interval." },
-    { "id": "8", "key": "metrics", "title": "Algorithms & Analysis Setup", "description": "Choose algorithms first, then family-level or metric-level analysis." },
-    { "id": "9", "key": "results", "title": "Generate Results", "description": "Create summaries and output tables." },
-    { "id": "10", "key": "export", "title": "Export Outputs", "description": "Save tables and report-ready outputs." }
+    {
+      "id": "1",
+      "key": "fileSelection",
+      "title": "Select Files",
+      "description": "Upload actigraphy and optional supporting files."
+    },
+    {
+      "id": "2",
+      "key": "csvMapping",
+      "title": "Map CSV Columns",
+      "description": "Assign timestamp, activity, light, temperature, and non-wear columns for CSV uploads."
+    },
+    {
+      "id": "3",
+      "key": "preview",
+      "title": "Preview Activity",
+      "description": "Inspect the loaded activity recording before cleaning and analysis."
+    },
+    {
+      "id": "4",
+      "key": "lightPreview",
+      "title": "Preview Light",
+      "description": "Inspect light data if present in the recording or separate light file."
+    },
+    {
+      "id": "5",
+      "key": "lightAnalysis",
+      "title": "Light Analysis",
+      "description": "Run light metrics and light-specific preprocessing/manipulation."
+    },
+    {
+      "id": "6",
+      "key": "cleaning",
+      "title": "Cleaning & Masking",
+      "description": "Exclude invalid or non-wear periods before analysis."
+    },
+    {
+      "id": "7",
+      "key": "sleepDiary",
+      "title": "Sleep Diary",
+      "description": "Attach reported sleep timing and naps if available."
+    },
+    {
+      "id": "8",
+      "key": "startStop",
+      "title": "Start / Stop Files",
+      "description": "Attach files defining the true effective recording interval."
+    },
+    {
+      "id": "9",
+      "key": "metrics",
+      "title": "Algorithms & Analysis Setup",
+      "description": "Choose algorithms first, then family-level or metric-level analysis."
+    },
+    {
+      "id": "10",
+      "key": "results",
+      "title": "Generate Results",
+      "description": "Create summaries and output tables."
+    },
+    {
+      "id": "11",
+      "key": "export",
+      "title": "Export Outputs",
+      "description": "Save tables and report-ready outputs."
+    }
   ],
   "panels": {
-    "fileSelection": { "enabled": true, "title": "1. File Selection" },
-    "csvMapping": { "enabled": true, "title": "2. CSV Column Mapping" },
-    "preview": { "enabled": true, "title": "3. Activity Preview" },
-    "lightPreview": { "enabled": true, "title": "4. Light Preview" },
-    "cleaning": { "enabled": true, "title": "5. Cleaning & Masking" },
-    "sleepDiary": { "enabled": true, "title": "6. Sleep Diary" },
-    "startStop": { "enabled": true, "title": "7. Start / Stop Files" },
-    "metrics": { "enabled": true, "title": "8. Sleep Algorithms, Families, and Metrics" },
-    "results": { "enabled": true, "title": "9. Generate Results" },
-    "export": { "enabled": true, "title": "10. Export Outputs" }
+    "fileSelection": {
+      "enabled": true,
+      "title": "1. File Selection"
+    },
+    "csvMapping": {
+      "enabled": true,
+      "title": "2. CSV Column Mapping"
+    },
+    "preview": {
+      "enabled": true,
+      "title": "3. Activity Preview"
+    },
+    "lightPreview": {
+      "enabled": true,
+      "title": "4. Light Preview"
+    },
+    "cleaning": {
+      "enabled": true,
+      "title": "6. Cleaning & Masking"
+    },
+    "sleepDiary": {
+      "enabled": true,
+      "title": "7. Sleep Diary"
+    },
+    "startStop": {
+      "enabled": true,
+      "title": "8. Start / Stop Files"
+    },
+    "metrics": {
+      "enabled": true,
+      "title": "9. Sleep Algorithms, Families, and Metrics"
+    },
+    "results": {
+      "enabled": true,
+      "title": "10. Generate Results"
+    },
+    "export": {
+      "enabled": true,
+      "title": "11. Export Outputs"
+    },
+    "lightAnalysis": {
+      "enabled": true,
+      "title": "5. Light Analysis & Manipulation"
+    }
   },
   "uiText": {
     "maskingHelp": "Masking excludes invalid or non-wear periods so they do not influence analysis.",

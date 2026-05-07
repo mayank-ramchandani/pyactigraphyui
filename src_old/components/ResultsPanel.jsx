@@ -34,7 +34,6 @@ export default function ResultsPanel({
   analysisError,
   analysisLoading,
   analysisMode,
-  supportFileSummary,
 }) {
   const resultKeys = Object.keys(summaryResults || {});
   const activeMetricDefinition = selectedResultMetric
@@ -172,26 +171,6 @@ export default function ResultsPanel({
               )}
             </div>
           </div>
-
-
-          {supportFileSummary && (
-            <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#eef2ff", marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 10 }}>Support File Processing</div>
-              <div style={{ color: "#475569", lineHeight: 1.7, fontSize: 14 }}>
-                Masking files: {supportFileSummary.masking_files_received ?? 0}; mask intervals applied: {supportFileSummary.mask_intervals_applied ?? 0}
-                <br />
-                Sleep diary files: {supportFileSummary.sleep_diary_files_received ?? 0}; diary rows loaded: {supportFileSummary.sleep_diary_rows_loaded ?? 0}
-                <br />
-                Start/stop files: {supportFileSummary.start_stop_files_received ?? 0}; start/stop applied: {supportFileSummary.start_stop_applied ? "Yes" : "No"}
-                {(supportFileSummary.notes || []).length > 0 && (
-                  <>
-                    <br />
-                    Notes: {(supportFileSummary.notes || []).join(" | ")}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
 
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#fff7ed" }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Quick QC</div>

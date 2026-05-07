@@ -15,7 +15,6 @@ READERS = {
     "atr": "read_raw_atr",
     "awd": "read_raw_awd",
     "bba": "read_raw_bba",
-    "bin": "read_raw_bba",
     "dqt": "read_raw_dqt",
     "gt3x": "read_gt3x",
     "mesa": "read_raw_mesa",
@@ -135,12 +134,8 @@ def _read_text_head(file_path: str, n_chars: int = 20000) -> str:
 def infer_reader_type(file_path: str):
     suffix = Path(file_path).suffix.lower().replace(".", "")
 
-    if suffix in ("awd", "agd", "atr", "bba", "bin", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
-        # .bin files are attempted through the BBA reader pathway. In pyActigraphy,
-        # the BBA reader is intended for files produced by the biobankAccelerometerAnalysis /
-        # accelerometer-package workflow, including Axivity/GENEActiv-derived outputs.
-        # Other vendor-specific binary layouts may still need conversion before upload.
-        return "bba" if suffix == "bin" else suffix
+    if suffix in ("awd", "agd", "atr", "bba", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
+        return suffix
 
     if suffix in ("csv", "txt", "gz"):
         head = _read_text_head(file_path).lower()
@@ -165,9 +160,7 @@ def infer_reader_type(file_path: str):
     if suffix in ("xls", "xlsx", "ods"):
         return "tabular"
 
-    raise ValueError(
-        "Unsupported file type: {}. Supported native formats include .agd, .atr, .awd, .bba, .bin, .dqt, .gt3x, .mesa, .mtn, .rpx, .tal, plus supported tabular files.".format(suffix)
-    )
+    raise ValueError("Unsupported file type: {}".format(suffix))
 
 
 def load_native_file(file_path: str, reader_type: str):

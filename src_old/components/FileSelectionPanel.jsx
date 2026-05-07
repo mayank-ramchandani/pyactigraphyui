@@ -57,7 +57,6 @@ const acceptedActigraphyExtensions = [
   ".atr",
   ".awd",
   ".bba",
-  ".bin",
   ".csv",
   ".dqt",
   ".gt3x",
@@ -183,7 +182,7 @@ export default function FileSelectionPanel({
   <div style={{ fontWeight: 700 }}>
     <BubbleInfo
       label="Accepted actigraphy files"
-      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. .bin uploads are attempted using the pyActigraphy BBA/accelerometer-package reader path; vendor-specific binary files may need conversion first.`}
+      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}`}
     />
   </div>
 

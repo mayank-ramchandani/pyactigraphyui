@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-import { downloadBlob, downloadJson, previewToRows, rowsToCsv } from "../services/exportUtils";
 import {
   LineChart,
   Line,
@@ -55,16 +54,6 @@ export default function PreviewPanel({
   const detectedInputType = previewData?.detected_input_type || "unknown";
   const points = mode === "light" ? lightPoints : activityPoints;
   const hasLight = Boolean(previewData?.light_preview_available);
-
-
-  const onExportPreviewCsv = () => {
-    const rows = previewToRows(previewData, mode);
-    downloadBlob(rowsToCsv(rows), `${mode}_preview.csv`, "text/csv;charset=utf-8");
-  };
-
-  const onExportPreviewJson = () => {
-    downloadJson(previewData, `${mode}_preview.json`);
-  };
 
   const canLoad =
     mode === "activity"
@@ -170,40 +159,6 @@ export default function PreviewPanel({
               ? "Load Light Preview"
               : "Load Activity Preview"}
           </button>
-          {previewLoaded && previewData && (
-            <>
-              <button
-                onClick={onExportPreviewCsv}
-                style={{
-                  marginLeft: 10,
-                  padding: "10px 16px",
-                  borderRadius: 12,
-                  background: "white",
-                  color: "#0f172a",
-                  border: "1px solid #cbd5e1",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                Export Preview CSV
-              </button>
-              <button
-                onClick={onExportPreviewJson}
-                style={{
-                  marginLeft: 10,
-                  padding: "10px 16px",
-                  borderRadius: 12,
-                  background: "white",
-                  color: "#0f172a",
-                  border: "1px solid #cbd5e1",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                Export Preview JSON
-              </button>
-            </>
-          )}
         </div>
       </div>
 

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "exports": [
+    {
+      "id": "csv_summary",
+      "label": "Export Summary CSV",
+      "type": "table",
+      "enabled": true
+    },
+    {
+      "id": "plots",
+      "label": "Export Visuals",
+      "type": "image",
+      "enabled": true
+    },
+    {
+      "id": "mask_intervals",
+      "label": "Export Mask Intervals",
+      "type": "table",
+      "enabled": true
+    },
+    {
+      "id": "algorithm_binary_series",
+      "label": "Export Algorithm Binary Series",
+      "type": "timeseries",
+      "enabled": true
+    },
+    {
+      "id": "methods_report",
+      "label": "Export Methods Summary",
+      "type": "report",
+      "enabled": true
+    },
+    {
+      "id": "citation_summary",
+      "label": "Export Citation Summary",
+      "type": "report",
+      "enabled": true
+    },
+    {
+      "id": "save_location",
+      "label": "Choose Save Location",
+      "type": "path",
+      "enabled": true
+    }
+  ]
+}
