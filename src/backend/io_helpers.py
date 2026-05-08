@@ -5,6 +5,8 @@ import csv
 import pandas as pd
 import pyActigraphy
 
+from .geneactiv_bin import looks_like_geneactiv_bin, read_raw_geneactiv_bin
+
 try:
     from pyActigraphy.io import BaseRaw
 except Exception:
@@ -135,12 +137,13 @@ def _read_text_head(file_path: str, n_chars: int = 20000) -> str:
 def infer_reader_type(file_path: str):
     suffix = Path(file_path).suffix.lower().replace(".", "")
 
-    if suffix in ("awd", "agd", "atr", "bba", "bin", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
-        # .bin files are attempted through the BBA reader pathway. In pyActigraphy,
-        # the BBA reader is intended for files produced by the biobankAccelerometerAnalysis /
-        # accelerometer-package workflow, including Axivity/GENEActiv-derived outputs.
-        # Other vendor-specific binary layouts may still need conversion before upload.
-        return "bba" if suffix == "bin" else suffix
+    if suffix == "bin":
+        if looks_like_geneactiv_bin(file_path):
+            return "geneactiv_bin"
+        return "bba"
+
+    if suffix in ("awd", "agd", "atr", "bba", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
+        return suffix
 
     if suffix in ("csv", "txt", "gz"):
         head = _read_text_head(file_path).lower()
@@ -171,6 +174,9 @@ def infer_reader_type(file_path: str):
 
 
 def load_native_file(file_path: str, reader_type: str):
+    if reader_type == "geneactiv_bin":
+        return read_raw_geneactiv_bin(file_path)
+
     method_name = READERS.get(reader_type)
     if method_name is None:
         raise ValueError("Unsupported native reader type: {}".format(reader_type))
