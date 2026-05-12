@@ -19,7 +19,6 @@ READERS = {
     "bba": "read_raw_bba",
     "bin": "read_raw_bba",
     "dqt": "read_raw_dqt",
-    "gt3x": "read_gt3x",
     "mesa": "read_raw_mesa",
     "mtn": "read_raw_mtn",
     "rpx": "read_raw_rpx",

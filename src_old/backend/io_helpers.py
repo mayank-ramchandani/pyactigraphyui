@@ -178,8 +178,7 @@ def _read_gt3x_file(file_path: str):
     Load ActiGraph .gt3x files without relying on a non-public read_gt3x function.
 
     pyActigraphy commonly exposes ActiGraph loading through the unified read_raw API
-    with reader_type='AGD'. Some environments expose read_raw_agd, but many do not
-    expose read_gt3x, which caused the preview error.
+    with reader_type='AGD'.
     """
     read_raw = getattr(pyActigraphy.io, "read_raw", None)
     if read_raw is None:
