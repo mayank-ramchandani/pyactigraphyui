@@ -263,6 +263,175 @@ def _read_gt3x_file(file_path: str):
 
     return SimpleRawPreview(series, format_name="ActiGraph GT3X raw preview via pygt3x")
 
+class SimpleRawPreview:
+    def __init__(self, data, format_name="ActiGraph GT3X raw preview"):
+        self.data = data
+        self.format = format_name
+
+
+def _get_nested_attr(obj, attr_names):
+    for attr_name in attr_names:
+        current = obj
+        ok = True
+        for part in attr_name.split("."):
+            if hasattr(current, part):
+                current = getattr(current, part)
+            else:
+                ok = False
+                break
+        if ok and current is not None:
+            return current
+    return None
+
+
+def _coerce_numeric_sample_rate(value, fallback=30.0):
+    if value is None:
+        return fallback
+    try:
+        if isinstance(value, str):
+            value = value.lower().replace("hz", "").replace("sample_rate", "").strip()
+        rate = float(value)
+        if rate > 0:
+            return rate
+    except Exception:
+        pass
+    return fallback
+
+
+def _make_gt3x_datetime_index(n_rows, start_time=None, sample_rate=None):
+    start = pd.to_datetime(start_time, errors="coerce") if start_time is not None else pd.NaT
+    if pd.isna(start):
+        start = pd.Timestamp("2000-01-01 00:00:00")
+
+    rate = _coerce_numeric_sample_rate(sample_rate, fallback=30.0)
+    step_ns = int(1_000_000_000 / rate)
+    return pd.date_range(start=start, periods=n_rows, freq=pd.to_timedelta(step_ns, unit="ns"))
+
+
+def _unwrap_pyactigraphy_reader(reader_result):
+    if hasattr(reader_result, "readers") and len(reader_result.readers) > 0:
+        return reader_result.readers[0]
+
+    if isinstance(reader_result, (list, tuple)) and len(reader_result) > 0:
+        return reader_result[0]
+
+    return reader_result
+
+
+def _read_gt3x_file(file_path: str):
+    try:
+        from pygt3x.reader import FileReader
+    except Exception as exc:
+        raise ValueError(
+            "This .gt3x file is a raw ActiGraph archive, not a pyActigraphy .agd database. "
+            "Install pygt3x to preview .gt3x files directly: pip install pygt3x. "
+            "For pyActigraphy sleep/activity metrics, export the recording from ActiLife as .agd "
+            "or epoch-count CSV."
+        ) from exc
+
+    try:
+        with FileReader(file_path) as reader:
+            df = reader.to_pandas()
+
+            start_time = _get_nested_attr(
+                reader,
+                [
+                    "start_time",
+                    "start_datetime",
+                    "start_date",
+                    "info.start_time",
+                    "info.start_datetime",
+                    "info.start_date",
+                    "metadata.start_time",
+                    "metadata.start_datetime",
+                    "metadata.start_date",
+                ],
+            )
+
+            sample_rate = _get_nested_attr(
+                reader,
+                [
+                    "sample_rate",
+                    "sampling_rate",
+                    "frequency",
+                    "fs",
+                    "info.sample_rate",
+                    "info.sampling_rate",
+                    "info.frequency",
+                    "metadata.sample_rate",
+                    "metadata.sampling_rate",
+                    "metadata.frequency",
+                ],
+            )
+
+    except Exception as exc:
+        raise ValueError(
+            "Could not read the .gt3x file with pygt3x. If the file opens in ActiLife, "
+            "export it as .agd or CSV and upload that instead. "
+            f"Original error: {exc}"
+        ) from exc
+
+    if df is None or len(df) == 0:
+        raise ValueError("The .gt3x file was read, but no samples were found.")
+
+    df = df.copy()
+
+    timestamp_col = None
+    for candidate in ["timestamp", "Timestamp", "time", "Time", "datetime", "DateTime", "date_time"]:
+        if candidate in df.columns:
+            timestamp_col = candidate
+            break
+
+    if timestamp_col is not None:
+        df.index = pd.to_datetime(df[timestamp_col], errors="coerce")
+        df = df.loc[df.index.notna()]
+    elif not isinstance(df.index, pd.DatetimeIndex):
+        df.index = _make_gt3x_datetime_index(
+            len(df),
+            start_time=start_time,
+            sample_rate=sample_rate,
+        )
+
+    numeric_df = df.select_dtypes(include="number")
+    if numeric_df.empty:
+        raise ValueError("The .gt3x file was read, but no numeric acceleration columns were found.")
+
+    lower_cols = {str(c).strip().lower(): c for c in numeric_df.columns}
+
+    axis_sets = [
+        ("x", "y", "z"),
+        ("axis1", "axis2", "axis3"),
+        ("axisx", "axisy", "axisz"),
+        ("x-axis", "y-axis", "z-axis"),
+        ("x_axis", "y_axis", "z_axis"),
+    ]
+
+    selected_axes = None
+    for axis_names in axis_sets:
+        if all(name in lower_cols for name in axis_names):
+            selected_axes = [lower_cols[name] for name in axis_names]
+            break
+
+    if selected_axes is not None:
+        vm = numeric_df[selected_axes].pow(2).sum(axis=1) ** 0.5
+
+        if vm.quantile(0.95) < 16:
+            series = ((vm - 1).clip(lower=0) * 1000).rename("ENMO_mg_preview")
+        else:
+            series = vm.rename("vector_magnitude_preview")
+    else:
+        series = numeric_df.iloc[:, 0].rename(str(numeric_df.columns[0]))
+
+    series = series.sort_index().dropna()
+
+    if len(series) == 0:
+        raise ValueError("The .gt3x file was read, but the preview activity series was empty.")
+
+    return SimpleRawPreview(
+        series,
+        format_name="ActiGraph GT3X raw preview via pygt3x",
+    )
+
 def load_native_file(file_path: str, reader_type: str):
     if reader_type == "geneactiv_bin":
         return read_raw_geneactiv_bin(file_path)
