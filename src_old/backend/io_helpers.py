@@ -5,6 +5,8 @@ import csv
 import pandas as pd
 import pyActigraphy
 
+from .geneactiv_bin import looks_like_geneactiv_bin, read_raw_geneactiv_bin
+
 try:
     from pyActigraphy.io import BaseRaw
 except Exception:
@@ -15,6 +17,7 @@ READERS = {
     "atr": "read_raw_atr",
     "awd": "read_raw_awd",
     "bba": "read_raw_bba",
+    "bin": "read_raw_bba",
     "dqt": "read_raw_dqt",
     "mesa": "read_raw_mesa",
     "mtn": "read_raw_mtn",
@@ -133,6 +136,11 @@ def _read_text_head(file_path: str, n_chars: int = 20000) -> str:
 def infer_reader_type(file_path: str):
     suffix = Path(file_path).suffix.lower().replace(".", "")
 
+    if suffix == "bin":
+        if looks_like_geneactiv_bin(file_path):
+            return "geneactiv_bin"
+        return "bba"
+
     if suffix in ("awd", "agd", "atr", "bba", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
         return suffix
 
@@ -159,11 +167,12 @@ def infer_reader_type(file_path: str):
     if suffix in ("xls", "xlsx", "ods"):
         return "tabular"
 
-    raise ValueError("Unsupported file type: {}".format(suffix))
+    raise ValueError(
+        "Unsupported file type: {}. Supported native formats include .agd, .atr, .awd, .bba, .bin, .dqt, .gt3x, .mesa, .mtn, .rpx, .tal, plus supported tabular files.".format(suffix)
+    )
 
 
 def _unwrap_pyactigraphy_reader(reader_result):
-    """Return a single raw object from pyActigraphy's direct or batch readers."""
     if hasattr(reader_result, "readers") and len(reader_result.readers) > 0:
         return reader_result.readers[0]
 
@@ -174,17 +183,12 @@ def _unwrap_pyactigraphy_reader(reader_result):
 
 
 def _read_gt3x_file(file_path: str):
-    """
-    Load ActiGraph .gt3x files without relying on a non-public read_gt3x function.
-
-    pyActigraphy commonly exposes ActiGraph loading through the unified read_raw API
-    with reader_type='AGD'.
-    """
     read_raw = getattr(pyActigraphy.io, "read_raw", None)
+
     if read_raw is None:
         raise ValueError(
             "This pyActigraphy installation does not expose 'read_raw', which is needed "
-            "to load .gt3x files via reader_type='AGD'."
+            "to load .gt3x files with reader_type='AGD'."
         )
 
     try:
@@ -197,9 +201,7 @@ def _read_gt3x_file(file_path: str):
         )
     except Exception as exc:
         raise ValueError(
-            "Could not load .gt3x with pyActigraphy.io.read_raw(..., reader_type='AGD'). "
-            "If this file is raw high-frequency acceleration, convert/export it to ActiGraph "
-            ".agd epoch/count format first, or confirm your pyActigraphy build supports GT3X. "
+            "Could not load .gt3x using pyActigraphy.io.read_raw(..., reader_type='AGD'). "
             f"Original error: {exc}"
         ) from exc
 

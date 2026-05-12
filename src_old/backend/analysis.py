@@ -1,4 +1,5 @@
 import math
+import numbers
 import pandas as pd
 
 
@@ -13,7 +14,6 @@ def _get_light_channels(raw):
     light_obj = _get_light_recording(raw)
     if light_obj is None:
         return []
-
     try:
         return [str(c) for c in light_obj.get_channel_list()]
     except Exception:
@@ -23,13 +23,10 @@ def _get_light_channels(raw):
 def _pick_default_light_channel(channels):
     if not channels:
         return None
-
     lowered = {c.lower(): c for c in channels}
-
     for preferred in ["weißes licht", "weisses licht", "white light", "whitelight", "light", "amb light"]:
         if preferred in lowered:
             return lowered[preferred]
-
     return channels[0]
 
 
@@ -45,24 +42,34 @@ def _lux_to_log10_threshold(threshold_lux):
     return math.log10(lux + 1.0)
 
 
-def _serialize_scalar(value):
+def _serialize_scalar(value, ndigits=2):
     if value is None:
         return None
-    if isinstance(value, (int, float, str, bool)):
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, numbers.Number):
+        value = float(value)
+        if math.isfinite(value):
+            return round(value, ndigits)
+        return None
+    if isinstance(value, str):
         return value
     try:
-        return float(value)
+        numeric = float(value)
+        if math.isfinite(numeric):
+            return round(numeric, ndigits)
     except Exception:
         return str(value)
+    return str(value)
 
 
 def _serialize_series(series):
-    return {
-        "kind": "series",
-        "index": [str(i) for i in series.index.tolist()],
-        "values": [_serialize_scalar(v) for v in series.tolist()],
-        "name": str(series.name) if series.name is not None else None,
-    }
+    return {"kind": "series", "index": [str(i) for i in series.index.tolist()], "values": [_serialize_scalar(v) for v in series.tolist()], "name": str(series.name) if series.name is not None else None}
 
 
 def _serialize_dataframe(df):
@@ -70,96 +77,96 @@ def _serialize_dataframe(df):
         columns = [" | ".join([str(x) for x in col if x is not None]) for col in df.columns.tolist()]
     else:
         columns = [str(c) for c in df.columns.tolist()]
-
     rows = []
     for idx, row in df.iterrows():
-        rows.append(
-            {
-                "index": str(idx),
-                "values": [_serialize_scalar(v) for v in row.tolist()],
-            }
-        )
-
-    return {
-        "kind": "dataframe",
-        "columns": columns,
-        "rows": rows,
-    }
+        rows.append({"index": str(idx), "values": [_serialize_scalar(v) for v in row.tolist()]})
+    return {"kind": "dataframe", "columns": columns, "rows": rows}
 
 
 def _select_channel_from_result(result, channel):
     if channel is None:
         return result
-
     if isinstance(result, pd.Series):
         if channel in result.index:
             return result.loc[channel]
         return result
-
     if isinstance(result, pd.DataFrame):
+        if "channel" in result.columns:
+            filtered = result[result["channel"].astype(str) == str(channel)]
+            if not filtered.empty:
+                return filtered
         if isinstance(result.columns, pd.MultiIndex):
             if channel in result.columns.get_level_values(0):
                 return result[channel]
         elif channel in result.columns:
             return result[channel]
         return result
-
     return result
 
 
-def run_basic_pylight_analysis(
-    raw,
-    metric_id,
-    channel=None,
-    threshold_lux=None,
-    start_time=None,
-    stop_time=None,
-    bins="24h",
-    agg="mean",
-    agg_funcs=None,
-    oformat="minute",
-):
+def _values_by_channel(df):
+    if isinstance(df, pd.DataFrame) and "channel" in df.columns and "value" in df.columns:
+        return df.set_index("channel")["value"]
+    return pd.Series(dtype=float)
+
+
+def run_basic_pylight_analysis(raw, metric_id, channel=None, threshold_lux=None, start_time=None, stop_time=None, bins="24h", agg="mean", agg_funcs=None, oformat="minute", lmx_length="5h", lowest=True, binarize=False):
     light_obj = _get_light_recording(raw)
     if light_obj is None:
         raise ValueError("No light recording is available on the loaded file.")
-
     channels = _get_light_channels(raw)
     if not channels:
         raise ValueError("No light channels are available on the loaded file.")
-
     if channel is None:
         channel = _pick_default_light_channel(channels)
-
     threshold = _lux_to_log10_threshold(threshold_lux)
 
     if metric_id == "exposure_level":
-        result = light_obj.light_exposure_level(
-            threshold=threshold,
-            start_time=start_time or None,
-            stop_time=stop_time or None,
-            agg=agg or "mean",
-        )
+        result = light_obj.light_exposure_level(threshold=threshold, start_time=start_time or None, stop_time=stop_time or None, agg=agg or "mean")
         result = _select_channel_from_result(result, channel)
-
     elif metric_id == "summary_stats":
-        if not agg_funcs:
-            agg_funcs = ["mean", "median", "sum", "std", "min", "max"]
-
-        result = light_obj.summary_statistics_per_time_bin(
-            bins=bins or "24h",
-            agg_func=agg_funcs,
-        )
+        result = light_obj.summary_statistics_per_time_bin(bins=bins or "24h", agg_func=agg_funcs or ["mean", "median", "sum", "std", "min", "max"])
         result = _select_channel_from_result(result, channel)
-
     elif metric_id == "tat":
-        result = light_obj.TAT(
-            threshold=threshold,
-            start_time=start_time or None,
-            stop_time=stop_time or None,
-            oformat=oformat or "minute",
-        )
+        result = light_obj.TAT(threshold=threshold, start_time=start_time or None, stop_time=stop_time or None, oformat=oformat or "minute")
         result = _select_channel_from_result(result, channel)
-
+    elif metric_id == "tatp":
+        result = light_obj.TATp(threshold=threshold, start_time=start_time or None, stop_time=stop_time or None, oformat=oformat or "minute")
+        result = _select_channel_from_result(result, channel)
+    elif metric_id == "mlit":
+        if threshold is None:
+            raise ValueError("MLiT requires a lux threshold such as 10, 100, or 500.")
+        result = light_obj.MLiT(threshold=threshold)
+        result = _select_channel_from_result(result, channel)
+    elif metric_id == "extremum_min":
+        result = light_obj.get_light_extremum(extremum="min")
+        result = _select_channel_from_result(result, channel)
+    elif metric_id == "extremum_max":
+        result = light_obj.get_light_extremum(extremum="max")
+        result = _select_channel_from_result(result, channel)
+    elif metric_id in {"l5", "m10"}:
+        result = light_obj.LMX(length="5h" if metric_id == "l5" else "10h", lowest=(metric_id == "l5"))
+        result = _select_channel_from_result(result, channel)
+    elif metric_id == "lmx":
+        result = light_obj.LMX(length=lmx_length or "5h", lowest=bool(lowest))
+        result = _select_channel_from_result(result, channel)
+    elif metric_id == "is":
+        result = light_obj.IS(binarize=bool(binarize), threshold=threshold or 0)
+        result = _select_channel_from_result(result, channel)
+    elif metric_id == "iv":
+        result = light_obj.IV(binarize=bool(binarize), threshold=threshold or 0)
+        result = _select_channel_from_result(result, channel)
+    elif metric_id == "ra":
+        l5_values = _values_by_channel(light_obj.LMX(length="5h", lowest=True))
+        m10_values = _values_by_channel(light_obj.LMX(length="10h", lowest=False))
+        common = [ch for ch in m10_values.index if ch in l5_values.index]
+        result = pd.Series({ch: ((m10_values.loc[ch] - l5_values.loc[ch]) / (m10_values.loc[ch] + l5_values.loc[ch]) if (m10_values.loc[ch] + l5_values.loc[ch]) != 0 else None) for ch in common}, name="RA")
+        result = _select_channel_from_result(result, channel)
+    elif metric_id == "vat":
+        if threshold is None:
+            raise ValueError("VAT requires a lux threshold such as 10 or 100.")
+        result = light_obj.VAT(threshold)
+        result = _select_channel_from_result(result, channel)
     else:
         raise ValueError("Unsupported light metric '{}'.".format(metric_id))
 
@@ -168,27 +175,55 @@ def run_basic_pylight_analysis(
     elif isinstance(result, pd.Series):
         payload = _serialize_series(result)
     else:
-        payload = {
-            "kind": "scalar",
-            "value": _serialize_scalar(result),
-        }
-
-    return {
-        "metric_id": metric_id,
-        "channel": channel,
-        "available_channels": channels,
-        "threshold_lux": _serialize_scalar(threshold_lux),
-        "threshold_log10": _serialize_scalar(threshold),
-        "result": payload,
-    }
+        payload = {"kind": "scalar", "value": _serialize_scalar(result)}
+    return {"metric_id": metric_id, "channel": channel, "available_channels": channels, "threshold_lux": _serialize_scalar(threshold_lux), "threshold_log10": _serialize_scalar(threshold), "result": payload}
 
 
 def get_basic_light_channels(raw):
     channels = _get_light_channels(raw)
-    return {
-        "channels": channels,
-        "default_channel": _pick_default_light_channel(channels),
-    }
+    return {"channels": channels, "default_channel": _pick_default_light_channel(channels)}
+
+
+def _light_dataframe(raw, channels=None):
+    requested = channels or _get_light_channels(raw)
+    series_map = {}
+    for channel in requested:
+        series = _get_light_channel_series(raw, channel)
+        if series is not None and len(series) > 0:
+            series_map[channel] = series.rename(channel)
+    if not series_map:
+        raise ValueError("No usable light channel data were found.")
+    return pd.concat(series_map.values(), axis=1).sort_index()
+
+
+def manipulate_light_data(raw, channels=None, truncate_start=None, truncate_stop=None, daily_start_time=None, daily_stop_time=None, resample_freq=None, binarize=False, threshold_lux=None, filter_method="none", filter_window="15min", max_points=1200):
+    df = _light_dataframe(raw, channels=channels)
+    original_rows = len(df)
+    if truncate_start:
+        df = df.loc[pd.to_datetime(truncate_start):]
+    if truncate_stop:
+        df = df.loc[:pd.to_datetime(truncate_stop)]
+    if daily_start_time and daily_stop_time:
+        start = pd.to_datetime(daily_start_time).time()
+        stop = pd.to_datetime(daily_stop_time).time()
+        times = df.index.time
+        if start <= stop:
+            mask = [(t >= start and t <= stop) for t in times]
+        else:
+            mask = [(t >= start or t <= stop) for t in times]
+        df = df.loc[mask]
+    if resample_freq:
+        df = df.resample(resample_freq).mean()
+    if filter_method in {"mean", "median"}:
+        rolled = df.rolling(filter_window, min_periods=1)
+        df = rolled.mean() if filter_method == "mean" else rolled.median()
+    threshold = _lux_to_log10_threshold(threshold_lux)
+    if binarize:
+        if threshold is None:
+            raise ValueError("Binarization requires a lux threshold.")
+        df = (df > threshold).astype(int)
+    df = df.dropna(how="all")
+    return {"light_manipulation_available": True, "channels": list(df.columns), "summary": {"original_rows": int(original_rows), "rows": int(len(df)), "start": str(df.index.min()) if len(df) else None, "end": str(df.index.max()) if len(df) else None, "threshold_lux": _serialize_scalar(threshold_lux), "threshold_log10": _serialize_scalar(threshold), "resample_freq": resample_freq, "filter_method": filter_method, "filter_window": filter_window, "binarized": bool(binarize)}, "preview": _sample_multichannel_dataframe(df, max_points=max_points)}
 
 DEFAULT_MEAN_FREQS = [
     "1min", "2min", "3min", "4min", "5min", "6min", "8min", "9min", "10min",
@@ -500,8 +535,8 @@ def build_light_preview(raw, resample_freq=None):
         "rows": int(len(preview_series)),
         "start": str(preview_series.index.min()) if len(preview_series) else None,
         "end": str(preview_series.index.max()) if len(preview_series) else None,
-        "mean_light": float(preview_series.mean()) if len(preview_series) else None,
-        "max_light": float(preview_series.max()) if len(preview_series) else None,
+        "mean_light": _serialize_scalar(preview_series.mean()) if len(preview_series) else None,
+        "max_light": _serialize_scalar(preview_series.max()) if len(preview_series) else None,
     }
 
     return {
@@ -549,7 +584,7 @@ def _sample_multichannel_dataframe(df, max_points=1200):
         point = {"timestamp": str(idx)}
         for col in df.columns:
             value = row[col]
-            point[col] = None if pd.isna(value) else float(value)
+            point[col] = None if pd.isna(value) else _serialize_scalar(value)
         rows.append(point)
 
     return rows
@@ -622,9 +657,9 @@ def build_light_rgb_preview(raw, resample_freq="5min"):
     for channel in preview_df.columns:
         series = preview_df[channel].dropna()
         summary["channel_stats"][channel] = {
-            "mean": float(series.mean()) if len(series) else None,
-            "max": float(series.max()) if len(series) else None,
-            "min": float(series.min()) if len(series) else None,
+            "mean": _serialize_scalar(series.mean()) if len(series) else None,
+            "max": _serialize_scalar(series.max()) if len(series) else None,
+            "min": _serialize_scalar(series.min()) if len(series) else None,
         }
 
     return {

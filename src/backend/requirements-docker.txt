@@ -4,3 +4,4 @@ uvicorn[standard]==0.39.0
 python-multipart==0.0.20
 numba==0.57.1
 pyActigraphy==1.2.2
+pygt3x

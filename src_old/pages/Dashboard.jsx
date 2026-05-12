@@ -101,6 +101,7 @@ export default function Dashboard() {
   const [selectedResultMetric, setSelectedResultMetric] = useState("");
   const [qcWarnings, setQcWarnings] = useState([]);
   const [summaryResults, setSummaryResults] = useState({});
+  const [supportFileSummary, setSupportFileSummary] = useState(null);
 
   const actigraphyFiles = uploadedFiles.actigraphy || [];
   const lightFiles = uploadedFiles.light || [];
@@ -210,6 +211,7 @@ export default function Dashboard() {
     setSummaryResults({});
     setQcWarnings([]);
     setAnalysisError("");
+    setSupportFileSummary(null);
   };
 
   const handleActigraphyFilesChange = (files) => {
@@ -251,6 +253,9 @@ export default function Dashboard() {
       formData.append("resampleFreq", "1min");
       formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
       formData.append("csvSeparator", csvSeparator);
+      (uploadedFiles.masking || []).forEach((file) => formData.append("maskingFiles", file));
+      (uploadedFiles.sleepDiary || []).forEach((file) => formData.append("sleepDiaryFiles", file));
+      (uploadedFiles.startStop || []).forEach((file) => formData.append("startStopFiles", file));
 
       const res = await fetch(buildApiUrl("api/preview/basic"), {
         method: "POST",
@@ -340,9 +345,10 @@ export default function Dashboard() {
       const results = data.results || {};
       setSummaryResults(results);
       setQcWarnings(data.qcWarnings || []);
+      setSupportFileSummary(data.supportFileSummary || null);
       setSelectedResultMetric(Object.keys(results)[0] || "");
       setResultsGenerated(true);
-      unlockAndGoToStep("9");
+      unlockAndGoToStep("10");
     } catch (err) {
       setAnalysisError(err.message || "Failed to generate results.");
       setResultsGenerated(false);
@@ -381,11 +387,12 @@ export default function Dashboard() {
       case "5":
       case "6":
       case "7":
+      case "8":
         return {
           valid: true,
           message: "",
         };
-      case "8": {
+      case "9": {
         const hasMetrics =
           analysisMode === "standard"
             ? resolvedSelectedMetrics.length > 0
@@ -403,7 +410,7 @@ export default function Dashboard() {
               : "Select an algorithm and at least one metric or family.",
         };
       }
-      case "9":
+      case "10":
         return {
           valid: resultsGenerated,
           message: resultsGenerated ? "" : "Generate results to continue.",
@@ -501,13 +508,13 @@ export default function Dashboard() {
           setSelectedLightPreviewFile={setSelectedLightPreviewFile}
           onPreview={onLightPreview}
         />
-  
+
         {lightFile && <LightRGBPanel lightFile={lightFile} />}
-  
-        {lightFile && <LightMetricsPanel lightFile={lightFile} />}
       </div>
     );
   } else if (currentStep === "5") {
+    content = <LightMetricsPanel lightFile={lightFile} />;
+  } else if (currentStep === "6") {
     content = (
       <SupportFilesStep
         title={appConfig.panels.cleaning.title}
@@ -520,7 +527,7 @@ export default function Dashboard() {
         ]}
       />
     );
-  } else if (currentStep === "6") {
+  } else if (currentStep === "7") {
     content = (
       <SupportFilesStep
         title={appConfig.panels.sleepDiary.title}
@@ -532,7 +539,7 @@ export default function Dashboard() {
         ]}
       />
     );
-  } else if (currentStep === "7") {
+  } else if (currentStep === "8") {
     content = (
       <SupportFilesStep
         title={appConfig.panels.startStop.title}
@@ -544,7 +551,7 @@ export default function Dashboard() {
         ]}
       />
     );
-  } else if (currentStep === "8") {
+  } else if (currentStep === "9") {
     content = (
       <MetricsPanel
         title={appConfig.panels.metrics.title}
@@ -571,7 +578,7 @@ export default function Dashboard() {
         inputType={detectedInputType}
       />
     );
-  } else if (currentStep === "9") {
+  } else if (currentStep === "10") {
     content = (
       <ResultsPanel
         title={appConfig.panels.results.title}
@@ -589,15 +596,22 @@ export default function Dashboard() {
         analysisError={analysisError}
         analysisLoading={analysisLoading}
         analysisMode={analysisMode}
+        supportFileSummary={supportFileSummary}
       />
     );
   } else {
     content = (
       <ExportPanel
         title={appConfig.panels.export.title}
-        exports={exportRegistry.exports}
-        enabled={resultsGenerated}
+        exportRegistry={exportRegistry}
+        resultsGenerated={resultsGenerated}
         summaryResults={summaryResults}
+        qcWarnings={qcWarnings}
+        metricRegistry={metricRegistry}
+        analysisConfig={resolvedAnalysisConfig}
+        selectedAlgorithm={selectedAlgorithm}
+        analysisMode={analysisMode}
+        supportFileSummary={supportFileSummary}
       />
     );
   }
@@ -683,7 +697,7 @@ export default function Dashboard() {
               </div>
 
               <div style={{ display: "flex", gap: 10 }}>
-                {currentStep === "8" && (
+                {currentStep === "9" && (
                   <button
                     type="button"
                     onClick={handleGenerateResults}
