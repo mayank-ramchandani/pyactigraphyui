@@ -16,7 +16,6 @@ READERS = {
     "awd": "read_raw_awd",
     "bba": "read_raw_bba",
     "dqt": "read_raw_dqt",
-    "gt3x": "read_gt3x",
     "mesa": "read_raw_mesa",
     "mtn": "read_raw_mtn",
     "rpx": "read_raw_rpx",
@@ -163,7 +162,56 @@ def infer_reader_type(file_path: str):
     raise ValueError("Unsupported file type: {}".format(suffix))
 
 
+def _unwrap_pyactigraphy_reader(reader_result):
+    """Return a single raw object from pyActigraphy's direct or batch readers."""
+    if hasattr(reader_result, "readers") and len(reader_result.readers) > 0:
+        return reader_result.readers[0]
+
+    if isinstance(reader_result, (list, tuple)) and len(reader_result) > 0:
+        return reader_result[0]
+
+    return reader_result
+
+
+def _read_gt3x_file(file_path: str):
+    """
+    Load ActiGraph .gt3x files without relying on a non-public read_gt3x function.
+
+    pyActigraphy commonly exposes ActiGraph loading through the unified read_raw API
+    with reader_type='AGD'. Some environments expose read_raw_agd, but many do not
+    expose read_gt3x, which caused the preview error.
+    """
+    read_raw = getattr(pyActigraphy.io, "read_raw", None)
+    if read_raw is None:
+        raise ValueError(
+            "This pyActigraphy installation does not expose 'read_raw', which is needed "
+            "to load .gt3x files via reader_type='AGD'."
+        )
+
+    try:
+        return _unwrap_pyactigraphy_reader(
+            read_raw(file_path, reader_type="AGD", verbose=0)
+        )
+    except TypeError:
+        return _unwrap_pyactigraphy_reader(
+            read_raw(file_path, reader_type="AGD")
+        )
+    except Exception as exc:
+        raise ValueError(
+            "Could not load .gt3x with pyActigraphy.io.read_raw(..., reader_type='AGD'). "
+            "If this file is raw high-frequency acceleration, convert/export it to ActiGraph "
+            ".agd epoch/count format first, or confirm your pyActigraphy build supports GT3X. "
+            f"Original error: {exc}"
+        ) from exc
+
+
 def load_native_file(file_path: str, reader_type: str):
+    if reader_type == "geneactiv_bin":
+        return read_raw_geneactiv_bin(file_path)
+
+    if reader_type == "gt3x":
+        return _read_gt3x_file(file_path)
+
     method_name = READERS.get(reader_type)
     if method_name is None:
         raise ValueError("Unsupported native reader type: {}".format(reader_type))
@@ -172,7 +220,7 @@ def load_native_file(file_path: str, reader_type: str):
     if reader is None:
         raise ValueError("This pyActigraphy installation does not expose '{}'.".format(method_name))
 
-    return reader(file_path)
+    return _unwrap_pyactigraphy_reader(reader(file_path))
 
 
 def _find_first_existing(columns, candidates):
