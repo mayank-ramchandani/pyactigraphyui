@@ -55,8 +55,6 @@ export default function PreviewPanel({
   const detectedInputType = previewData?.detected_input_type || "unknown";
   const points = mode === "light" ? lightPoints : activityPoints;
   const hasLight = Boolean(previewData?.light_preview_available);
-  const meanActivityWave = previewData?.mean_activity_wave || [];
-  const timezoneInfo = previewData?.timezone_info || {};
 
 
   const onExportPreviewCsv = () => {
@@ -284,22 +282,6 @@ export default function PreviewPanel({
                     : "No light preview was returned for the selected file."
                   : "Activity preview is available."}
               </div>
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: 10,
-                  borderRadius: 12,
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  color: "#1e3a8a",
-                  fontSize: 13,
-                  lineHeight: 1.45,
-                }}
-              >
-                <strong>Timezone note:</strong>{" "}
-                {timezoneInfo?.note ||
-                  "pyActigraphy uses the timestamps available in the file/index. If the file does not include timezone-aware timestamps, confirm the device/export timezone before interpreting clock-time metrics."}
-              </div>
             </div>
           </div>
 
@@ -398,44 +380,6 @@ export default function PreviewPanel({
                   </div>
                 )}
               </div>
-
-              {mode === "activity" && meanActivityWave.length > 0 && (
-                <div
-                  style={{
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 16,
-                    padding: 16,
-                    background: "#f8fafc",
-                    marginTop: 20,
-                  }}
-                >
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                    Mean 24-hour Activity Wave
-                  </div>
-                  <div style={{ color: "#64748b", fontSize: 14, marginBottom: 10 }}>
-                    Average activity at each clock time across the entire recording window.
-                  </div>
-                  <div style={{ width: "100%", height: 320 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={meanActivityWave}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="time" minTickGap={40} />
-                        <YAxis />
-                        <Tooltip
-                          formatter={(value) => [value, "Mean activity"]}
-                          labelFormatter={(label) => `Clock time: ${label}`}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="mean_activity"
-                          dot={false}
-                          strokeWidth={2}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
             </>
           )}
         </>

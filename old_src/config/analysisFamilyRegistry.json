@@ -1,0 +1,68 @@
+{
+    "schemaVersion": 1,
+    "families": [
+      {
+        "id": "amplitude",
+        "label": "Amplitude",
+        "description": "Amplitude-based nonparametric rhythm measures.",
+        "metrics": ["ra", "rap"],
+        "planned": false
+      },
+      {
+        "id": "rhythm",
+        "label": "Rhythm",
+        "description": "Interdaily and intradaily rhythm stability / variability measures.",
+        "metrics": ["is", "iv", "ism", "ivm", "isp", "ivp"],
+        "planned": false
+      },
+      {
+        "id": "sleep",
+        "label": "Sleep",
+        "description": "Sleep summary metrics derived from selected sleep/rest algorithms.",
+        "metrics": ["sri", "tst", "waso", "sleep_efficiency"],
+        "planned": false
+      },
+      {
+        "id": "fragmentation",
+        "label": "Fragmentation",
+        "description": "State-transition and fragmentation analyses.",
+        "metrics": ["kra", "kar"],
+        "planned": false
+      },
+      {
+        "id": "cosinor",
+        "label": "Cosinor",
+        "description": "Cosinor rhythm modeling.",
+        "metrics": [],
+        "planned": true
+      },
+      {
+        "id": "flm",
+        "label": "FLM",
+        "description": "Functional linear modelling.",
+        "metrics": [],
+        "planned": true
+      },
+      {
+        "id": "mfdfa",
+        "label": "MF-DFA",
+        "description": "Multifractal detrended fluctuation analysis.",
+        "metrics": [],
+        "planned": true
+      },
+      {
+        "id": "ssa",
+        "label": "SSA",
+        "description": "Singular spectrum analysis.",
+        "metrics": [],
+        "planned": true
+      },
+      {
+        "id": "clustering",
+        "label": "Clustering",
+        "description": "Cluster-level / grouped analysis workflow.",
+        "metrics": [],
+        "planned": true
+      }
+    ]
+  }

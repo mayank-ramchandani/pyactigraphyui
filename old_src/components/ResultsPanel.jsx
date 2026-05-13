@@ -7,19 +7,6 @@ import {
   getMetricResultSchema,
 } from "../services/configUtils";
 
-const RESULT_LABEL_OVERRIDES = {
-  sleep_window_source: "Sleep window source",
-  sleep_window_method: "Sleep window method",
-  sleep_window_count: "Sleep window count",
-  time_in_bed_minutes: "Time in bed / rest window",
-  sleep_window_estimated: "Sleep window estimated",
-  sleep_window_notes: "Sleep window notes",
-};
-
-function resultLabel(metricRegistry, key) {
-  return RESULT_LABEL_OVERRIDES[key] || getMetricLabel(metricRegistry, key);
-}
-
 function formatResultValue(value, schema) {
   if (value == null) return "Not available";
   if (Array.isArray(value)) return value.join(", ");
@@ -153,7 +140,7 @@ export default function ResultsPanel({
                   return (
                     <tr key={key}>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>
-                        {resultLabel(metricRegistry, key)}
+                        {getMetricLabel(metricRegistry, key)}
                       </td>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
                         {formatResultValue(value, schema)}
@@ -177,14 +164,6 @@ export default function ResultsPanel({
               Sleep/rest algorithm: {selectedAlgorithm ? getAlgorithmLabel(algorithmRegistry, selectedAlgorithm) : "None"}
               <br />
               Analysis mode: {analysisMode === "standard" ? "Standard defaults" : "Customized settings"}
-              <br />
-              No-diary sleep-window estimation: {analysisConfig?.sleepWindowSettings?.estimateWithoutDiary === false ? "Disabled" : "Enabled"}
-              {analysisConfig?.sleepWindowSettings?.estimateWithoutDiary !== false && (
-                <>
-                  <br />
-                  Estimation method: {analysisConfig?.sleepWindowSettings?.method === "roenneberg_aot" ? "pyActigraphy Roenneberg_AoT" : "pyActigraphy Crespo_AoT"}
-                </>
-              )}
               {activeAlgorithm?.citationText && (
                 <>
                   <br />
@@ -201,7 +180,7 @@ export default function ResultsPanel({
               <div style={{ color: "#475569", lineHeight: 1.7, fontSize: 14 }}>
                 Masking files: {supportFileSummary.masking_files_received ?? 0}; mask intervals applied: {supportFileSummary.mask_intervals_applied ?? 0}
                 <br />
-                Sleep diary files: {supportFileSummary.sleep_diary_files_received ?? 0}; diary rows loaded: {supportFileSummary.sleep_diary_rows_loaded ?? 0}; sleep windows loaded: {supportFileSummary.sleep_windows_loaded ?? 0}
+                Sleep diary files: {supportFileSummary.sleep_diary_files_received ?? 0}; diary rows loaded: {supportFileSummary.sleep_diary_rows_loaded ?? 0}
                 <br />
                 Start/stop files: {supportFileSummary.start_stop_files_received ?? 0}; start/stop applied: {supportFileSummary.start_stop_applied ? "Yes" : "No"}
                 {(supportFileSummary.notes || []).length > 0 && (

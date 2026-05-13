@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "previewCards": [
+    {
+      "id": "activity_preview",
+      "title": "Activity Preview",
+      "description": "Shows the full activity recording and summary.",
+      "plotType": "activity_preview",
+      "defaultVisible": true,
+      "supportsMaskOverlay": false,
+      "supportsDiaryOverlay": false,
+      "supportsAlgorithmOverlay": false,
+      "supportsLightOverlay": false
+    },
+    {
+      "id": "light_preview",
+      "title": "Light Preview",
+      "description": "Shows light exposure if present in the actigraphy file or separate light file.",
+      "plotType": "light_preview",
+      "defaultVisible": true,
+      "supportsMaskOverlay": false,
+      "supportsDiaryOverlay": false,
+      "supportsAlgorithmOverlay": false,
+      "supportsLightOverlay": true
+    }
+  ],
+  "resultCards": [
+    {
+      "id": "metric_plot",
+      "title": "Metric Summary Visual",
+      "description": "Plot or structured summary of the selected metric output.",
+      "plotType": "selected_metric_plot"
+    },
+    {
+      "id": "summary_table",
+      "title": "Tabular Output",
+      "description": "Table of computed summary values and method settings.",
+      "plotType": "summary_table"
+    },
+    {
+      "id": "methods_summary",
+      "title": "Methods Summary",
+      "description": "Human-readable description of the selected processing steps, algorithms, and parameters for reporting.",
+      "plotType": "methods_summary"
+    }
+  ]
+}

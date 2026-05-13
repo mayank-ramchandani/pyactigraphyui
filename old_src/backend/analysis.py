@@ -362,263 +362,7 @@ def _score_rest_minutes(score):
     series = _coerce_score_series(score)
     if series is None:
         return None
-    return float((series > 0).sum()) * _epoch_minutes(series.index)
-
-
-def _normalize_sleep_window(window, default_source="sleep_diary"):
-    try:
-        start = pd.to_datetime(window.get("start"))
-        stop = pd.to_datetime(window.get("stop"))
-        if pd.isna(start) or pd.isna(stop) or stop <= start:
-            return None
-        return {
-            "start": start,
-            "stop": stop,
-            "state": str(window.get("state", "NIGHT")),
-            "source": str(window.get("source", default_source)),
-            "method": str(window.get("method", default_source)),
-            "estimated": bool(window.get("estimated", default_source != "sleep_diary")),
-        }
-    except Exception:
-        return None
-
-
-def _get_sleep_windows(raw):
-    windows = getattr(raw, "_ui_sleep_windows", None) or []
-    normalized = []
-    for window in windows:
-        normalized_window = _normalize_sleep_window(window, default_source="sleep_diary")
-        if normalized_window is not None:
-            normalized.append(normalized_window)
-    return normalized
-
-
-def _flatten_aot_times(values):
-    if values is None:
-        return []
-    try:
-        if isinstance(values, pd.Series):
-            values = values.dropna().tolist()
-        elif isinstance(values, pd.DataFrame):
-            values = values.stack().dropna().tolist()
-    except Exception:
-        pass
-    if not isinstance(values, (list, tuple, set)):
-        try:
-            values = list(values)
-        except Exception:
-            values = [values]
-    flattened = []
-    for value in values:
-        if isinstance(value, (list, tuple, set)):
-            flattened.extend(_flatten_aot_times(value))
-            continue
-        try:
-            ts = pd.to_datetime(value)
-            if not pd.isna(ts):
-                flattened.append(ts)
-        except Exception:
-            continue
-    return sorted(set(flattened))
-
-
-def _call_aot_method(raw, method_name, params=None):
-    params = params or {}
-    method = getattr(raw, method_name, None)
-    if method is None or not callable(method):
-        return None
-    try:
-        if method_name == "Crespo_AoT":
-            kwargs = {}
-            for key in ["zeta", "zeta_r", "zeta_a", "t", "alpha", "beta", "estimate_zeta", "seq_length_max", "verbose"]:
-                if key in params and params[key] not in (None, ""):
-                    kwargs[key] = params[key]
-            return method(**kwargs)
-        if method_name == "Roenneberg_AoT":
-            kwargs = {}
-            for key in ["trend_period", "min_trend_period", "threshold", "min_seed_period", "max_test_period", "min_period", "verbose"]:
-                if key in params and params[key] not in (None, ""):
-                    kwargs[key] = params[key]
-            return method(**kwargs)
-        return method()
-    except Exception:
-        return None
-
-
-def _rest_windows_from_activity_onset_offset(onsets, offsets, min_hours=3.0, max_hours=14.0):
-    onset_times = _flatten_aot_times(onsets)
-    offset_times = _flatten_aot_times(offsets)
-    windows = []
-    if not onset_times or not offset_times:
-        return windows
-
-    for offset in offset_times:
-        next_onsets = [onset for onset in onset_times if onset > offset]
-        if not next_onsets:
-            continue
-        onset = next_onsets[0]
-        duration_hours = (onset - offset).total_seconds() / 3600.0
-        if min_hours <= duration_hours <= max_hours:
-            windows.append({
-                "start": offset,
-                "stop": onset,
-                "state": "ESTIMATED_REST",
-                "source": "estimated_rest_period",
-                "method": "activity_offset_to_next_onset",
-                "estimated": True,
-            })
-
-    # Dedupe overlapping/identical windows.
-    deduped = []
-    seen = set()
-    for window in sorted(windows, key=lambda item: item["start"]):
-        key = (str(window["start"]), str(window["stop"]))
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(window)
-    return deduped
-
-
-def _detect_rest_windows_with_pyactigraphy(raw, sleep_window_settings=None):
-    settings = sleep_window_settings or {}
-    enabled = bool(settings.get("estimateWithoutDiary", True))
-    if not enabled:
-        return [], {"source": "none", "method": None, "estimated": False, "notes": ["No-diary rest-window estimation disabled."]}
-
-    method_preference = settings.get("method") or "crespo_aot"
-    min_hours = float(settings.get("minRestWindowHours", 3) or 3)
-    max_hours = float(settings.get("maxRestWindowHours", 14) or 14)
-    notes = []
-
-    method_order = [method_preference]
-    for fallback in ["crespo_aot", "roenneberg_aot"]:
-        if fallback not in method_order:
-            method_order.append(fallback)
-
-    for method_name in method_order:
-        if method_name == "crespo_aot":
-            aot = _call_aot_method(raw, "Crespo_AoT", settings.get("crespoParams", {}))
-            label = "pyActigraphy Crespo_AoT"
-        elif method_name == "roenneberg_aot":
-            aot = _call_aot_method(raw, "Roenneberg_AoT", settings.get("roennebergParams", {}))
-            label = "pyActigraphy Roenneberg_AoT"
-        else:
-            notes.append(f"Unknown rest-window detection method: {method_name}.")
-            continue
-
-        if not aot or not isinstance(aot, (list, tuple)) or len(aot) < 2:
-            notes.append(f"{label} did not return usable activity onset/offset arrays.")
-            continue
-
-        onsets, offsets = aot[0], aot[1]
-        windows = _rest_windows_from_activity_onset_offset(onsets, offsets, min_hours=min_hours, max_hours=max_hours)
-        if windows:
-            for window in windows:
-                window["source"] = "estimated_rest_period"
-                window["method"] = label
-            return windows, {
-                "source": "estimated_rest_period",
-                "method": label,
-                "estimated": True,
-                "notes": notes + [f"Detected {len(windows)} rest window(s) from activity offset/onset times."],
-            }
-        notes.append(f"{label} ran, but no rest windows passed the duration filters ({min_hours}-{max_hours} h).")
-
-    return [], {"source": "none", "method": None, "estimated": False, "notes": notes}
-
-
-def _resolve_sleep_windows(raw, sleep_window_settings=None):
-    diary_windows = _get_sleep_windows(raw)
-    if diary_windows:
-        return diary_windows, {
-            "source": "sleep_diary",
-            "method": "sleep_diary",
-            "estimated": False,
-            "count": len(diary_windows),
-            "notes": [f"Using {len(diary_windows)} diary/user-defined sleep window(s)."],
-        }
-
-    detected_windows, metadata = _detect_rest_windows_with_pyactigraphy(raw, sleep_window_settings=sleep_window_settings)
-    metadata["count"] = len(detected_windows)
-    return detected_windows, metadata
-
-
-def _score_minutes_in_windows(score, windows):
-    series = _coerce_score_series(score)
-    if series is None:
-        return None
-    if not windows:
-        return _score_rest_minutes(series)
-
-    epoch_minutes = _epoch_minutes(series.index)
-    total_sleep_minutes = 0.0
-    usable_windows = 0
-    for window in windows:
-        window_series = series.loc[window["start"]:window["stop"]].dropna()
-        if len(window_series) == 0:
-            continue
-        usable_windows += 1
-        total_sleep_minutes += float((window_series > 0).sum()) * epoch_minutes
-    if usable_windows == 0:
-        return None
-    return total_sleep_minutes
-
-
-def _compute_waso_and_efficiency(score, windows):
-    series = _coerce_score_series(score)
-    if series is None or not windows:
-        return {
-            "waso": None,
-            "sleep_efficiency": None,
-            "time_in_bed_minutes": None,
-            "sleep_window_count": 0,
-        }
-
-    epoch_minutes = _epoch_minutes(series.index)
-    total_sleep_minutes = 0.0
-    total_waso_minutes = 0.0
-    total_time_in_bed_minutes = 0.0
-    usable_windows = 0
-
-    for window in windows:
-        start = window["start"]
-        stop = window["stop"]
-        if stop <= start:
-            continue
-        window_series = series.loc[start:stop].dropna()
-        if len(window_series) == 0:
-            continue
-
-        sleep_mask = window_series > 0
-        if not bool(sleep_mask.any()):
-            # The diary window exists, but the chosen algorithm found no sleep in it.
-            usable_windows += 1
-            total_time_in_bed_minutes += (stop - start).total_seconds() / 60.0
-            continue
-
-        usable_windows += 1
-        total_time_in_bed_minutes += (stop - start).total_seconds() / 60.0
-        total_sleep_minutes += float(sleep_mask.sum()) * epoch_minutes
-
-        first_sleep_pos = sleep_mask.to_numpy().nonzero()[0][0]
-        after_onset = sleep_mask.iloc[first_sleep_pos:]
-        total_waso_minutes += float((~after_onset).sum()) * epoch_minutes
-
-    if usable_windows == 0 or total_time_in_bed_minutes <= 0:
-        return {
-            "waso": None,
-            "sleep_efficiency": None,
-            "time_in_bed_minutes": None,
-            "sleep_window_count": 0,
-        }
-
-    return {
-        "waso": total_waso_minutes,
-        "sleep_efficiency": (total_sleep_minutes / total_time_in_bed_minutes) * 100.0,
-        "time_in_bed_minutes": total_time_in_bed_minutes,
-        "sleep_window_count": usable_windows,
-    }
+    return float(series.sum()) * _epoch_minutes(series.index)
 
 
 def compute_metric(raw, metric_id, params=None):
@@ -657,7 +401,7 @@ def compute_metric(raw, metric_id, params=None):
     return None
 
 
-def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sleep_window_settings=None):
+def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None):
     results = {}
     selected_metrics = selected_metrics or []
     algorithm_request = algorithm_request or {}
@@ -665,9 +409,7 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
     algorithm_params = {algorithm: algorithm_request.get("params", {})}
 
     scorer = _score_algorithm(raw, algorithm, algorithm_params=algorithm_params)
-    sleep_windows, window_metadata = _resolve_sleep_windows(raw, sleep_window_settings=sleep_window_settings)
-    rest_minutes = _score_minutes_in_windows(scorer, sleep_windows)
-    sleep_window_summary = _compute_waso_and_efficiency(scorer, sleep_windows)
+    rest_minutes = _score_rest_minutes(scorer)
 
     if "sri" in selected_metrics:
         algo_key = ALGO_TO_SRI_KEY.get(algorithm)
@@ -680,21 +422,13 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
         results["tst"] = round(rest_minutes, 2) if rest_minutes is not None else None
 
     if "waso" in selected_metrics:
-        waso = sleep_window_summary.get("waso")
-        results["waso"] = round(waso, 2) if waso is not None else None
+        # WASO requires a sleep interval/diary window to separate in-bed wake from daytime wake.
+        # Keep it explicit rather than returning a misleading all-recording value.
+        results["waso"] = None
 
     if "sleep_efficiency" in selected_metrics:
-        sleep_efficiency = sleep_window_summary.get("sleep_efficiency")
-        results["sleep_efficiency"] = round(sleep_efficiency, 2) if sleep_efficiency is not None else None
-
-    if any(metric in selected_metrics for metric in ["tst", "waso", "sleep_efficiency"]):
-        results["sleep_window_source"] = window_metadata.get("source") or "none"
-        results["sleep_window_method"] = window_metadata.get("method") or "none"
-        results["sleep_window_count"] = int(window_metadata.get("count") or sleep_window_summary.get("sleep_window_count") or 0)
-        results["time_in_bed_minutes"] = round(sleep_window_summary.get("time_in_bed_minutes"), 2) if sleep_window_summary.get("time_in_bed_minutes") is not None else None
-        results["sleep_window_estimated"] = bool(window_metadata.get("estimated"))
-        if window_metadata.get("notes"):
-            results["sleep_window_notes"] = " | ".join([str(note) for note in window_metadata.get("notes", [])])
+        # Sleep efficiency also needs a diary/SST-defined time-in-bed denominator.
+        results["sleep_efficiency"] = None
 
     return results
 
@@ -716,7 +450,7 @@ def _run_advanced_family_placeholder(family_id):
     }
 
 
-def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=None, analysis_scope="metric", algorithm_request=None, sleep_window_settings=None):
+def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=None, analysis_scope="metric", algorithm_request=None):
     metric_requests = metric_requests or []
     family_requests = family_requests or []
     results = {}
@@ -742,55 +476,13 @@ def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=N
 
     sleep_selected = [metric_id for metric_id in selected_metric_ids if metric_id in sleep_ids]
     if sleep_selected:
-        results.update(compute_sleep_metrics(raw, selected_metrics=sleep_selected, algorithm_request=algorithm_request, sleep_window_settings=sleep_window_settings))
+        results.update(compute_sleep_metrics(raw, selected_metrics=sleep_selected, algorithm_request=algorithm_request))
 
     for metric_id in selected_metric_ids:
         if metric_id not in results:
             results[metric_id] = None
 
     return results
-
-
-
-def _index_timezone_info(index):
-    tz = getattr(index, "tz", None)
-    if tz is None:
-        return {
-            "timezone_aware": False,
-            "timezone": None,
-            "note": "Timestamps are timezone-naive. pyActigraphy calculations use the timestamps as stored in the file; confirm the device/export timezone before interpreting clock-time metrics.",
-        }
-    return {
-        "timezone_aware": True,
-        "timezone": str(tz),
-        "note": "Timestamps include timezone information. Clock-time plots and metrics are shown using the timezone stored on the DateTimeIndex.",
-    }
-
-
-def _mean_daily_wave(series, value_key="mean_activity", max_points=1440):
-    if series is None or len(series) == 0:
-        return []
-    wave = pd.to_numeric(series, errors="coerce").dropna()
-    if len(wave) == 0:
-        return []
-    if not isinstance(wave.index, pd.DatetimeIndex):
-        return []
-    try:
-        if getattr(wave.index, "freq", None) is None:
-            inferred = pd.infer_freq(wave.index)
-            if inferred is None:
-                median_step = pd.Series(wave.index).diff().dropna().median()
-                if pd.notna(median_step):
-                    inferred = pd.Timedelta(median_step)
-            if inferred is not None:
-                wave = wave.resample(inferred).mean().dropna()
-    except Exception:
-        pass
-    grouped = wave.groupby(wave.index.strftime("%H:%M")).mean().sort_index()
-    if len(grouped) > max_points:
-        step = max(1, len(grouped) // max_points)
-        grouped = grouped.iloc[::step]
-    return [{"time": str(idx), value_key: _safe_float(value)} for idx, value in grouped.items()]
 
 
 def _sample_full_recording(series, max_points=2000, value_key="activity"):
@@ -813,8 +505,6 @@ def build_native_preview(raw, activity_channel="data", resample_freq=None):
     if resample_freq:
         preview_series = preview_series.resample(resample_freq).mean()
 
-    timezone_info = _index_timezone_info(preview_series.index) if len(preview_series) else _index_timezone_info(series.index)
-    mean_activity_wave = _mean_daily_wave(preview_series, value_key="mean_activity")
     summary = {
         "rows": int(len(preview_series)),
         "start": str(preview_series.index.min()) if len(preview_series) else None,
@@ -823,17 +513,12 @@ def build_native_preview(raw, activity_channel="data", resample_freq=None):
         "resample_freq": resample_freq,
         "preview_mode": "full_recording",
         "device": getattr(raw, "format", None),
-        "timezone_aware": timezone_info.get("timezone_aware"),
-        "timezone": timezone_info.get("timezone") or "Not provided in file/index",
-        "mean_activity_wave_points": len(mean_activity_wave),
     }
 
     return {
         "preview_available": True,
         "summary": summary,
-        "timezone_info": timezone_info,
         "full_recording_preview": _sample_full_recording(preview_series, value_key="activity"),
-        "mean_activity_wave": mean_activity_wave,
     }
 
 
@@ -897,20 +582,16 @@ def build_light_preview(raw, resample_freq=None):
     if resample_freq:
         preview_series = preview_series.resample(resample_freq).mean()
 
-    timezone_info = _index_timezone_info(preview_series.index)
     summary = {
         "rows": int(len(preview_series)),
         "start": str(preview_series.index.min()) if len(preview_series) else None,
         "end": str(preview_series.index.max()) if len(preview_series) else None,
         "mean_light": _serialize_scalar(preview_series.mean()) if len(preview_series) else None,
         "max_light": _serialize_scalar(preview_series.max()) if len(preview_series) else None,
-        "timezone_aware": timezone_info.get("timezone_aware"),
-        "timezone": timezone_info.get("timezone") or "Not provided in file/index",
     }
 
     return {
         "light_preview_available": True,
-        "timezone_info": timezone_info,
         "light_preview": _sample_full_recording(preview_series, value_key="light"),
         "light_summary": summary,
     }
