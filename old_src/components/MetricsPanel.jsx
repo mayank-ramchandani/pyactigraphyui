@@ -67,9 +67,12 @@ export default function MetricsPanel({
   inputType,
   algorithmParams = {},
   setAlgorithmParams = () => {},
+  sleepWindowSettings = {},
+  setSleepWindowSettings = () => {},
 }) {
   const [expandedAlgorithm, setExpandedAlgorithm] = useState(null);
   const [expandedMetric, setExpandedMetric] = useState(null);
+  const [expandedMetricGroup, setExpandedMetricGroup] = useState("rest_activity_group");
 
   const resolvedInputType = inputType || "csv";
   const detectedInputLabel = INPUT_TYPE_LABELS[resolvedInputType] || resolvedInputType;
@@ -84,6 +87,35 @@ export default function MetricsPanel({
       allMetrics.some((metric) => metric.category === category.id)
     );
   }, [metricRegistry, allMetrics]);
+
+  const metricGroups = useMemo(() => {
+    const categoryById = Object.fromEntries(visibleCategories.map((category) => [category.id, category]));
+    const restActivityCategories = new Set(["rest_activity", "fragmentation"]);
+    const groups = [];
+
+    const restActivityMetrics = allMetrics.filter((metric) => restActivityCategories.has(metric.category));
+    if (restActivityMetrics.length > 0) {
+      groups.push({
+        id: "rest_activity_group",
+        label: "Rest-Activity Metrics",
+        description: "Rest-activity rhythm, non-parametric, and fragmentation metrics grouped together so users can select the whole group or expand it to choose individual metrics.",
+        metrics: restActivityMetrics,
+      });
+    }
+
+    visibleCategories
+      .filter((category) => !restActivityCategories.has(category.id))
+      .forEach((category) => {
+        groups.push({
+          id: category.id,
+          label: category.label,
+          description: category.description,
+          metrics: allMetrics.filter((metric) => metric.category === category.id),
+        });
+      });
+
+    return groups.filter((group) => group.metrics.length > 0);
+  }, [visibleCategories, allMetrics]);
 
   const sharedParamsForSelection = useMemo(
     () =>
@@ -101,6 +133,21 @@ export default function MetricsPanel({
         ? prev.filter((item) => item !== metricId)
         : [...prev, metricId]
     );
+  };
+
+
+  const toggleMetricGroup = (metrics) => {
+    const selectableIds = metrics
+      .filter((metric) => !metric?.uiExposure?.planned)
+      .map((metric) => metric.id);
+    const allSelected = selectableIds.every((id) => selectedMetrics.includes(id));
+
+    setSelectedMetrics((prev) => {
+      if (allSelected) {
+        return prev.filter((id) => !selectableIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...selectableIds]));
+    });
   };
 
   const toggleFamily = (familyId, planned) => {
@@ -423,6 +470,70 @@ export default function MetricsPanel({
         </div>
       </div>
 
+      <div
+        style={{
+          border: "1px solid #dcfce7",
+          borderRadius: 14,
+          background: "#f0fdf4",
+          color: "#14532d",
+          padding: 14,
+          marginBottom: 24,
+          fontSize: 14,
+          lineHeight: 1.55,
+        }}
+      >
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>Sleep window source for TST, WASO, and sleep efficiency</div>
+        <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+          <input
+            type="checkbox"
+            checked={sleepWindowSettings?.estimateWithoutDiary !== false}
+            onChange={(e) =>
+              setSleepWindowSettings((prev) => ({ ...prev, estimateWithoutDiary: e.target.checked }))
+            }
+            style={{ marginTop: 3 }}
+          />
+          <span>
+            If no sleep diary is uploaded, estimate the sleep/rest window using pyActigraphy activity onset/offset detection.
+            Results will be labelled as estimated.
+          </span>
+        </label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Detection method</div>
+            <select
+              value={sleepWindowSettings?.method || "crespo_aot"}
+              onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, method: e.target.value }))}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
+            >
+              <option value="crespo_aot">pyActigraphy Crespo_AoT</option>
+              <option value="roenneberg_aot">pyActigraphy Roenneberg_AoT</option>
+            </select>
+          </label>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Min rest window (h)</div>
+            <input
+              type="number"
+              min="1"
+              step="0.5"
+              value={sleepWindowSettings?.minRestWindowHours ?? 3}
+              onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, minRestWindowHours: Number(e.target.value) }))}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
+            />
+          </label>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Max rest window (h)</div>
+            <input
+              type="number"
+              min="2"
+              step="0.5"
+              value={sleepWindowSettings?.maxRestWindowHours ?? 14}
+              onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, maxRestWindowHours: Number(e.target.value) }))}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
+            />
+          </label>
+        </div>
+      </div>
+
       {analysisMode !== "standard" && (
         <div
           style={{
@@ -505,85 +616,147 @@ export default function MetricsPanel({
       )}
 
       {analysisScope === "metric" &&
-        visibleCategories.map((category) => {
-          const categoryMetrics = allMetrics.filter((metric) => metric.category === category.id);
-          if (categoryMetrics.length === 0) return null;
+        metricGroups.map((group) => {
+          const selectableMetrics = group.metrics.filter((metric) => !metric?.uiExposure?.planned);
+          const selectedCount = selectableMetrics.filter((metric) => selectedMetrics.includes(metric.id)).length;
+          const allSelected = selectableMetrics.length > 0 && selectedCount === selectableMetrics.length;
+          const isExpanded = expandedMetricGroup === group.id;
 
           return (
-            <div key={category.id} style={{ marginBottom: 24 }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>{category.label}</div>
-              <div style={{ color: "#64748b", fontSize: 16, marginBottom: 12 }}>
-                {category.description}
-              </div>
-
+            <div
+              key={group.id}
+              style={{
+                marginBottom: 16,
+                border: "1px solid #e2e8f0",
+                borderRadius: 16,
+                overflow: "hidden",
+                background: "#f8fafc",
+              }}
+            >
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: 12,
+                  gridTemplateColumns: "1fr auto auto",
+                  gap: 10,
+                  alignItems: "center",
+                  padding: 14,
+                  background: "white",
+                  borderBottom: isExpanded ? "1px solid #e2e8f0" : "none",
                 }}
               >
-                {categoryMetrics.map((metric) => {
-                  const isSelected = selectedMetrics.includes(metric.id);
-                  const isPlanned = Boolean(metric?.uiExposure?.planned);
+                <button
+                  type="button"
+                  onClick={() => setExpandedMetricGroup(isExpanded ? null : group.id)}
+                  style={{
+                    padding: 0,
+                    border: "none",
+                    background: "transparent",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: 17 }}>
+                    {isExpanded ? "▾" : "▸"} {group.label}
+                  </div>
+                  <div style={{ color: "#64748b", fontSize: 14, marginTop: 4, lineHeight: 1.45 }}>
+                    {group.description}
+                  </div>
+                </button>
 
-                  return (
-                    <div key={metric.id}>
-                      <button
-                        type="button"
-                        onClick={() => !isPlanned && toggleMetric(metric.id)}
-                        style={cardStyle(isSelected, isPlanned)}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 1000, fontSize: 17 }}>{metric.label}</div>
-                          <div
-                            style={{
-                              marginTop: 8,
-                              fontSize: 15,
-                              lineHeight: 1.45,
-                              color: isSelected ? "rgba(255,255,255,0.92)" : "#475569",
-                              minHeight: 38,
-                            }}
-                          >
-                            {getMetricSummary(metricRegistry, metric.id)}
-                          </div>
-                        </div>
+                <div style={{ color: "#475569", fontSize: 14 }}>
+                  {selectedCount}/{selectableMetrics.length} selected
+                </div>
 
-                        <div style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => toggleMetricGroup(group.metrics)}
+                  disabled={selectableMetrics.length === 0}
+                  style={{
+                    padding: "9px 12px",
+                    borderRadius: 10,
+                    border: allSelected ? "1px solid #0f172a" : "1px solid #cbd5e1",
+                    background: allSelected ? "#0f172a" : "white",
+                    color: allSelected ? "white" : "#0f172a",
+                    cursor: selectableMetrics.length === 0 ? "not-allowed" : "pointer",
+                    fontWeight: 700,
+                  }}
+                >
+                  {allSelected ? "Clear group" : "Select group"}
+                </button>
+              </div>
+
+              {isExpanded && (
+                <div style={{ padding: 14 }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                      gap: 12,
+                    }}
+                  >
+                    {group.metrics.map((metric) => {
+                      const isSelected = selectedMetrics.includes(metric.id);
+                      const isPlanned = Boolean(metric?.uiExposure?.planned);
+
+                      return (
+                        <div key={metric.id}>
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpandedMetric(expandedMetric === metric.id ? null : metric.id);
-                            }}
-                            style={{
-                              padding: 0,
-                              border: "none",
-                              background: "transparent",
-                              color: isSelected ? "white" : "#2563eb",
-                              cursor: "pointer",
-                              fontSize: 15,
-                            }}
+                            onClick={() => !isPlanned && toggleMetric(metric.id)}
+                            style={cardStyle(isSelected, isPlanned)}
                           >
-                            {expandedMetric === metric.id ? "Hide details" : "Show details"}
-                          </button>
+                            <div>
+                              <div style={{ fontWeight: 1000, fontSize: 17 }}>{metric.label}</div>
+                              <div
+                                style={{
+                                  marginTop: 8,
+                                  fontSize: 15,
+                                  lineHeight: 1.45,
+                                  color: isSelected ? "rgba(255,255,255,0.92)" : "#475569",
+                                  minHeight: 38,
+                                }}
+                              >
+                                {getMetricSummary(metricRegistry, metric.id)}
+                              </div>
+                            </div>
 
-                          {expandedMetric === metric.id && (
-                            <div style={{ marginTop: 10, fontSize: 15, lineHeight: 1.55 }}>
-                              <div style={{ marginBottom: 6 }}>{metric.description}</div>
-                              {(metric.references || []).length > 0 && (
-                                <div>
-                                  <strong>References:</strong> {metric.references.join("; ")}
+                            <div style={{ marginTop: 10 }}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedMetric(expandedMetric === metric.id ? null : metric.id);
+                                }}
+                                style={{
+                                  padding: 0,
+                                  border: "none",
+                                  background: "transparent",
+                                  color: isSelected ? "white" : "#2563eb",
+                                  cursor: "pointer",
+                                  fontSize: 15,
+                                }}
+                              >
+                                {expandedMetric === metric.id ? "Hide details" : "Show details"}
+                              </button>
+
+                              {expandedMetric === metric.id && (
+                                <div style={{ marginTop: 10, fontSize: 15, lineHeight: 1.55 }}>
+                                  <div style={{ marginBottom: 6 }}>{metric.description}</div>
+                                  {(metric.references || []).length > 0 && (
+                                    <div>
+                                      <strong>References:</strong> {metric.references.join("; ")}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
-                          )}
+                          </button>
                         </div>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

@@ -334,6 +334,83 @@ def _find_column(df, candidates):
     return None
 
 
+
+
+def _extract_sleep_windows_from_table(df):
+    import pandas as pd
+
+    windows = []
+    if df is None or len(df) == 0:
+        return windows
+
+    state_col = _find_column(df, [
+        "state", "type", "status", "event", "label", "period", "category", "sleep_state"
+    ])
+    start_col = _find_column(df, [
+        "start", "start_time", "startTime", "onset", "begin", "from", "bedtime",
+        "bed_time", "lights_off", "sleep_start", "Start_time"
+    ])
+    stop_col = _find_column(df, [
+        "stop", "end", "end_time", "stopTime", "offset", "to", "wake_time",
+        "wake", "rise_time", "get_up_time", "Stop_time"
+    ])
+
+    if not start_col or not stop_col:
+        return windows
+
+    night_like_terms = ("night", "sleep", "bed", "in_bed", "in bed", "main")
+    excluded_terms = ("nap", "nowear", "no wear", "nonwear", "active")
+
+    for _, row in df.iterrows():
+        raw_state = str(row[state_col]).strip() if state_col else "NIGHT"
+        state = raw_state.lower()
+        if state_col:
+            if any(term in state for term in excluded_terms):
+                continue
+            if not any(term in state for term in night_like_terms):
+                continue
+        try:
+            start = pd.to_datetime(row[start_col])
+            stop = pd.to_datetime(row[stop_col])
+            if pd.isna(start) or pd.isna(stop) or stop <= start:
+                continue
+            windows.append({
+                "start": start.isoformat(),
+                "stop": stop.isoformat(),
+                "state": raw_state or "NIGHT",
+                "source": "sleep_diary",
+            })
+        except Exception:
+            continue
+    return windows
+
+
+def _read_sleep_diary_table(file_path: str):
+    # pyActigraphy sleep diaries often include a small preamble before the table;
+    # try normal parsing first, then retry with skipped header rows.
+    df = _read_support_table(file_path)
+    if df is not None and _extract_sleep_windows_from_table(df):
+        return df
+
+    try:
+        import pandas as pd
+        for skiprows in range(1, 6):
+            try:
+                candidate = pd.read_csv(file_path, skiprows=skiprows)
+                if _extract_sleep_windows_from_table(candidate):
+                    return candidate
+            except Exception:
+                try:
+                    candidate = pd.read_csv(file_path, sep=None, engine="python", skiprows=skiprows)
+                    if _extract_sleep_windows_from_table(candidate):
+                        return candidate
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return df
+
 def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_stop_paths=None):
     import pandas as pd
 
@@ -343,6 +420,7 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
         "start_stop_files_received": len(start_stop_paths or []),
         "mask_intervals_applied": 0,
         "sleep_diary_rows_loaded": 0,
+        "sleep_windows_loaded": 0,
         "start_stop_applied": False,
         "notes": [],
     }
@@ -397,20 +475,38 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
             summary["notes"].append("Masking file received, but start/stop columns were not recognized.")
 
     # 3) Load diary metadata last so downstream sleep summaries can use the cleaned/truncated signal.
+    sleep_windows = []
     for path in diary_paths or []:
-        df = _read_support_table(path)
+        df = _read_sleep_diary_table(path)
         if df is not None:
             summary["sleep_diary_rows_loaded"] += int(len(df))
+            windows = _extract_sleep_windows_from_table(df)
+            sleep_windows.extend(windows)
+            summary["sleep_windows_loaded"] += int(len(windows))
+            if windows:
+                summary["notes"].append(f"Loaded {len(windows)} sleep diary NIGHT/sleep window(s) for WASO and sleep efficiency.")
+            else:
+                summary["notes"].append("Sleep diary parsed, but no NIGHT/sleep windows were recognized.")
             if hasattr(raw, "read_sleep_diary"):
                 try:
                     raw.read_sleep_diary(path)
-                    summary["notes"].append("Sleep diary loaded with raw.read_sleep_diary.")
+                    summary["notes"].append("Sleep diary also loaded with raw.read_sleep_diary.")
                 except Exception as exc:
                     summary["notes"].append(f"Sleep diary parsed but raw.read_sleep_diary failed ({exc}).")
             else:
                 summary["notes"].append("Sleep diary parsed; this raw object does not expose read_sleep_diary.")
         else:
             summary["notes"].append("Sleep diary file received but could not be parsed.")
+
+    # Store parsed windows on the raw object so analysis.py can calculate TST, WASO,
+    # and sleep efficiency consistently across all scoring algorithms.
+    try:
+        raw._ui_sleep_windows = sleep_windows
+    except Exception:
+        pass
+
+    if ("waso" in str(sleep_windows).lower() or "sleep_efficiency" in str(sleep_windows).lower()) and not sleep_windows:
+        summary["notes"].append("WASO and sleep efficiency require a diary-defined in-bed/sleep window.")
 
     return summary
 
@@ -434,6 +530,7 @@ async def analyze_basic(
         family_requests = analysis_config.get("families", [])
         analysis_scope = analysis_config.get("analysisScope", "metric")
         algorithm_request = analysis_config.get("algorithm")
+        sleep_window_settings = analysis_config.get("sleepWindowSettings", {})
         _json_or_empty(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
@@ -455,6 +552,7 @@ async def analyze_basic(
             family_requests=family_requests,
             analysis_scope=analysis_scope,
             algorithm_request=algorithm_request,
+            sleep_window_settings=sleep_window_settings,
         )
 
         warnings = quick_qc(results)

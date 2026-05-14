@@ -1,6 +1,6 @@
 import React from "react";
 import { downloadBlob, downloadJson, rowsToCsv, summaryResultsToRows } from "../services/exportUtils";
-import { getMetricLabel } from "../services/configUtils";
+import { getAlgorithmLabel, getMetricLabel } from "../services/configUtils";
 
 export default function ExportPanel({
   title,
@@ -9,16 +9,21 @@ export default function ExportPanel({
   summaryResults = {},
   qcWarnings = [],
   metricRegistry,
+  algorithmRegistry,
   analysisConfig,
   selectedAlgorithm,
   analysisMode,
   supportFileSummary,
 }) {
   const enabledExports = (exportRegistry?.exports ?? []).filter((item) => item.enabled);
+  const selectedAlgorithmLabel = getAlgorithmLabel(algorithmRegistry, selectedAlgorithm);
 
   const exportSummaryCsv = () => {
-    const rows = summaryResultsToRows(summaryResults, (metricId) => getMetricLabel(metricRegistry, metricId));
-    const csv = rowsToCsv(rows, ["metric", "label", "value"]);
+    const rows = summaryResultsToRows(summaryResults, (metricId) => getMetricLabel(metricRegistry, metricId)).map((row) => ({
+      ...row,
+      sleep_algorithm: selectedAlgorithmLabel || selectedAlgorithm || "not_selected",
+    }));
+    const csv = rowsToCsv(rows, ["metric", "label", "value", "sleep_algorithm"]);
     downloadBlob(csv, "actigraphy_summary_results.csv", "text/csv;charset=utf-8");
   };
 
@@ -27,6 +32,7 @@ export default function ExportPanel({
       {
         analysisMode,
         selectedAlgorithm,
+        selectedAlgorithmLabel,
         analysisConfig,
         qcWarnings,
         supportFileSummary,
@@ -43,6 +49,7 @@ export default function ExportPanel({
         qcWarnings,
         analysisMode,
         selectedAlgorithm,
+        selectedAlgorithmLabel,
         analysisConfig,
         supportFileSummary,
         exportedAt: new Date().toISOString(),
@@ -54,10 +61,6 @@ export default function ExportPanel({
   const handleExport = (item) => {
     if (item.id === "csv_summary") {
       exportSummaryCsv();
-      return;
-    }
-    if (item.id === "methods_report" || item.id === "citation_summary") {
-      exportMethods();
       return;
     }
     exportAllJson();
@@ -74,13 +77,13 @@ export default function ExportPanel({
     >
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        Save result tables, QC information, and methods metadata from the generated workflow.
+        Export the generated results as CSV or JSON. Both exports include the sleep-analysis algorithm used, support-file metadata, QC warnings, and analysis settings.
       </p>
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
           gap: 12,
         }}
       >

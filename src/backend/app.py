@@ -411,13 +411,21 @@ def _read_sleep_diary_table(file_path: str):
 
     return df
 
-def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_stop_paths=None):
+def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_stop_paths=None, support_settings=None):
     import pandas as pd
+
+    support_settings = support_settings or {}
+    start_stop_settings = support_settings.get("startStop", {}) or {}
+    masking_settings = support_settings.get("masking", {}) or {}
+    diary_settings = support_settings.get("sleepDiary", {}) or {}
 
     summary = {
         "masking_files_received": len(masking_paths or []),
         "sleep_diary_files_received": len(diary_paths or []),
         "start_stop_files_received": len(start_stop_paths or []),
+        "manual_start_stop_intervals_received": len(start_stop_settings.get("manualIntervals", []) or []),
+        "manual_mask_intervals_received": len(masking_settings.get("manualIntervals", []) or []),
+        "manual_sleep_diary_windows_received": len(diary_settings.get("manualIntervals", []) or []),
         "mask_intervals_applied": 0,
         "sleep_diary_rows_loaded": 0,
         "sleep_windows_loaded": 0,
@@ -442,29 +450,45 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
         except Exception as exc:
             summary["notes"].append(f"{source}: could not apply interval ({exc}).")
 
+    def apply_start_stop_window(start, stop, source="start/stop"):
+        try:
+            start = pd.to_datetime(start)
+            stop = pd.to_datetime(stop)
+            if pd.isna(start) or pd.isna(stop) or stop <= start:
+                summary["notes"].append(f"{source}: skipped invalid start/stop interval.")
+                return
+            if hasattr(raw, "data") and raw.data is not None:
+                raw.data = raw.data.loc[start:stop]
+                summary["start_stop_applied"] = True
+                summary["notes"].append(f"{source}: applied recording interval before masking and sleep scoring.")
+            else:
+                summary["notes"].append(f"{source}: parsed, but raw.data is not available.")
+        except Exception as exc:
+            summary["notes"].append(f"{source}: data truncation failed ({exc}).")
+
     # 1) Apply start/stop first, because pyActigraphy's SST-log use case is to remove
     #    leading/trailing periods when the device was not yet worn or no longer worn.
-    for path in start_stop_paths or []:
+    if start_stop_settings.get("apply", True):
+        for interval in start_stop_settings.get("manualIntervals", []) or []:
+            apply_start_stop_window(interval.get("start"), interval.get("stop"), "manual start/stop")
+
+    for path in (start_stop_paths or []) if start_stop_settings.get("apply", True) else []:
         df = _read_support_table(path)
         start_col = _find_column(df, ["start", "start_time", "startTime", "onset", "begin", "Start_time"])
         stop_col = _find_column(df, ["stop", "end", "end_time", "stopTime", "offset", "Stop_time"])
         if df is not None and len(df) > 0 and start_col and stop_col:
             start = pd.to_datetime(df.iloc[0][start_col])
             stop = pd.to_datetime(df.iloc[0][stop_col])
-            if hasattr(raw, "data") and raw.data is not None:
-                try:
-                    raw.data = raw.data.loc[start:stop]
-                    summary["start_stop_applied"] = True
-                    summary["notes"].append("Start/stop interval applied before masking and sleep scoring.")
-                except Exception as exc:
-                    summary["notes"].append(f"Start/stop file parsed but data truncation failed ({exc}).")
-            else:
-                summary["notes"].append("Start/stop file parsed, but raw.data is not available.")
+            apply_start_stop_window(start, stop, "start/stop file")
         else:
             summary["notes"].append("Start/stop file received, but start/stop columns were not recognized.")
 
     # 2) Apply masks after truncation.
-    for path in masking_paths or []:
+    if masking_settings.get("apply", True):
+        for interval in masking_settings.get("manualIntervals", []) or []:
+            apply_interval(interval.get("start"), interval.get("stop"), "manual masking")
+
+    for path in (masking_paths or []) if masking_settings.get("apply", True) else []:
         df = _read_support_table(path)
         start_col = _find_column(df, ["start", "start_time", "startTime", "onset", "begin", "Start_time"])
         stop_col = _find_column(df, ["stop", "end", "end_time", "stopTime", "offset", "Stop_time"])
@@ -476,7 +500,26 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
 
     # 3) Load diary metadata last so downstream sleep summaries can use the cleaned/truncated signal.
     sleep_windows = []
-    for path in diary_paths or []:
+    if diary_settings.get("apply", True):
+        for interval in diary_settings.get("manualIntervals", []) or []:
+            try:
+                start = pd.to_datetime(interval.get("start"))
+                stop = pd.to_datetime(interval.get("stop"))
+                if pd.isna(start) or pd.isna(stop) or stop <= start:
+                    continue
+                state = str(interval.get("state") or "NIGHT")
+                if state.lower() not in ("nap", "nowear", "no wear", "nonwear", "active"):
+                    sleep_windows.append({
+                        "start": start.isoformat(),
+                        "stop": stop.isoformat(),
+                        "state": state,
+                        "source": "manual_sleep_diary",
+                    })
+                    summary["sleep_windows_loaded"] += 1
+            except Exception as exc:
+                summary["notes"].append(f"manual sleep diary: could not parse interval ({exc}).")
+
+    for path in (diary_paths or []) if diary_settings.get("apply", True) else []:
         df = _read_sleep_diary_table(path)
         if df is not None:
             summary["sleep_diary_rows_loaded"] += int(len(df))
@@ -544,6 +587,7 @@ async def analyze_basic(
             masking_paths=masking_paths,
             diary_paths=diary_paths,
             start_stop_paths=start_stop_paths,
+            support_settings=analysis_config.get("supportFileSettings", {}),
         )
 
         results = run_basic_pyactigraphy_analysis(

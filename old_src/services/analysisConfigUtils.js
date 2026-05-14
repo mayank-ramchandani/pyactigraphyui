@@ -118,13 +118,25 @@ import {
     metricRegistry,
     sharedRegistry,
     algorithmRegistry,
+    analysisFamilyRegistry,
     selectedMetrics,
+    selectedFamilies,
+    analysisScope,
     selectedAlgorithm,
     sharedValues,
     metricOverrides,
     algorithmParams,
   }) {
+    const familyLookup = Object.fromEntries(
+      (analysisFamilyRegistry?.families || []).map((family) => [family.id, family])
+    );
+
     return {
+      analysisScope: analysisScope || "metric",
+      families: (selectedFamilies || []).map((familyId) => ({
+        id: familyId,
+        label: familyLookup[familyId]?.label || familyId,
+      })),
       metrics: (selectedMetrics || []).map((metricId) => ({
         id: metricId,
         params: resolveMetricParams(

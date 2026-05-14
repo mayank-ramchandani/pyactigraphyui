@@ -81,6 +81,12 @@ export default function Dashboard() {
   const [sharedValues, setSharedValues] = useState({});
   const [metricOverrides, setMetricOverrides] = useState({});
   const [algorithmParams, setAlgorithmParams] = useState({});
+  const [sleepWindowSettings, setSleepWindowSettings] = useState({
+    estimateWithoutDiary: true,
+    method: "crespo_aot",
+    minRestWindowHours: 3,
+    maxRestWindowHours: 14,
+  });
 
   const [activityChannel, setActivityChannel] = useState("VM");
   const [activityTransform, setActivityTransform] = useState("none");
@@ -147,8 +153,8 @@ export default function Dashboard() {
   }, [analysisMode, analysisScope, familyMetricIds, selectedMetrics]);
 
   const resolvedAnalysisConfig = useMemo(
-    () =>
-      buildAnalysisPayload({
+    () => ({
+      ...buildAnalysisPayload({
         metricRegistry,
         sharedRegistry: sharedParamRegistry,
         algorithmRegistry,
@@ -161,6 +167,8 @@ export default function Dashboard() {
         metricOverrides,
         algorithmParams,
       }),
+      sleepWindowSettings,
+    }),
     [
       selectedMetrics,
       selectedFamilies,
@@ -169,6 +177,7 @@ export default function Dashboard() {
       sharedValues,
       metricOverrides,
       algorithmParams,
+      sleepWindowSettings,
     ]
   );
 
@@ -593,6 +602,8 @@ export default function Dashboard() {
         setMetricOverrides={setMetricOverrides}
         algorithmParams={algorithmParams}
         setAlgorithmParams={setAlgorithmParams}
+        sleepWindowSettings={sleepWindowSettings}
+        setSleepWindowSettings={setSleepWindowSettings}
         analysisMode={analysisMode}
         inputType={detectedInputType}
       />

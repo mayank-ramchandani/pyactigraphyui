@@ -12,11 +12,28 @@
       "citationText": "Cole RJ, Kripke DF, Gruen W, et al. Automatic sleep/wake identification from wrist activity.",
       "context": "Legacy adult research",
       "note": "General default for adult actigraphy sleep/rest scoring.",
-      "warnings": [],
+      "warnings": [
+        "Cole-Kripke parameters were developed for specific data reduction settings. If the 30-second setting fails for lower-frequency data, the backend falls back to the mean-per-minute setting."
+      ],
       "scoringType": "epoch_by_epoch",
       "outputType": "binary_time_series",
-      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedMetrics": [
+        "sri",
+        "tst",
+        "waso",
+        "sleep_efficiency"
+      ],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "default": true,
       "allowMultipleSelection": true,
       "supportsBinaryPreviewOverlay": true,
@@ -26,7 +43,44 @@
         "advanced": false,
         "planned": false
       },
-      "parameterSchema": []
+      "parameterSchema": [
+        {
+          "name": "settings",
+          "label": "Cole-Kripke data reduction setting",
+          "type": "select",
+          "default": "30sec_max_non_overlap",
+          "options": [
+            {
+              "value": "30sec_max_non_overlap",
+              "label": "30-sec maximum, non-overlap"
+            },
+            {
+              "value": "mean",
+              "label": "Mean activity per minute"
+            }
+          ],
+          "backendArgName": "settings",
+          "description": "pyActigraphy CK defaults to 30sec_max_non_overlap. Use mean if your file is minute-level or the 30-second setting is not compatible."
+        },
+        {
+          "name": "threshold",
+          "label": "Cole-Kripke threshold",
+          "type": "number",
+          "default": 1.0,
+          "min": 0,
+          "step": 0.1,
+          "backendArgName": "threshold",
+          "description": "Threshold passed to pyActigraphy CK."
+        },
+        {
+          "name": "rescoring",
+          "label": "Apply Cole-Kripke rescoring",
+          "type": "boolean",
+          "default": true,
+          "backendArgName": "rescoring",
+          "description": "Use pyActigraphy's rescoring option when available."
+        }
+      ]
     },
     {
       "id": "sadeh",
@@ -42,8 +96,23 @@
       "warnings": [],
       "scoringType": "epoch_by_epoch",
       "outputType": "binary_time_series",
-      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedMetrics": [
+        "sri",
+        "tst",
+        "waso",
+        "sleep_efficiency"
+      ],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "default": false,
       "allowMultipleSelection": true,
       "supportsBinaryPreviewOverlay": true,
@@ -70,8 +139,23 @@
       ],
       "scoringType": "epoch_by_epoch",
       "outputType": "binary_time_series",
-      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedMetrics": [
+        "sri",
+        "tst",
+        "waso",
+        "sleep_efficiency"
+      ],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "default": false,
       "allowMultipleSelection": true,
       "supportsBinaryPreviewOverlay": true,
@@ -86,8 +170,13 @@
           "name": "thresholdMode",
           "label": "Threshold mode",
           "type": "multiselect",
-          "default": ["auto"],
-          "options": ["auto", "manual"],
+          "default": [
+            "auto"
+          ],
+          "options": [
+            "auto",
+            "manual"
+          ],
           "backendArgName": "thresholdMode",
           "description": "Run Oakley with automatically determined threshold, user-defined threshold, or both."
         },
@@ -109,7 +198,7 @@
       "backendMethod": "Scripps",
       "label": "Scripps",
       "shortLabel": "Scripps",
-      "summary": "Epoch-by-epoch rest/activity scoring algorithm available in pyActigraphy’s sleep-algorithm toolkit.",
+      "summary": "Epoch-by-epoch rest/activity scoring algorithm available in pyActigraphy\u2019s sleep-algorithm toolkit.",
       "description": "Scripps can be exposed alongside the other binary rest/activity scoring algorithms and previewed as an overlay over the full recording.",
       "citationText": "Scripps Clinic / actigraphy sleep-wake scoring reference.",
       "context": "Alternative epoch-by-epoch sleep-rest scoring",
@@ -117,8 +206,23 @@
       "warnings": [],
       "scoringType": "epoch_by_epoch",
       "outputType": "binary_time_series",
-      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedMetrics": [
+        "sri",
+        "tst",
+        "waso",
+        "sleep_efficiency"
+      ],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "default": false,
       "allowMultipleSelection": true,
       "supportsBinaryPreviewOverlay": true,
@@ -137,14 +241,29 @@
       "label": "Crespo",
       "shortLabel": "Crespo",
       "summary": "Rest-period detection algorithm using pattern-based activity structure rather than only simple epoch-by-epoch scoring.",
-      "description": "Crespo is one of the automatic rest-detection approaches documented in pyActigraphy. It is used with its alpha parameter",
+      "description": "Crespo is a pyActigraphy activity/rest identification method. In this UI it can be used for rest/activity scoring and Crespo_AoT can estimate activity offset/onset to derive no-diary rest windows.",
       "citationText": "Crespo et al. automatic rest-period detection approach.",
       "context": "Pattern-based rest detection",
       "warnings": [],
       "scoringType": "rest_period_detection",
       "outputType": "binary_time_series",
-      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedMetrics": [
+        "sri",
+        "tst",
+        "waso",
+        "sleep_efficiency"
+      ],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "default": false,
       "allowMultipleSelection": true,
       "supportsBinaryPreviewOverlay": true,
@@ -160,9 +279,13 @@
           "label": "Alpha mode",
           "type": "select",
           "default": "default",
-          "options": ["default", "auto", "manual"],
+          "options": [
+            "default",
+            "auto",
+            "manual"
+          ],
           "description": "Run Crespo using tutorial-like defaults, automatic behavior, or a user-specified alpha.",
-          "backendArgName":"alphaMode"
+          "backendArgName": "alphaMode"
         },
         {
           "name": "alpha",
@@ -172,9 +295,10 @@
           "min": 0,
           "step": 0.5,
           "description": "User-defined alpha in hours when manual alpha mode is selected.",
-          "backendArgName":"alpha"
+          "backendArgName": "alpha"
         }
-      ]
+      ],
+      "note": "Best when you want pyActigraphy to identify consolidated rest/activity periods from the actigraphy signal. For no-diary sleep windows, start with min 3 h and max 14 h; tighten to 4\u201312 h for typical adult overnight sleep."
     },
     {
       "id": "roenneberg",
@@ -183,14 +307,29 @@
       "label": "Roenneberg",
       "shortLabel": "Roenneberg",
       "summary": "Automatic rest-period detection approach available in pyActigraphy.",
-      "description": "Roenneberg is one of the pyActigraphy-supported rest-detection workflows.",
+      "description": "Roenneberg is an automatic sleep/rest detection method in pyActigraphy that uses threshold/trend style detection of consolidated rest periods.",
       "citationText": "Roenneberg-inspired automatic rest-period detection approach.",
       "context": "Automatic rest detection",
       "warnings": [],
       "scoringType": "rest_period_detection",
       "outputType": "binary_time_series",
-      "supportedMetrics": ["sri", "tst", "waso", "sleep_efficiency"],
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedMetrics": [
+        "sri",
+        "tst",
+        "waso",
+        "sleep_efficiency"
+      ],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "default": false,
       "allowMultipleSelection": true,
       "supportsBinaryPreviewOverlay": true,
@@ -205,11 +344,14 @@
           "name": "thresholdFactors",
           "label": "Threshold factor(s)",
           "type": "number_list",
-          "default": [0.15],
+          "default": [
+            0.15
+          ],
           "description": "One or more threshold-factor values to run and compare.",
-          "backendArgName":"thresholdFactors"
+          "backendArgName": "thresholdFactors"
         }
-      ]
+      ],
+      "note": "Useful as an alternative rest-window detector when Crespo is too permissive or does not return usable windows. For no-diary sleep windows, start with min 3 h and max 14 h; use 4\u201312 h for typical overnight sleep and keep wider limits if shift work or long sleep episodes are expected."
     }
   ]
 }

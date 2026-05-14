@@ -285,7 +285,28 @@ def _score_algorithm(raw, algorithm, algorithm_params=None):
     params = algorithm_params.get(algorithm, {}) if isinstance(algorithm_params, dict) else {}
 
     if algorithm == "cole_kripke":
-        return _call_raw_method(raw, "CK")
+        method = getattr(raw, "CK", None)
+        if method is None or not callable(method):
+            return None
+        settings = params.get("settings") or "30sec_max_non_overlap"
+        threshold = params.get("threshold", 1.0)
+        rescoring = params.get("rescoring", True)
+        attempts = [
+            {"settings": settings, "threshold": threshold, "rescoring": rescoring},
+            {"settings": "mean", "threshold": threshold, "rescoring": rescoring},
+            {},
+        ]
+        seen = set()
+        for kwargs in attempts:
+            key = tuple(sorted(kwargs.items()))
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                return method(**kwargs)
+            except Exception:
+                continue
+        return None
     if algorithm == "sadeh":
         return _call_raw_method(raw, "Sadeh")
     if algorithm == "scripps":
