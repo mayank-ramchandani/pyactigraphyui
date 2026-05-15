@@ -5,7 +5,7 @@ import csv
 import pandas as pd
 import pyActigraphy
 
-from .geneactiv_bin import looks_like_geneactiv_bin, read_raw_geneactiv_bin
+from .accelerometer_loader import load_accelerometer_as_baseraw
 
 try:
     from pyActigraphy.io import BaseRaw
@@ -137,9 +137,7 @@ def infer_reader_type(file_path: str):
     suffix = Path(file_path).suffix.lower().replace(".", "")
 
     if suffix == "bin":
-        if looks_like_geneactiv_bin(file_path):
-            return "geneactiv_bin"
-        return "bba"
+        return "geneactiv_bin_accelerometer"
 
     if suffix in ("awd", "agd", "atr", "bba", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
         return suffix
@@ -168,7 +166,7 @@ def infer_reader_type(file_path: str):
         return "tabular"
 
     raise ValueError(
-        "Unsupported file type: {}. Supported native formats include .agd, .atr, .awd, .bba, .bin, .dqt, .gt3x, .mesa, .mtn, .rpx, .tal, plus supported tabular files.".format(suffix)
+        "Unsupported file type: {}. Supported native formats include .agd, .atr, .awd, .bba, .bin, .dqt, .mesa, .mtn, .rpx, .tal, plus supported tabular files. Raw .gt3x uploads are accepted only to show a conversion message; export .gt3x to .agd before final pyActigraphy analysis.".format(suffix)
     )
 
 
@@ -358,11 +356,15 @@ def _read_gt3x_file(file_path: str):
     )
 
 def load_native_file(file_path: str, reader_type: str):
-    if reader_type == "geneactiv_bin":
-        return read_raw_geneactiv_bin(file_path)
+    if reader_type == "geneactiv_bin_accelerometer":
+        return load_accelerometer_as_baseraw(file_path, epoch_period=30)
 
     if reader_type == "gt3x":
-        return _read_gt3x_file(file_path)
+        raise ValueError(
+            "pyActigraphy supports ActiGraph wGT3X-BT through .agd files, not raw .gt3x archives. "
+            "Please export/create an .agd file in ActiLife, then upload the .agd for preview and analysis. "
+            "This keeps the workflow aligned with pyActigraphy's calibrated, aggregated ActiGraph reader path."
+        )
 
     method_name = READERS.get(reader_type)
     if method_name is None:

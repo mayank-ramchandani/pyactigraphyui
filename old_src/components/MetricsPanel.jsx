@@ -81,6 +81,16 @@ export default function MetricsPanel({
   const allAlgorithms = useMemo(() => algorithmRegistry.algorithms || [], [algorithmRegistry]);
   const allFamilies = useMemo(() => analysisFamilyRegistry.families || [], [analysisFamilyRegistry]);
 
+  const crespoAotParams = useMemo(
+    () => getAlgorithmParameters(algorithmRegistry, "crespo") || [],
+    [algorithmRegistry]
+  );
+
+  const roennebergAotParams = useMemo(
+    () => getAlgorithmParameters(algorithmRegistry, "roenneberg") || [],
+    [algorithmRegistry]
+  );
+
   const visibleCategories = useMemo(() => {
     const categories = getMetricCategories(metricRegistry);
     return categories.filter((category) =>
@@ -181,6 +191,16 @@ export default function MetricsPanel({
       ...prev,
       [algorithmId]: {
         ...(prev[algorithmId] || {}),
+        [name]: value,
+      },
+    }));
+  };
+
+  const updateSleepWindowParam = (groupName, name, value) => {
+    setSleepWindowSettings((prev) => ({
+      ...prev,
+      [groupName]: {
+        ...(prev?.[groupName] || {}),
         [name]: value,
       },
     }));
@@ -536,6 +556,33 @@ export default function MetricsPanel({
               style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
             />
           </label>
+        </div>
+
+        <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "white", border: "1px solid #bbf7d0" }}>
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>Advanced onset/offset parameters</div>
+          <div style={{ color: "#475569", marginBottom: 12 }}>
+            Leave parameter mode on <strong>default</strong> for pyActigraphy's documented defaults, or choose <strong>custom</strong> and edit the values below. Roenneberg_AoT should be used cautiously unless your data are close to 10-minute bins or you set an appropriate resampling frequency.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+            {((sleepWindowSettings?.method || "crespo_aot") === "crespo_aot" ? crespoAotParams : roennebergAotParams).map((param) => {
+              const groupName = (sleepWindowSettings?.method || "crespo_aot") === "crespo_aot" ? "crespoParams" : "roennebergParams";
+              return (
+                <div key={`sleep-window-${groupName}-${param.name}`}>
+                  <div style={{ fontWeight: 600, marginBottom: 5 }}>{param.label}</div>
+                  {renderParamInput(
+                    param,
+                    sleepWindowSettings?.[groupName]?.[param.name],
+                    (value) => updateSleepWindowParam(groupName, param.name, value)
+                  )}
+                  {param.description && (
+                    <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+                      {param.description}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
