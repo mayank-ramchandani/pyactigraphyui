@@ -31,7 +31,8 @@ class AccelerometerProcessingError(ValueError):
 
 
 DEFAULT_EPOCH_PERIOD = int(os.environ.get("ACCELEROMETER_EPOCH_PERIOD", "30"))
-DEFAULT_JAVA_HEAP_MB = int(os.environ.get("ACCELEROMETER_JAVA_HEAP_MB", "256"))
+_DEFAULT_JAVA_HEAP_ENV = os.environ.get("ACCELEROMETER_JAVA_HEAP_MB", "").strip()
+DEFAULT_JAVA_HEAP_MB = int(_DEFAULT_JAVA_HEAP_ENV) if _DEFAULT_JAVA_HEAP_ENV else None
 MAX_SERVER_SIDE_BIN_MB = float(os.environ.get("MAX_SERVER_SIDE_BIN_MB", "2"))
 ACCPROCESS_TIMEOUT_SECONDS = int(os.environ.get("ACCELEROMETER_TIMEOUT_SECONDS", "180"))
 
@@ -209,8 +210,7 @@ def build_lightweight_accprocess_command(
     ]
 
     if java_heap_mb and int(java_heap_mb) > 0:
-        # Important: accProcess expects a JVM-style argument here, not a plain number.
-        cmd.extend(["--javaHeapSpace", f"-Xmx{int(java_heap_mb)}M"])
+        cmd.append(f"--javaHeapSpace=-Xmx{int(java_heap_mb)}M")
 
     return cmd
 
