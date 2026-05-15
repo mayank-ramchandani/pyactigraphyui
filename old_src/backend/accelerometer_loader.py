@@ -37,6 +37,18 @@ def _find_accprocess_executable() -> str:
     )
 
 
+def _ensure_java_available() -> None:
+    if shutil.which("java"):
+        return
+    raise AccelerometerProcessingError(
+        "The Oxford accelerometer package is installed, but Java is missing from this backend "
+        "environment. accProcess needs the `java` command during calibration/preprocessing. "
+        "Install a Java runtime such as OpenJDK before running .bin/.cwa analysis. For Docker, "
+        "add `apt-get install -y openjdk-17-jre-headless` to the backend image. For Render, "
+        "deploy the backend with Docker or install OpenJDK in the environment before starting FastAPI."
+    )
+
+
 def _find_accelerometer_outputs(output_dir: Path) -> Tuple[Path, Optional[Path]]:
     csv_files = sorted(
         list(output_dir.rglob("*timeSeries.csv"))
@@ -147,6 +159,7 @@ def run_accelerometer_process(
         raise AccelerometerProcessingError(f"Input file does not exist: {source}")
 
     accprocess = _find_accprocess_executable()
+    _ensure_java_available()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir) / "accelerometer_output"
@@ -171,10 +184,18 @@ def run_accelerometer_process(
         )
 
         if completed.returncode != 0:
+            stdout_tail = completed.stdout[-1500:]
+            stderr_tail = completed.stderr[-1500:]
+            if "No such file or directory: 'java'" in stdout_tail or "No such file or directory: 'java'" in stderr_tail:
+                raise AccelerometerProcessingError(
+                    "accelerometer failed because Java is not installed or not available on PATH. "
+                    "Install OpenJDK in the backend runtime, then redeploy. "
+                    f"STDOUT: {stdout_tail} STDERR: {stderr_tail}"
+                )
             raise AccelerometerProcessingError(
                 "accelerometer failed to process this file. "
-                f"STDOUT: {completed.stdout[-1500:]} "
-                f"STDERR: {completed.stderr[-1500:]}"
+                f"STDOUT: {stdout_tail} "
+                f"STDERR: {stderr_tail}"
             )
 
         time_series_path, summary_path = _find_accelerometer_outputs(output_dir)

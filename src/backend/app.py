@@ -21,6 +21,13 @@ from .io_helpers import (
     infer_reader_type,
 )
 
+from .accelerometer_loader import (
+    convert_bin_lightweight_summary,
+    summarize_uploaded_accelerometer_csv,
+    MAX_SERVER_SIDE_BIN_MB,
+    DEFAULT_JAVA_HEAP_MB,
+)
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -55,12 +62,53 @@ def _load_native_supported_file(file_path: str):
     if reader_type == "tabular":
         raise ValueError(
             "This file is currently being detected as a generic tabular file, not a native "
-            "pyActigraphy-supported format. For the simple tutorial-like path, the file must be "
-            "recognized by a native reader first."
+            "pyActigraphy-supported format. For .bin/.cwa files, use the lightweight converter for "
+            "small demo files or upload a pre-converted accelerometer *timeSeries.csv.gz file."
         )
 
     raw = load_native_file(file_path, reader_type)
     return raw, reader_type
+
+
+@app.post("/api/accelerometer/convert-lite")
+async def convert_accelerometer_lite(
+    file: UploadFile = File(...),
+    epochPeriod: int = Form(30),
+    javaHeapMb: int = Form(DEFAULT_JAVA_HEAP_MB),
+):
+    """Lightweight diagnostic endpoint for small raw .bin/.cwa files or uploaded timeSeries CSVs.
+
+    This returns a compact summary rather than running the full pyActigraphy analysis.
+    It is useful on low-memory Render instances to confirm that the conversion/loading path works.
+    """
+    try:
+        tmp_path = _write_upload_to_temp(file)
+        suffix = Path(file.filename or tmp_path).suffix.lower()
+
+        if suffix in (".bin", ".cwa"):
+            payload = convert_bin_lightweight_summary(
+                tmp_path,
+                epoch_period=epochPeriod,
+                java_heap_mb=javaHeapMb,
+            )
+            mode = "server_side_raw_conversion_limited"
+        else:
+            payload = summarize_uploaded_accelerometer_csv(tmp_path, epoch_period=epochPeriod)
+            mode = "uploaded_accelerometer_timeseries_csv"
+
+        return JSONResponse(
+            content={
+                "ok": True,
+                "mode": mode,
+                "max_server_side_bin_mb": MAX_SERVER_SIDE_BIN_MB,
+                **payload,
+            }
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"ok": False, "detail": str(e)})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "detail": "Server error: {}".format(str(e))})
 
 
 @app.post("/api/preview/basic")

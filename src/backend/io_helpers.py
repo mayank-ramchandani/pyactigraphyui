@@ -5,7 +5,11 @@ import csv
 import pandas as pd
 import pyActigraphy
 
-from .accelerometer_loader import load_accelerometer_as_baseraw
+from .accelerometer_loader import (
+    load_accelerometer_as_baseraw,
+    load_accelerometer_csv_as_baseraw,
+    looks_like_accelerometer_timeseries_file,
+)
 
 try:
     from pyActigraphy.io import BaseRaw
@@ -159,6 +163,14 @@ def infer_reader_type(file_path: str):
 
         if "date/time" in head and "pim" in head and "zcm" in head:
             return "atr"
+
+        # Oxford accelerometer output from accProcess, recommended for larger .bin/.cwa files.
+        if "time" in head and ("acc" in head or "enmo" in head or "activity" in head):
+            try:
+                if looks_like_accelerometer_timeseries_file(file_path):
+                    return "accelerometer_timeseries_csv"
+            except Exception:
+                pass
 
         return "tabular"
 
@@ -358,6 +370,9 @@ def _read_gt3x_file(file_path: str):
 def load_native_file(file_path: str, reader_type: str):
     if reader_type == "geneactiv_bin_accelerometer":
         return load_accelerometer_as_baseraw(file_path, epoch_period=30)
+
+    if reader_type == "accelerometer_timeseries_csv":
+        return load_accelerometer_csv_as_baseraw(file_path, epoch_period=30)
 
     if reader_type == "gt3x":
         raise ValueError(

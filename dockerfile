@@ -1,25 +1,29 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
+    PATH="/usr/lib/jvm/java-21-openjdk-amd64/bin:${PATH}" \
+    MAX_SERVER_SIDE_BIN_MB=2 \
+    ACCELEROMETER_JAVA_HEAP_MB=256 \
+    ACCELEROMETER_TIMEOUT_SECONDS=180
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    g++ \
-    gfortran \
-    openjdk-21-jre-headless \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        openjdk-21-jre-headless \
+        build-essential \
+        gcc \
+        g++ \
+        gfortran \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/backend/requirements-docker.txt /app/requirements-docker.txt
-RUN pip install --upgrade pip setuptools==59.8.0 wheel
-RUN pip install -r /app/requirements-docker.txt
+COPY src/backend/requirements-docker.txt ./requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools==59.8.0 wheel \
+    && pip install --no-cache-dir -r requirements.txt
 
-COPY . /app
+COPY src ./src
 
 RUN java -version
 
