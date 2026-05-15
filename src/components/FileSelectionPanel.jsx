@@ -188,7 +188,7 @@ export default function FileSelectionPanel({
   <div style={{ fontWeight: 700 }}>
     <BubbleInfo
       label="Accepted actigraphy files"
-      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. .bin uploads are attempted using the pyActigraphy BBA/accelerometer-package reader path; vendor-specific binary files may need conversion first.`}
+      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. For ActiGraph, upload .agd for pyActigraphy analysis; raw .gt3x files should be exported to .agd first. GENEActiv .bin files are converted in the backend with the Oxford accelerometer package before entering the pandas/pyActigraphy workflow.`}
     />
   </div>
 

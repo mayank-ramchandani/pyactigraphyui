@@ -86,6 +86,28 @@ export default function Dashboard() {
     method: "crespo_aot",
     minRestWindowHours: 3,
     maxRestWindowHours: 14,
+    crespoParams: {
+      mode: "default",
+      zeta: 15,
+      zeta_r: 30,
+      zeta_a: 2,
+      t: 0.33,
+      alpha: "8h",
+      beta: "1h",
+      estimate_zeta: false,
+      seq_length_max: 100,
+      verbose: false,
+    },
+    roennebergParams: {
+      mode: "default",
+      trend_period: "24h",
+      min_trend_period: "12h",
+      threshold: 0.15,
+      min_seed_period: "30Min",
+      max_test_period: "12h",
+      r_consec_below: "30Min",
+      rsfreq: "",
+    },
   });
 
   const [supportFileSettings, setSupportFileSettings] = useState({

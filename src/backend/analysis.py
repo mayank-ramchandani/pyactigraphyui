@@ -319,14 +319,34 @@ def _score_algorithm(raw, algorithm, algorithm_params=None):
         threshold = "automatic" if mode == "auto" else params.get("manualThreshold", 40)
         return _call_raw_method(raw, "Oakley", threshold=threshold)
     if algorithm == "crespo":
+        method = getattr(raw, "Crespo", None)
+        if method is None or not callable(method):
+            return None
+        kwargs = {}
+        for key in ["zeta", "zeta_r", "zeta_a", "t", "alpha", "beta", "estimate_zeta", "seq_length_max", "verbose"]:
+            if key in params and params[key] not in (None, ""):
+                kwargs[key] = params[key]
+        scored = _safe_call(method, **kwargs) if kwargs else None
+        if scored is not None:
+            return scored
         alpha_mode = params.get("alphaMode", "default")
         if alpha_mode == "manual":
             alpha = "{}h".format(params.get("alpha", 8))
-            return _call_raw_method(raw, "Crespo", alpha=alpha)
+            return _safe_call(method, alpha=alpha)
         if alpha_mode == "auto":
-            return _call_raw_method(raw, "Crespo", estimate_zeta=True)
-        return _call_raw_method(raw, "Crespo")
+            return _safe_call(method, estimate_zeta=True)
+        return _safe_call(method)
     if algorithm == "roenneberg":
+        method = getattr(raw, "Roenneberg", None)
+        if method is None or not callable(method):
+            return None
+        kwargs = {}
+        for key in ["trend_period", "min_trend_period", "threshold", "min_seed_period", "max_test_period", "r_consec_below", "rsfreq"]:
+            if key in params and params[key] not in (None, ""):
+                kwargs[key] = params[key]
+        scored = _safe_call(method, **kwargs) if kwargs else None
+        if scored is not None:
+            return scored
         factors = params.get("thresholdFactors") or [0.15]
         factor = 0.15
         if isinstance(factors, str):
@@ -339,7 +359,7 @@ def _score_algorithm(raw, algorithm, algorithm_params=None):
                 factor = float(factors[0])
             except Exception:
                 factor = 0.15
-        return _call_raw_method(raw, "Roenneberg", threshold=factor)
+        return _safe_call(method, threshold=factor)
     return None
 
 
@@ -457,7 +477,15 @@ def _call_aot_method(raw, method_name, params=None):
             return method(**kwargs)
         if method_name == "Roenneberg_AoT":
             kwargs = {}
-            for key in ["trend_period", "min_trend_period", "threshold", "min_seed_period", "max_test_period", "min_period", "verbose"]:
+            for key in [
+                "trend_period",
+                "min_trend_period",
+                "threshold",
+                "min_seed_period",
+                "max_test_period",
+                "r_consec_below",
+                "rsfreq",
+            ]:
                 if key in params and params[key] not in (None, ""):
                     kwargs[key] = params[key]
             return method(**kwargs)

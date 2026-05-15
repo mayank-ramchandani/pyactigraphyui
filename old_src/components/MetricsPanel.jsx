@@ -483,6 +483,11 @@ export default function MetricsPanel({
         }}
       >
         <div style={{ fontWeight: 800, marginBottom: 8 }}>Sleep window source for TST, WASO, and sleep efficiency</div>
+        <div style={{ marginBottom: 10 }}>
+          <strong>Crespo_AoT</strong> estimates activity offset/onset periods from the activity-rest pattern and is a good default for detecting the main rest window.
+          <strong> Roenneberg_AoT</strong> is an alternative automatic sleep/rest detector based on consolidated rest periods and threshold/trend-style detection.
+          Start with <strong>3–14 hours</strong> to avoid missing unusual sleep windows; for typical adult overnight sleep, <strong>4–12 hours</strong> is usually a tighter practical range.
+        </div>
         <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
           <input
             type="checkbox"

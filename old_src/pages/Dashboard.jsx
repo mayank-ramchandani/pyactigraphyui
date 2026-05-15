@@ -88,6 +88,12 @@ export default function Dashboard() {
     maxRestWindowHours: 14,
   });
 
+  const [supportFileSettings, setSupportFileSettings] = useState({
+    startStop: { apply: true, manualIntervals: [] },
+    masking: { apply: true, manualIntervals: [], respectNonwear: true },
+    sleepDiary: { apply: true, manualIntervals: [] },
+  });
+
   const [activityChannel, setActivityChannel] = useState("VM");
   const [activityTransform, setActivityTransform] = useState("none");
   const [lightTransform, setLightTransform] = useState("none");
@@ -128,8 +134,8 @@ export default function Dashboard() {
       getVisibleWorkflowSteps(appConfig, {
         enableCleaning: true,
         enableDiary: true,
-      }),
-    []
+      }).filter((step) => showManualMapping || step.key !== "csvMapping"),
+    [showManualMapping]
   );
 
   const currentStepIndex = workflowSteps.findIndex((step) => step.id === currentStep);
@@ -168,6 +174,7 @@ export default function Dashboard() {
         algorithmParams,
       }),
       sleepWindowSettings,
+      supportFileSettings,
     }),
     [
       selectedMetrics,
@@ -178,6 +185,7 @@ export default function Dashboard() {
       metricOverrides,
       algorithmParams,
       sleepWindowSettings,
+      supportFileSettings,
     ]
   );
 
@@ -449,6 +457,11 @@ export default function Dashboard() {
       return;
     }
 
+    if (currentStep === "2" && !showManualMapping) {
+      unlockAndGoToStep("3");
+      return;
+    }
+
     if (currentStep === "4" && !lightPreviewLoaded) {
       unlockAndGoToStep("6");
       return;
@@ -487,6 +500,24 @@ export default function Dashboard() {
         onCsvNeedsMapping={handleCsvNeedsMapping}
         showManualMapping={showManualMapping}
         setShowManualMapping={setShowManualMapping}
+      />
+    );
+  } else if (currentStep === "2" && !showManualMapping) {
+    content = (
+      <PreviewPanel
+        title={appConfig.panels.preview.title}
+        mode="activity"
+        previewLoaded={previewLoaded}
+        previewLoading={previewLoading}
+        previewError={previewError}
+        previewData={previewData}
+        actigraphyFiles={actigraphyFiles}
+        selectedPreviewFile={selectedPreviewFile}
+        setSelectedPreviewFile={setSelectedPreviewFile}
+        lightFiles={lightFiles}
+        selectedLightPreviewFile={selectedLightPreviewFile}
+        setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+        onPreview={onActivityPreview}
       />
     );
   } else if (currentStep === "2" && showManualMapping) {
@@ -547,11 +578,16 @@ export default function Dashboard() {
     content = (
       <SupportFilesStep
         title={appConfig.panels.startStop.title}
+        type="startStop"
         description="Start/stop files define the true recording interval and should be applied before masking or sleep scoring."
         files={uploadedFiles.startStop}
         onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, startStop: files }))}
+        settings={supportFileSettings.startStop}
+        onSettingsChange={(settings) =>
+          setSupportFileSettings((prev) => ({ ...prev, startStop: settings }))
+        }
         options={[
-          { id: "applyStartStop", label: "Apply uploaded start/stop intervals if present", defaultValue: true },
+          { id: "apply", label: "Apply uploaded or manually selected start/stop intervals", defaultValue: true },
         ]}
       />
     );
@@ -559,11 +595,16 @@ export default function Dashboard() {
     content = (
       <SupportFilesStep
         title={appConfig.panels.cleaning.title}
+        type="masking"
         description="Masking excludes invalid, non-wear, or spurious inactivity periods before analysis."
         files={uploadedFiles.masking}
         onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, masking: files }))}
+        settings={supportFileSettings.masking}
+        onSettingsChange={(settings) =>
+          setSupportFileSettings((prev) => ({ ...prev, masking: settings }))
+        }
         options={[
-          { id: "applyMasking", label: "Apply uploaded masking file if present", defaultValue: true },
+          { id: "apply", label: "Apply uploaded or manually selected masking intervals", defaultValue: true },
           { id: "respectNonwear", label: "Respect detected non-wear when available", defaultValue: true },
         ]}
       />
@@ -572,11 +613,16 @@ export default function Dashboard() {
     content = (
       <SupportFilesStep
         title={appConfig.panels.sleepDiary.title}
+        type="sleepDiary"
         description="Sleep diary files provide reported bedtimes, wake times, naps, or diary states for sleep-specific summaries."
         files={uploadedFiles.sleepDiary}
         onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, sleepDiary: files }))}
+        settings={supportFileSettings.sleepDiary}
+        onSettingsChange={(settings) =>
+          setSupportFileSettings((prev) => ({ ...prev, sleepDiary: settings }))
+        }
         options={[
-          { id: "useDiary", label: "Use uploaded sleep diary when available", defaultValue: true },
+          { id: "apply", label: "Use uploaded or manually selected diary windows when available", defaultValue: true },
         ]}
       />
     );
@@ -638,6 +684,7 @@ export default function Dashboard() {
         summaryResults={summaryResults}
         qcWarnings={qcWarnings}
         metricRegistry={metricRegistry}
+        algorithmRegistry={algorithmRegistry}
         analysisConfig={resolvedAnalysisConfig}
         selectedAlgorithm={selectedAlgorithm}
         analysisMode={analysisMode}

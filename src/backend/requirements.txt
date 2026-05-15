@@ -4,4 +4,4 @@ pandas
 numpy
 python-multipart
 pyActigraphy
-pygt3x
+accelerometer
