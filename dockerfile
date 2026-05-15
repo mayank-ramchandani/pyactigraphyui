@@ -2,7 +2,11 @@ FROM python:3.9-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+<<<<<<< HEAD
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+=======
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+>>>>>>> origin/main
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 WORKDIR /app
@@ -12,7 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     gfortran \
+<<<<<<< HEAD
     openjdk-21-jre-headless \
+=======
+    openjdk-17-jre-headless \
+>>>>>>> origin/main
     && rm -rf /var/lib/apt/lists/*
 
 COPY src/backend/requirements-docker.txt /app/requirements-docker.txt
