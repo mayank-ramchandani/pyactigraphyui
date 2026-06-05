@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import tempfile
 from pathlib import Path
+import shutil
 
 from .analysis import (
     run_basic_pyactigraphy_analysis,
@@ -45,7 +46,7 @@ app.add_middleware(
 def _write_upload_to_temp(upload: UploadFile):
     suffix = Path(upload.filename).suffix.lower()
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(upload.file.read())
+        shutil.copyfileobj(upload.file, tmp)
         return tmp.name
 
 
@@ -81,6 +82,7 @@ async def convert_accelerometer_lite(
     This returns a compact summary rather than running the full pyActigraphy analysis.
     It is useful on low-memory Render instances to confirm that the conversion/loading path works.
     """
+    MAX_SERVER_SIDE_BIN_MB=2
     try:
         tmp_path = _write_upload_to_temp(file)
         suffix = Path(file.filename or tmp_path).suffix.lower()

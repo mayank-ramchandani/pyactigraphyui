@@ -140,8 +140,8 @@ def _read_text_head(file_path: str, n_chars: int = 20000) -> str:
 def infer_reader_type(file_path: str):
     suffix = Path(file_path).suffix.lower().replace(".", "")
 
-    if suffix == "bin":
-        return "geneactiv_bin_accelerometer"
+    if suffix in ("bin", "cwa"):
+        return "raw_accelerometer_needs_conversion"
 
     if suffix in ("awd", "agd", "atr", "bba", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
         return suffix
@@ -368,6 +368,14 @@ def _read_gt3x_file(file_path: str):
     )
 
 def load_native_file(file_path: str, reader_type: str):
+    if reader_type == "raw_accelerometer_needs_conversion":
+        raise ValueError(
+        "Raw .bin/.cwa files are too memory-heavy for the hosted web analysis workflow. "
+        "Please convert the file locally with the Oxford accelerometer package and upload "
+        "the generated *timeSeries.csv.gz file instead. Small raw files can be tested using "
+        "the lightweight diagnostic converter only."
+    )
+    
     if reader_type == "geneactiv_bin_accelerometer":
         return load_accelerometer_as_baseraw(file_path, epoch_period=30)
 
