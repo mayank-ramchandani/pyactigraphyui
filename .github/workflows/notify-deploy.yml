@@ -1,0 +1,25 @@
+name: Trigger OBI deploy
+
+# On every push to main, ping the OBI deployment repo
+# (Brain-Institute/pyactigraphy-infrastructure-deploy), which then rebuilds and
+# redeploys this app to OBI Cloud (Azure Container Apps, Canada Central).
+#
+# Requires one repository secret: OBI_DEPLOY_TOKEN — a token (provided by the OBI
+# team) that can trigger the deploy repo. The app source is never modified by
+# the deploy side; it only reads this repo's latest main.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tell the OBI deploy repo to redeploy
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${{ secrets.OBI_DEPLOY_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/Brain-Institute/pyactigraphy-infrastructure-deploy/dispatches \
+            -d '{"event_type":"app-updated"}'
