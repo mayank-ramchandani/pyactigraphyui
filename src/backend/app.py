@@ -3,9 +3,14 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
+import os
 import tempfile
 from pathlib import Path
+from datetime import datetime, timezone
 import shutil
+import uuid
+
+from pydantic import BaseModel, Field
 
 from .analysis import (
     run_basic_pyactigraphy_analysis,
@@ -30,18 +35,89 @@ from .accelerometer_loader import (
 )
 from .gt3x_loader import summarize_gt3x_file, DEFAULT_GT3X_ACTIVITY_MODE
 
+
+
+class FeedbackPayload(BaseModel):
+    category: str = Field(default="issue", max_length=80)
+    message: str = Field(..., min_length=1, max_length=8000)
+    email: Optional[str] = Field(default=None, max_length=320)
+    user_id: Optional[str] = Field(default=None, max_length=128)
+    user_email: Optional[str] = Field(default=None, max_length=320)
+    current_step: Optional[str] = Field(default=None, max_length=32)
+    file_name: Optional[str] = Field(default=None, max_length=512)
+    file_type: Optional[str] = Field(default=None, max_length=32)
+    file_size_mb: Optional[float] = None
+    endpoint: Optional[str] = Field(default=None, max_length=256)
+    error_message: Optional[str] = Field(default=None, max_length=4000)
+    app_version: Optional[str] = Field(default=None, max_length=128)
+    backend_url: Optional[str] = Field(default=None, max_length=512)
+    browser_info: Optional[str] = Field(default=None, max_length=1000)
+
+
+def _get_data_dir() -> Path:
+    data_dir = Path(os.getenv("APP_DATA_DIR", "/tmp/actigraphy-ui-data"))
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
+def _append_jsonl(filename: str, payload: dict) -> Path:
+    path = _get_data_dir() / filename
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+    return path
+
 app = FastAPI()
+
+_default_cors_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://actigraphy-ui.vercel.app",
+]
+_extra_cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOW_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://actigraphy-ui.vercel.app",
-    ],
+    allow_origins=_default_cors_origins + _extra_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/version")
+def version():
+    return {
+        "ok": True,
+        "app_version": os.getenv("APP_VERSION", "local-dev"),
+        "git_commit": os.getenv("GIT_COMMIT", "unknown"),
+        "features": {
+            "feedback": True,
+            "gt3x_pygt3x": True,
+            "bin_cwa_accelerometer": True,
+            "saved_runs_frontend_supabase": True,
+        },
+    }
+
+
+@app.post("/api/feedback")
+async def submit_feedback(payload: FeedbackPayload):
+    try:
+        record = payload.model_dump()
+    except AttributeError:
+        # Pydantic v1 fallback.
+        record = payload.dict()
+
+    record.update({
+        "id": str(uuid.uuid4()),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    path = _append_jsonl("feedback.jsonl", record)
+    return {"ok": True, "id": record["id"], "stored": str(path)}
 
 
 def _write_upload_to_temp(upload: UploadFile):

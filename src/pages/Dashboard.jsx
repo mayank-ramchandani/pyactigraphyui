@@ -18,6 +18,9 @@ import ExportPanel from "../components/ExportPanel";
 import SupportFilesStep from "../components/SupportFilesStep";
 import LightMetricsPanel from "../components/LightMetricsPanel";
 import LightRGBPanel from "../components/LightRGBPanel";
+import AuthBar from "../components/AuthBar";
+import RunHistoryPanel from "../components/RunHistoryPanel";
+import FeedbackButton from "../components/FeedbackButton";
 
 import {
   getDefaultAlgorithm,
@@ -25,6 +28,7 @@ import {
   getVisibleWorkflowSteps,
 } from "../services/configUtils";
 import { buildAnalysisPayload } from "../services/analysisConfigUtils";
+import { supabase, supabaseConfigured } from "../services/supabaseClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
 
@@ -136,6 +140,9 @@ export default function Dashboard() {
   const [qcWarnings, setQcWarnings] = useState([]);
   const [summaryResults, setSummaryResults] = useState({});
   const [supportFileSummary, setSupportFileSummary] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [runSaveStatus, setRunSaveStatus] = useState("");
+  const [runHistoryRefresh, setRunHistoryRefresh] = useState(0);
 
   const actigraphyFiles = uploadedFiles.actigraphy || [];
   const lightFiles = uploadedFiles.light || [];
@@ -395,12 +402,72 @@ export default function Dashboard() {
       setSelectedResultMetric(Object.keys(results)[0] || "");
       setResultsGenerated(true);
       unlockAndGoToStep("10");
+      void saveRunRecord({
+        status: "completed",
+        results,
+        qcWarnings: data.qcWarnings || [],
+        supportFileSummary: data.supportFileSummary || null,
+        detectedInputType: data.detected_input_type || null,
+      });
     } catch (err) {
-      setAnalysisError(err.message || "Failed to generate results.");
+      const message = err.message || "Failed to generate results.";
+      setAnalysisError(message);
       setResultsGenerated(false);
+      void saveRunRecord({ status: "failed", errorMessage: message });
     } finally {
       setAnalysisLoading(false);
     }
+  };
+
+  const saveRunRecord = async ({
+    status = "completed",
+    results = {},
+    qcWarnings: savedWarnings = [],
+    supportFileSummary: savedSupportFileSummary = null,
+    detectedInputType: savedDetectedInputType = null,
+    errorMessage = "",
+  }) => {
+    if (!supabaseConfigured || !supabase || !currentUser || !actigraphyFile) return;
+
+    try {
+      const row = {
+        user_id: currentUser.id,
+        user_email: currentUser.email || null,
+        original_filename: actigraphyFile.name,
+        file_type: getExtension(actigraphyFile.name),
+        file_size_mb: Number((actigraphyFile.size / (1024 * 1024)).toFixed(3)),
+        status,
+        analysis_mode: analysisMode,
+        selected_algorithm: selectedAlgorithm,
+        activity_channel: activityChannel,
+        detected_input_type: savedDetectedInputType || detectedInputType,
+        results: results || {},
+        qc_warnings: savedWarnings || [],
+        support_file_summary: savedSupportFileSummary || null,
+        analysis_config: resolvedAnalysisConfig || {},
+        error_message: errorMessage || null,
+        app_version: import.meta.env.VITE_APP_VERSION || "frontend-dev",
+      };
+
+      const { error } = await supabase.from("analysis_runs").insert(row);
+      if (error) throw error;
+
+      setRunSaveStatus("Saved this analysis to your account.");
+      setRunHistoryRefresh((value) => value + 1);
+    } catch (err) {
+      setRunSaveStatus(`Could not save run history: ${err.message || "Unknown error"}`);
+    }
+  };
+
+  const handleLoadSavedRun = (run) => {
+    const savedResults = run.results || {};
+    setSummaryResults(savedResults);
+    setQcWarnings(run.qc_warnings || []);
+    setSupportFileSummary(run.support_file_summary || null);
+    setSelectedResultMetric(Object.keys(savedResults)[0] || "");
+    setResultsGenerated(Object.keys(savedResults).length > 0);
+    setAnalysisError(run.error_message || "");
+    unlockAndGoToStep("10");
   };
 
   const getStepValidation = () => {
@@ -733,6 +800,28 @@ export default function Dashboard() {
           Sequential actigraphy workflow with separate activity and light preview, optional mapping, support files, and family-aware analysis.
         </p>
 
+        <AuthBar onUserChange={setCurrentUser} />
+        {runSaveStatus && (
+          <div
+            style={{
+              background: runSaveStatus.startsWith("Saved") ? "#f0fdf4" : "#fef2f2",
+              border: runSaveStatus.startsWith("Saved") ? "1px solid #bbf7d0" : "1px solid #fecaca",
+              color: runSaveStatus.startsWith("Saved") ? "#166534" : "#b91c1c",
+              borderRadius: 12,
+              padding: 10,
+              fontSize: 14,
+              marginBottom: 16,
+            }}
+          >
+            {runSaveStatus}
+          </div>
+        )}
+        <RunHistoryPanel
+          user={currentUser}
+          refreshToken={runHistoryRefresh}
+          onLoadRun={handleLoadSavedRun}
+        />
+
         <div
           style={{
             display: "grid",
@@ -835,6 +924,23 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      <FeedbackButton
+        buildApiUrl={buildApiUrl}
+        user={currentUser}
+        context={{
+          currentStep,
+          fileName: actigraphyFile?.name || "",
+          fileType: getExtension(actigraphyFile?.name || ""),
+          fileSizeMb: actigraphyFile ? Number((actigraphyFile.size / (1024 * 1024)).toFixed(3)) : null,
+          previewError,
+          analysisError,
+          fileError,
+          endpoint: analysisError ? "api/analyze/basic" : previewError ? "api/preview/basic" : "",
+          appVersion: import.meta.env.VITE_APP_VERSION || "frontend-dev",
+          backendUrl: API_BASE_URL,
+        }}
+      />
     </div>
   );
 }
