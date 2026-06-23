@@ -59,6 +59,7 @@ const acceptedActigraphyExtensions = [
   ".bba",
   ".bin",
   ".csv",
+  ".cwa",
   ".dqt",
   ".gt3x",
   ".mesa",
@@ -188,7 +189,7 @@ export default function FileSelectionPanel({
   <div style={{ fontWeight: 700 }}>
     <BubbleInfo
       label="Accepted actigraphy files"
-      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. For ActiGraph, upload .agd for pyActigraphy analysis; raw .gt3x files should be exported to .agd first. GENEActiv .bin files are converted in the backend with the Oxford accelerometer package before entering the pandas/pyActigraphy workflow.`}
+      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. ActiGraph .gt3x files can now be read with pygt3x and converted to epoch activity through agcounts when available. GENEActiv/Axivity .bin/.cwa files are converted in the backend with the Oxford accelerometer package before entering the pandas/pyActigraphy workflow.`}
     />
   </div>
 

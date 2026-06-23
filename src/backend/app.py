@@ -28,6 +28,7 @@ from .accelerometer_loader import (
     MAX_SERVER_SIDE_BIN_MB,
     DEFAULT_JAVA_HEAP_MB,
 )
+from .gt3x_loader import summarize_gt3x_file, DEFAULT_GT3X_ACTIVITY_MODE
 
 app = FastAPI()
 app.add_middleware(
@@ -63,8 +64,8 @@ def _load_native_supported_file(file_path: str):
     if reader_type == "tabular":
         raise ValueError(
             "This file is currently being detected as a generic tabular file, not a native "
-            "pyActigraphy-supported format. For .bin/.cwa files, use the lightweight converter for "
-            "small demo files or upload a pre-converted accelerometer *timeSeries.csv.gz file."
+            "pyActigraphy-supported format. Upload a native actigraphy file, raw .gt3x/.bin/.cwa, "
+            "or a pre-converted accelerometer *timeSeries.csv.gz file."
         )
 
     raw = load_native_file(file_path, reader_type)
@@ -75,14 +76,13 @@ def _load_native_supported_file(file_path: str):
 async def convert_accelerometer_lite(
     file: UploadFile = File(...),
     epochPeriod: int = Form(30),
-    javaHeapMb: int = Form(DEFAULT_JAVA_HEAP_MB),
+    javaHeapMb: Optional[int] = Form(DEFAULT_JAVA_HEAP_MB or 0),
 ):
-    """Lightweight diagnostic endpoint for small raw .bin/.cwa files or uploaded timeSeries CSVs.
+    """Diagnostic endpoint for raw .bin/.cwa/.gt3x files or uploaded timeSeries CSVs.
 
     This returns a compact summary rather than running the full pyActigraphy analysis.
     It is useful on low-memory Render instances to confirm that the conversion/loading path works.
     """
-    MAX_SERVER_SIDE_BIN_MB=2
     try:
         tmp_path = _write_upload_to_temp(file)
         suffix = Path(file.filename or tmp_path).suffix.lower()
@@ -91,9 +91,16 @@ async def convert_accelerometer_lite(
             payload = convert_bin_lightweight_summary(
                 tmp_path,
                 epoch_period=epochPeriod,
-                java_heap_mb=javaHeapMb,
+                java_heap_mb=javaHeapMb or None,
             )
-            mode = "server_side_raw_conversion_limited"
+            mode = "server_side_raw_bin_conversion"
+        elif suffix == ".gt3x":
+            payload = summarize_gt3x_file(
+                tmp_path,
+                epoch_period=epochPeriod,
+                activity_mode=DEFAULT_GT3X_ACTIVITY_MODE,
+            )
+            mode = "server_side_gt3x_pygt3x"
         else:
             payload = summarize_uploaded_accelerometer_csv(tmp_path, epoch_period=epochPeriod)
             mode = "uploaded_accelerometer_timeseries_csv"

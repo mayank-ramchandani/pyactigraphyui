@@ -5,3 +5,5 @@ numpy
 python-multipart
 pyActigraphy
 accelerometer
+pygt3x
+agcounts

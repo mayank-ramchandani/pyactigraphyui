@@ -4,3 +4,5 @@ python-multipart==0.0.20
 numba==0.57.1
 pyActigraphy==1.2.2
 accelerometer
+pygt3x==0.7.1
+agcounts==0.2.6
