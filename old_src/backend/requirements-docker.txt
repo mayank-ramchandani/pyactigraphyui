@@ -3,4 +3,6 @@ uvicorn[standard]==0.39.0
 python-multipart==0.0.20
 numba==0.57.1
 pyActigraphy==1.2.2
-accelerometer
+accelerometer==6.2.3
+pygt3x==0.7.1
+agcounts==0.2.6

@@ -9,7 +9,6 @@
       "csvMapping",
       "preview",
       "lightPreview",
-      "lightAnalysis",
       "startStop",
       "cleaning",
       "sleepDiary",
@@ -68,12 +67,6 @@
       "key": "lightPreview",
       "title": "Preview Light",
       "description": "Inspect light data if present in the recording or separate light file."
-    },
-    {
-      "id": "5",
-      "key": "lightAnalysis",
-      "title": "Light Analysis",
-      "description": "Run light metrics and light-specific preprocessing/manipulation."
     },
     {
       "id": "6",
@@ -143,7 +136,7 @@
     },
     "metrics": {
       "enabled": true,
-      "title": "9. Sleep Algorithms, Families, and Metrics"
+      "title": "9. Algorithms, Analysis Setup, and Light Analysis"
     },
     "results": {
       "enabled": true,
@@ -152,10 +145,6 @@
     "export": {
       "enabled": true,
       "title": "11. Export Outputs"
-    },
-    "lightAnalysis": {
-      "enabled": true,
-      "title": "5. Light Analysis & Manipulation"
     }
   },
   "uiText": {

@@ -31,6 +31,7 @@ import { buildAnalysisPayload } from "../services/analysisConfigUtils";
 import { supabase, supabaseConfigured } from "../services/supabaseClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
+const ENABLE_AUTH_RUNS = import.meta.env.VITE_ENABLE_AUTH_RUNS === "true";
 
 function buildApiUrl(path) {
   const base = API_BASE_URL.endsWith("/") ? API_BASE_URL : `${API_BASE_URL}/`;
@@ -427,7 +428,7 @@ export default function Dashboard() {
     detectedInputType: savedDetectedInputType = null,
     errorMessage = "",
   }) => {
-    if (!supabaseConfigured || !supabase || !currentUser || !actigraphyFile) return;
+    if (!ENABLE_AUTH_RUNS || !supabaseConfigured || !supabase || !currentUser || !actigraphyFile) return;
 
     try {
       const row = {
@@ -661,8 +662,6 @@ export default function Dashboard() {
         {lightFile && <LightRGBPanel lightFile={lightFile} />}
       </div>
     );
-  } else if (currentStep === "5") {
-    content = <LightMetricsPanel lightFile={lightFile} />;
   } else if (currentStep === "6") {
     content = (
       <SupportFilesStep
@@ -717,31 +716,34 @@ export default function Dashboard() {
     );
   } else if (currentStep === "9") {
     content = (
-      <MetricsPanel
-        title={appConfig.panels.metrics.title}
-        metricRegistry={metricRegistry}
-        algorithmRegistry={algorithmRegistry}
-        analysisFamilyRegistry={analysisFamilyRegistry}
-        sharedParamRegistry={sharedParamRegistry}
-        selectedMetrics={selectedMetrics}
-        setSelectedMetrics={setSelectedMetrics}
-        selectedFamilies={selectedFamilies}
-        setSelectedFamilies={setSelectedFamilies}
-        analysisScope={analysisScope}
-        setAnalysisScope={setAnalysisScope}
-        selectedAlgorithm={selectedAlgorithm}
-        setSelectedAlgorithm={setSelectedAlgorithm}
-        sharedValues={sharedValues}
-        setSharedValues={setSharedValues}
-        metricOverrides={metricOverrides}
-        setMetricOverrides={setMetricOverrides}
-        algorithmParams={algorithmParams}
-        setAlgorithmParams={setAlgorithmParams}
-        sleepWindowSettings={sleepWindowSettings}
-        setSleepWindowSettings={setSleepWindowSettings}
-        analysisMode={analysisMode}
-        inputType={detectedInputType}
-      />
+      <div style={{ display: "grid", gap: 16 }}>
+        <MetricsPanel
+          title={appConfig.panels.metrics.title}
+          metricRegistry={metricRegistry}
+          algorithmRegistry={algorithmRegistry}
+          analysisFamilyRegistry={analysisFamilyRegistry}
+          sharedParamRegistry={sharedParamRegistry}
+          selectedMetrics={selectedMetrics}
+          setSelectedMetrics={setSelectedMetrics}
+          selectedFamilies={selectedFamilies}
+          setSelectedFamilies={setSelectedFamilies}
+          analysisScope={analysisScope}
+          setAnalysisScope={setAnalysisScope}
+          selectedAlgorithm={selectedAlgorithm}
+          setSelectedAlgorithm={setSelectedAlgorithm}
+          sharedValues={sharedValues}
+          setSharedValues={setSharedValues}
+          metricOverrides={metricOverrides}
+          setMetricOverrides={setMetricOverrides}
+          algorithmParams={algorithmParams}
+          setAlgorithmParams={setAlgorithmParams}
+          sleepWindowSettings={sleepWindowSettings}
+          setSleepWindowSettings={setSleepWindowSettings}
+          analysisMode={analysisMode}
+          inputType={detectedInputType}
+        />
+        <LightMetricsPanel lightFile={lightFile} />
+      </div>
     );
   } else if (currentStep === "10") {
     content = (
@@ -800,27 +802,31 @@ export default function Dashboard() {
           Sequential actigraphy workflow with separate activity and light preview, optional mapping, support files, and family-aware analysis.
         </p>
 
-        <AuthBar onUserChange={setCurrentUser} />
-        {runSaveStatus && (
-          <div
-            style={{
-              background: runSaveStatus.startsWith("Saved") ? "#f0fdf4" : "#fef2f2",
-              border: runSaveStatus.startsWith("Saved") ? "1px solid #bbf7d0" : "1px solid #fecaca",
-              color: runSaveStatus.startsWith("Saved") ? "#166534" : "#b91c1c",
-              borderRadius: 12,
-              padding: 10,
-              fontSize: 14,
-              marginBottom: 16,
-            }}
-          >
-            {runSaveStatus}
-          </div>
+        {ENABLE_AUTH_RUNS && (
+          <>
+            <AuthBar onUserChange={setCurrentUser} />
+            {runSaveStatus && (
+              <div
+                style={{
+                  background: runSaveStatus.startsWith("Saved") ? "#f0fdf4" : "#fef2f2",
+                  border: runSaveStatus.startsWith("Saved") ? "1px solid #bbf7d0" : "1px solid #fecaca",
+                  color: runSaveStatus.startsWith("Saved") ? "#166534" : "#b91c1c",
+                  borderRadius: 12,
+                  padding: 10,
+                  fontSize: 14,
+                  marginBottom: 16,
+                }}
+              >
+                {runSaveStatus}
+              </div>
+            )}
+            <RunHistoryPanel
+              user={currentUser}
+              refreshToken={runHistoryRefresh}
+              onLoadRun={handleLoadSavedRun}
+            />
+          </>
         )}
-        <RunHistoryPanel
-          user={currentUser}
-          refreshToken={runHistoryRefresh}
-          onLoadRun={handleLoadSavedRun}
-        />
 
         <div
           style={{

@@ -10,6 +10,7 @@ from .accelerometer_loader import (
     load_accelerometer_csv_as_baseraw,
     looks_like_accelerometer_timeseries_file,
 )
+from .gt3x_loader import load_gt3x_as_baseraw
 
 try:
     from pyActigraphy.io import BaseRaw
@@ -178,7 +179,7 @@ def infer_reader_type(file_path: str):
         return "tabular"
 
     raise ValueError(
-        "Unsupported file type: {}. Supported native formats include .agd, .atr, .awd, .bba, .bin, .dqt, .mesa, .mtn, .rpx, .tal, plus supported tabular files. Raw .gt3x uploads are accepted only to show a conversion message; export .gt3x to .agd before final pyActigraphy analysis.".format(suffix)
+        "Unsupported file type: {}. Supported native formats include .agd, .atr, .awd, .bba, .bin, .cwa, .dqt, .gt3x, .mesa, .mtn, .rpx, .tal, plus supported tabular files.".format(suffix)
     )
 
 
@@ -369,12 +370,7 @@ def _read_gt3x_file(file_path: str):
 
 def load_native_file(file_path: str, reader_type: str):
     if reader_type == "raw_accelerometer_needs_conversion":
-        raise ValueError(
-        "Raw .bin/.cwa files are too memory-heavy for the hosted web analysis workflow. "
-        "Please convert the file locally with the Oxford accelerometer package and upload "
-        "the generated *timeSeries.csv.gz file instead. Small raw files can be tested using "
-        "the lightweight diagnostic converter only."
-    )
+        return load_accelerometer_as_baseraw(file_path, epoch_period=30)
     
     if reader_type == "geneactiv_bin_accelerometer":
         return load_accelerometer_as_baseraw(file_path, epoch_period=30)
@@ -383,11 +379,7 @@ def load_native_file(file_path: str, reader_type: str):
         return load_accelerometer_csv_as_baseraw(file_path, epoch_period=30)
 
     if reader_type == "gt3x":
-        raise ValueError(
-            "pyActigraphy supports ActiGraph wGT3X-BT through .agd files, not raw .gt3x archives. "
-            "Please export/create an .agd file in ActiLife, then upload the .agd for preview and analysis. "
-            "This keeps the workflow aligned with pyActigraphy's calibrated, aggregated ActiGraph reader path."
-        )
+        return load_gt3x_as_baseraw(file_path, epoch_period=30)
 
     method_name = READERS.get(reader_type)
     if method_name is None:

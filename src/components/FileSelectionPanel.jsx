@@ -10,7 +10,14 @@ function BubbleInfo({ label, content }) {
       onMouseLeave={() => setOpen(false)}
     >
       <span>{label}</span>
-      <span
+      <button
+        type="button"
+        aria-label={`More information about ${label}`}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((value) => !value);
+        }}
         style={{
           width: 18,
           height: 18,
@@ -22,10 +29,13 @@ function BubbleInfo({ label, content }) {
           color: "#0f172a",
           fontSize: 12,
           fontWeight: 700,
+          border: "none",
+          cursor: "pointer",
+          padding: 0,
         }}
       >
         i
-      </span>
+      </button>
 
       {open && (
         <div
@@ -197,6 +207,17 @@ export default function FileSelectionPanel({
     <BubbleInfo
       label="Custom CSV / TXT mapping"
       content="Manual mapping is optional. Native pyActigraphy-supported files should load directly. Generic CSV or TXT files can use manual mapping only when automatic detection does not match the file."
+    />
+  </div>
+
+  <div style={{ fontWeight: 700, display: "flex", gap: 16, flexWrap: "wrap" }}>
+    <BubbleInfo
+      label="Crespo_AoT"
+      content="Crespo_AoT estimates activity offset/onset periods from the rest-activity pattern. It is the default automatic sleep/rest window method when no sleep diary is uploaded."
+    />
+    <BubbleInfo
+      label="Roenneberg_AoT"
+      content="Roenneberg_AoT is an alternative automatic sleep/rest detector based on consolidated rest periods and threshold/trend-style detection. Use it when you intentionally want that detector instead of Crespo_AoT."
     />
   </div>
 

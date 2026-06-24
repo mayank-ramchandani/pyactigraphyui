@@ -4,4 +4,6 @@ pandas
 numpy
 python-multipart
 pyActigraphy
-accelerometer
+accelerometer==6.2.3
+pygt3x
+agcounts
