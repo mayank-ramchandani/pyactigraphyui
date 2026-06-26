@@ -100,11 +100,6 @@ def version():
             "bin_cwa_accelerometer": True,
             "saved_runs_frontend_supabase": True,
         },
-        "runtime_limits": {
-            "max_server_side_bin_mb": MAX_SERVER_SIDE_BIN_MB,
-            "default_java_heap_mb": DEFAULT_JAVA_HEAP_MB,
-            "gt3x_activity_mode": DEFAULT_GT3X_ACTIVITY_MODE,
-        },
     }
 
 
@@ -712,6 +707,7 @@ async def analyze_basic(
         analysis_scope = analysis_config.get("analysisScope", "metric")
         algorithm_request = analysis_config.get("algorithm")
         sleep_window_settings = analysis_config.get("sleepWindowSettings", {})
+        analysis_window_settings = analysis_config.get("analysisWindowSettings", {})
         _json_or_empty(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
@@ -735,6 +731,7 @@ async def analyze_basic(
             analysis_scope=analysis_scope,
             algorithm_request=algorithm_request,
             sleep_window_settings=sleep_window_settings,
+            analysis_window_settings=analysis_window_settings,
         )
 
         warnings = quick_qc(results)

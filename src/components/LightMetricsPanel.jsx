@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import InteractiveIntervalSelector from "./InteractiveIntervalSelector";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
 
@@ -293,6 +294,11 @@ export default function LightMetricsPanel({
   const startDateTimeValue = normalizeDatetimeInput(settings.startTime, bounds);
   const stopDateTimeValue = normalizeDatetimeInput(settings.stopTime, bounds);
   const windowError = validateDateWindow(startDateTimeValue, stopDateTimeValue, bounds);
+  const lightPlotPoints = useMemo(
+    () => previewData?.light_preview || previewData?.full_recording_preview || [],
+    [previewData]
+  );
+  const lightPlotValueKey = lightPlotPoints?.[0]?.light !== undefined ? "light" : "activity";
 
   useEffect(() => {
     let cancelled = false;
@@ -458,6 +464,31 @@ export default function LightMetricsPanel({
         <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5, marginTop: 10 }}>
           The calendar fields are bounded by the detected recording start/end. Leave them blank when you want the metric to use the full recording/default daily window.
         </div>
+
+        <InteractiveIntervalSelector
+          title="Light plot time-window selector"
+          description="Use the light trace to choose the start and stop date/time for threshold and exposure-window metrics."
+          plotPoints={lightPlotPoints}
+          valueKey={lightPlotValueKey}
+          valueLabel={lightPlotValueKey === "light" ? "Light" : "Activity"}
+          lineName={lightPlotValueKey === "light" ? "Light" : "Activity"}
+          bounds={bounds}
+          allowMultiple={false}
+          startValue={startDateTimeValue}
+          stopValue={stopDateTimeValue}
+          onWindowChange={({ start, stop }) => {
+            setLightMetricSettings((prev) => ({
+              ...DEFAULT_LIGHT_SETTINGS,
+              ...(prev || {}),
+              startTime: start,
+              stopTime: stop,
+            }));
+          }}
+          defaultState="LIGHT_WINDOW"
+          intervalLabel="Selected light analysis window"
+          emptyLabel="No light time window selected; light metrics will use their default/full-recording behavior."
+          noPlotMessage="Load the light preview first to enable light-plot window selection."
+        />
       </Section>
 
       {LIGHT_METRIC_GROUPS.map((group) => {

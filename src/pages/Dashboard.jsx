@@ -120,6 +120,10 @@ export default function Dashboard() {
     masking: { apply: true, manualIntervals: [], respectNonwear: true },
     sleepDiary: { apply: true, manualIntervals: [] },
   });
+  const [analysisWindowSettings, setAnalysisWindowSettings] = useState({
+    mode: "full",
+    manualIntervals: [],
+  });
 
   const [selectedLightMetrics, setSelectedLightMetrics] = useState(["exposure_level"]);
   const [lightMetricSettings, setLightMetricSettings] = useState({
@@ -222,6 +226,7 @@ export default function Dashboard() {
       }),
       sleepWindowSettings,
       supportFileSettings,
+      analysisWindowSettings,
       lightAnalysisSettings: {
         selectedLightMetrics,
         lightMetricSettings,
@@ -237,6 +242,7 @@ export default function Dashboard() {
       algorithmParams,
       sleepWindowSettings,
       supportFileSettings,
+      analysisWindowSettings,
       selectedLightMetrics,
       lightMetricSettings,
     ]
@@ -288,6 +294,7 @@ export default function Dashboard() {
     setLightAnalysisError("");
     setLightResults({});
     setSupportFileSummary(null);
+    setAnalysisWindowSettings({ mode: "full", manualIntervals: [] });
   };
 
   const handleActigraphyFilesChange = (files) => {
@@ -591,12 +598,18 @@ export default function Dashboard() {
 
         const hasAlgorithm = Boolean(selectedAlgorithm);
 
+        const intervalModeValid =
+          analysisWindowSettings.mode !== "selected" ||
+          (analysisWindowSettings.manualIntervals || []).length > 0;
+
         return {
-          valid: hasMetrics && hasAlgorithm,
+          valid: hasMetrics && hasAlgorithm && intervalModeValid,
           message:
-            hasMetrics && hasAlgorithm
-              ? ""
-              : "Select an algorithm and at least one metric or family.",
+            !hasMetrics || !hasAlgorithm
+              ? "Select an algorithm and at least one metric or family."
+              : !intervalModeValid
+              ? "Add at least one analysis interval, or switch back to Analyze whole file."
+              : "",
         };
       }
       case "10":
@@ -819,6 +832,9 @@ export default function Dashboard() {
           setSleepWindowSettings={setSleepWindowSettings}
           analysisMode={analysisMode}
           inputType={detectedInputType}
+          previewData={previewData}
+          analysisWindowSettings={analysisWindowSettings}
+          setAnalysisWindowSettings={setAnalysisWindowSettings}
         />
         <LightMetricsPanel
           lightFile={lightFile}

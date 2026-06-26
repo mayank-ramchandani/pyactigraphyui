@@ -15,6 +15,9 @@ const RESULT_LABEL_OVERRIDES = {
   time_in_bed_minutes: "Time in bed / rest window",
   sleep_window_estimated: "Sleep window estimated",
   sleep_window_notes: "Sleep window notes",
+  analysis_window_mode: "Analysis window mode",
+  analysis_window_count: "Analysis window count",
+  analysis_window_summary: "Analysis window summary",
 };
 
 function resultLabel(metricRegistry, key) {
@@ -134,6 +137,7 @@ export default function ResultsPanel({
 }) {
   const resultKeys = Object.keys(summaryResults || {});
   const lightResultKeys = Object.keys(lightResults || {});
+  const analysisWindows = Array.isArray(summaryResults?.analysis_windows) ? summaryResults.analysis_windows : [];
   const activeMetricDefinition = selectedResultMetric
     ? getMetricDefinition(metricRegistry, selectedResultMetric)
     : null;
@@ -141,7 +145,8 @@ export default function ResultsPanel({
     ? getAlgorithmDefinition(algorithmRegistry, selectedAlgorithm)
     : null;
 
-  const selectableMetricIds = [...new Set([...(selectedMetrics || []), ...resultKeys])];
+  const hiddenResultKeys = new Set(["analysis_windows"]);
+  const selectableMetricIds = [...new Set([...(selectedMetrics || []), ...resultKeys.filter((key) => !hiddenResultKeys.has(key))])];
 
   return (
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
@@ -223,7 +228,7 @@ export default function ResultsPanel({
                 </option>
               ))}
               {Object.keys(summaryResults || {})
-                .filter((key) => !selectableMetricIds.includes(key))
+                .filter((key) => !selectableMetricIds.includes(key) && !hiddenResultKeys.has(key))
                 .map((key) => (
                   <option key={key} value={key}>
                     {key}
@@ -248,7 +253,7 @@ export default function ResultsPanel({
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Summary Table</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <tbody>
-                {Object.entries(summaryResults).map(([key, value]) => {
+                {Object.entries(summaryResults).filter(([key]) => key !== "analysis_windows").map(([key, value]) => {
                   const schema = getMetricResultSchema(metricRegistry, key);
                   return (
                     <tr key={key}>
@@ -265,6 +270,45 @@ export default function ResultsPanel({
             </table>
           </div>
 
+          {analysisWindows.length > 0 && (
+            <div style={{ border: "1px solid #c7d2fe", borderRadius: 16, padding: 16, background: "#eef2ff", marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>Analysis Window Details</div>
+              <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}>
+                Metrics were calculated separately for each selected interval. The main summary table reports the mean of numeric metrics across intervals when possible.
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Interval</th>
+                      <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Start</th>
+                      <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Stop</th>
+                      <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Duration</th>
+                      <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Results</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysisWindows.map((window, idx) => (
+                      <tr key={`${window.start}-${window.stop}-${idx}`}>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.label || `Interval ${idx + 1}`}</td>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.start}</td>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.stop}</td>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", textAlign: "right" }}>{window.duration_hours ?? "—"} h</td>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", fontSize: 13 }}>
+                          {window.error ? (
+                            <span style={{ color: "#991b1b" }}>{window.error}</span>
+                          ) : (
+                            Object.entries(window.results || {}).map(([key, value]) => `${resultLabel(metricRegistry, key)}: ${formatResultValue(value, getMetricResultSchema(metricRegistry, key))}`).join("; ") || "No values"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Methods Summary</div>
             <div style={{ color: "#475569", lineHeight: 1.7, fontSize: 14 }}>
@@ -277,6 +321,10 @@ export default function ResultsPanel({
               Sleep/rest algorithm: {selectedAlgorithm ? getAlgorithmLabel(algorithmRegistry, selectedAlgorithm) : "None"}
               <br />
               Analysis mode: {analysisMode === "standard" ? "Standard defaults" : "Customized settings"}
+              <br />
+              Analysis window mode: {analysisConfig?.analysisWindowSettings?.mode === "selected" ? "Selected intervals" : "Whole cleaned recording"}
+              <br />
+              Selected analysis intervals: {(analysisConfig?.analysisWindowSettings?.manualIntervals || []).length}
               <br />
               No-diary sleep-window estimation: {analysisConfig?.sleepWindowSettings?.estimateWithoutDiary === false ? "Disabled" : "Enabled"}
               {analysisConfig?.sleepWindowSettings?.estimateWithoutDiary !== false && (
