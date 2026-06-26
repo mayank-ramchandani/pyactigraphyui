@@ -100,6 +100,11 @@ def version():
             "bin_cwa_accelerometer": True,
             "saved_runs_frontend_supabase": True,
         },
+        "runtime_limits": {
+            "max_server_side_bin_mb": MAX_SERVER_SIDE_BIN_MB,
+            "default_java_heap_mb": DEFAULT_JAVA_HEAP_MB,
+            "gt3x_activity_mode": DEFAULT_GT3X_ACTIVITY_MODE,
+        },
     }
 
 

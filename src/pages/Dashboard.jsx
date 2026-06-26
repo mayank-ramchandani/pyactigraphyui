@@ -121,6 +121,23 @@ export default function Dashboard() {
     sleepDiary: { apply: true, manualIntervals: [] },
   });
 
+  const [selectedLightMetrics, setSelectedLightMetrics] = useState(["exposure_level"]);
+  const [lightMetricSettings, setLightMetricSettings] = useState({
+    channel: "",
+    thresholdLux: "",
+    startTime: "",
+    stopTime: "",
+    bins: "24h",
+    agg: "mean",
+    aggFuncs: "mean,median,sum,std,min,max",
+    outputFormat: "minute",
+    lmxLength: "5h",
+    lowest: true,
+    binarizeMetric: false,
+  });
+  const [lightResults, setLightResults] = useState({});
+  const [lightAnalysisError, setLightAnalysisError] = useState("");
+
   const [activityChannel, setActivityChannel] = useState("VM");
   const [activityTransform, setActivityTransform] = useState("none");
   const [lightTransform, setLightTransform] = useState("none");
@@ -205,6 +222,10 @@ export default function Dashboard() {
       }),
       sleepWindowSettings,
       supportFileSettings,
+      lightAnalysisSettings: {
+        selectedLightMetrics,
+        lightMetricSettings,
+      },
     }),
     [
       selectedMetrics,
@@ -216,6 +237,8 @@ export default function Dashboard() {
       algorithmParams,
       sleepWindowSettings,
       supportFileSettings,
+      selectedLightMetrics,
+      lightMetricSettings,
     ]
   );
 
@@ -262,6 +285,8 @@ export default function Dashboard() {
     setSummaryResults({});
     setQcWarnings([]);
     setAnalysisError("");
+    setLightAnalysisError("");
+    setLightResults({});
     setSupportFileSummary(null);
   };
 
@@ -365,12 +390,57 @@ export default function Dashboard() {
     }
   };
 
+  const runSelectedLightMetrics = async () => {
+    if (!lightFile || selectedLightMetrics.length === 0) {
+      return {};
+    }
+
+    const nextLightResults = {};
+    const errors = [];
+
+    for (const metricId of selectedLightMetrics) {
+      try {
+        const formData = new FormData();
+        formData.append("file", lightFile);
+        formData.append("metricId", metricId);
+        formData.append("channel", lightMetricSettings.channel || "");
+        formData.append("thresholdLux", lightMetricSettings.thresholdLux || "");
+        formData.append("startTime", lightMetricSettings.startTime || "");
+        formData.append("stopTime", lightMetricSettings.stopTime || "");
+        formData.append("bins", lightMetricSettings.bins || "24h");
+        formData.append("agg", lightMetricSettings.agg || "mean");
+        formData.append("aggFuncs", lightMetricSettings.aggFuncs || "mean,median,sum,std,min,max");
+        formData.append("outputFormat", lightMetricSettings.outputFormat || "minute");
+        formData.append("lmxLength", lightMetricSettings.lmxLength || "5h");
+        formData.append("lowest", String(lightMetricSettings.lowest !== false));
+        formData.append("binarize", String(Boolean(lightMetricSettings.binarizeMetric)));
+
+        const res = await fetch(buildApiUrl("api/light/analyze"), { method: "POST", body: formData });
+        const data = await parseJsonResponse(res);
+
+        if (!res.ok) {
+          throw new Error(data?.detail || `Failed to run ${metricId}.`);
+        }
+
+        nextLightResults[metricId] = data;
+      } catch (err) {
+        errors.push(`${metricId}: ${err.message || "failed"}`);
+      }
+    }
+
+    setLightResults(nextLightResults);
+    setLightAnalysisError(errors.length ? errors.join(" | ") : "");
+    return nextLightResults;
+  };
+
   const handleGenerateResults = async () => {
     if (!actigraphyFile) return;
 
     try {
       setAnalysisLoading(true);
       setAnalysisError("");
+      setLightAnalysisError("");
+      setLightResults({});
       setResultsGenerated(false);
 
       const formData = new FormData();
@@ -400,6 +470,7 @@ export default function Dashboard() {
       setSummaryResults(results);
       setQcWarnings(data.qcWarnings || []);
       setSupportFileSummary(data.supportFileSummary || null);
+      const generatedLightResults = await runSelectedLightMetrics();
       setSelectedResultMetric(Object.keys(results)[0] || "");
       setResultsGenerated(true);
       unlockAndGoToStep("10");
@@ -409,6 +480,7 @@ export default function Dashboard() {
         qcWarnings: data.qcWarnings || [],
         supportFileSummary: data.supportFileSummary || null,
         detectedInputType: data.detected_input_type || null,
+        lightResults: generatedLightResults,
       });
     } catch (err) {
       const message = err.message || "Failed to generate results.";
@@ -426,6 +498,7 @@ export default function Dashboard() {
     qcWarnings: savedWarnings = [],
     supportFileSummary: savedSupportFileSummary = null,
     detectedInputType: savedDetectedInputType = null,
+    lightResults: savedLightResults = {},
     errorMessage = "",
   }) => {
     if (!ENABLE_AUTH_RUNS || !supabaseConfigured || !supabase || !currentUser || !actigraphyFile) return;
@@ -468,6 +541,8 @@ export default function Dashboard() {
     setSelectedResultMetric(Object.keys(savedResults)[0] || "");
     setResultsGenerated(Object.keys(savedResults).length > 0);
     setAnalysisError(run.error_message || "");
+    setLightResults({});
+    setLightAnalysisError("");
     unlockAndGoToStep("10");
   };
 
@@ -677,6 +752,7 @@ export default function Dashboard() {
         options={[
           { id: "apply", label: "Apply uploaded or manually selected start/stop intervals", defaultValue: true },
         ]}
+        previewData={previewData}
       />
     );
   } else if (currentStep === "7") {
@@ -695,6 +771,7 @@ export default function Dashboard() {
           { id: "apply", label: "Apply uploaded or manually selected masking intervals", defaultValue: true },
           { id: "respectNonwear", label: "Respect detected non-wear when available", defaultValue: true },
         ]}
+        previewData={previewData}
       />
     );
   } else if (currentStep === "8") {
@@ -712,6 +789,7 @@ export default function Dashboard() {
         options={[
           { id: "apply", label: "Use uploaded or manually selected diary windows when available", defaultValue: true },
         ]}
+        previewData={previewData}
       />
     );
   } else if (currentStep === "9") {
@@ -742,7 +820,13 @@ export default function Dashboard() {
           analysisMode={analysisMode}
           inputType={detectedInputType}
         />
-        <LightMetricsPanel lightFile={lightFile} />
+        <LightMetricsPanel
+          lightFile={lightFile}
+          selectedLightMetrics={selectedLightMetrics}
+          setSelectedLightMetrics={setSelectedLightMetrics}
+          lightMetricSettings={lightMetricSettings}
+          setLightMetricSettings={setLightMetricSettings}
+        />
       </div>
     );
   } else if (currentStep === "10") {
@@ -764,6 +848,10 @@ export default function Dashboard() {
         analysisLoading={analysisLoading}
         analysisMode={analysisMode}
         supportFileSummary={supportFileSummary}
+        lightResults={lightResults}
+        selectedLightMetrics={selectedLightMetrics}
+        lightMetricSettings={lightMetricSettings}
+        lightAnalysisError={lightAnalysisError}
       />
     );
   } else {
@@ -780,6 +868,7 @@ export default function Dashboard() {
         selectedAlgorithm={selectedAlgorithm}
         analysisMode={analysisMode}
         supportFileSummary={supportFileSummary}
+        lightResults={lightResults}
       />
     );
   }

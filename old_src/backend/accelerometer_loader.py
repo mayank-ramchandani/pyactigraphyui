@@ -210,7 +210,10 @@ def build_lightweight_accprocess_command(
     ]
 
     if java_heap_mb and int(java_heap_mb) > 0:
-        cmd.append(f"--javaHeapSpace=-Xmx{int(java_heap_mb)}M")
+        # accProcess expects the heap as an integer number of MB. It constructs
+        # the Java -Xmx argument internally, so passing "-Xmx256M" here makes
+        # argparse reject the command and print the accProcess usage text.
+        cmd.extend(["--javaHeapSpace", str(int(java_heap_mb))])
 
     return cmd
 
