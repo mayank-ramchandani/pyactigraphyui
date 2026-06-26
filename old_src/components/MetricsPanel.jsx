@@ -27,6 +27,69 @@ function normalizeMultiselectValue(value) {
   return value ? [value] : [];
 }
 
+
+function BubbleInfo({ label, content, align = "left" }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <span style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span>{label}</span>
+      <button
+        type="button"
+        aria-label={`More information about ${label}`}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((value) => !value);
+        }}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#e2e8f0",
+          color: "#0f172a",
+          fontSize: 12,
+          fontWeight: 800,
+          border: "none",
+          cursor: "pointer",
+          padding: 0,
+        }}
+      >
+        i
+      </button>
+
+      {open && (
+        <div
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          style={{
+            position: "absolute",
+            top: "125%",
+            [align === "right" ? "right" : "left"]: 0,
+            zIndex: 50,
+            width: 360,
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid #cbd5e1",
+            background: "white",
+            color: "#334155",
+            fontSize: 13,
+            lineHeight: 1.5,
+            boxShadow: "0 8px 24px rgba(15,23,42,0.14)",
+          }}
+        >
+          {content}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function cardStyle(selected, planned) {
   return {
     padding: 12,
@@ -73,6 +136,7 @@ export default function MetricsPanel({
   const [expandedAlgorithm, setExpandedAlgorithm] = useState(null);
   const [expandedMetric, setExpandedMetric] = useState(null);
   const [expandedMetricGroup, setExpandedMetricGroup] = useState("rest_activity_group");
+  const [showSleepWindowAdvanced, setShowSleepWindowAdvanced] = useState(false);
 
   const resolvedInputType = inputType || "csv";
   const detectedInputLabel = INPUT_TYPE_LABELS[resolvedInputType] || resolvedInputType;
@@ -504,10 +568,17 @@ export default function MetricsPanel({
       >
         <div style={{ fontWeight: 800, marginBottom: 8 }}>Sleep window source for TST, WASO, and sleep efficiency</div>
         <div style={{ marginBottom: 10 }}>
-          <strong>Crespo_AoT</strong> estimates activity offset/onset periods from the activity-rest pattern and is a good default for detecting the main rest window.
-          <strong> Roenneberg_AoT</strong> is an alternative automatic sleep/rest detector based on consolidated rest periods and threshold/trend-style detection.
-          Start with <strong>3–14 hours</strong> to avoid missing unusual sleep windows; for typical adult overnight sleep, <strong>4–12 hours</strong> is usually a tighter practical range.
+          Use sleep diary windows when available. If no diary is uploaded, the app can estimate the main sleep/rest window automatically.
+          The default automatic method is <BubbleInfo
+            label="Crespo_AoT"
+            content="Crespo_AoT estimates activity offset/onset periods from the rest-activity pattern. It is a practical default for detecting the main rest window when no sleep diary is uploaded."
+          />.
+          An alternative is <BubbleInfo
+            label="Roenneberg_AoT"
+            content="Roenneberg_AoT is an alternative automatic sleep/rest detector based on consolidated rest periods and threshold/trend-style detection. Use it cautiously when your data sampling/epoch structure differs from its expected assumptions."
+          />.
         </div>
+
         <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
           <input
             type="checkbox"
@@ -518,72 +589,96 @@ export default function MetricsPanel({
             style={{ marginTop: 3 }}
           />
           <span>
-            If no sleep diary is uploaded, estimate the sleep/rest window using pyActigraphy activity onset/offset detection.
-            Results will be labelled as estimated.
+            If no sleep diary is uploaded, estimate the sleep/rest window automatically. Results will be labelled as estimated.
           </span>
         </label>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
-          <label>
-            <div style={{ fontWeight: 600, marginBottom: 5 }}>Detection method</div>
-            <select
-              value={sleepWindowSettings?.method || "crespo_aot"}
-              onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, method: e.target.value }))}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
-            >
-              <option value="crespo_aot">pyActigraphy Crespo_AoT</option>
-              <option value="roenneberg_aot">pyActigraphy Roenneberg_AoT</option>
-            </select>
-          </label>
-          <label>
-            <div style={{ fontWeight: 600, marginBottom: 5 }}>Min rest window (h)</div>
-            <input
-              type="number"
-              min="1"
-              step="0.5"
-              value={sleepWindowSettings?.minRestWindowHours ?? 3}
-              onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, minRestWindowHours: Number(e.target.value) }))}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
-            />
-          </label>
-          <label>
-            <div style={{ fontWeight: 600, marginBottom: 5 }}>Max rest window (h)</div>
-            <input
-              type="number"
-              min="2"
-              step="0.5"
-              value={sleepWindowSettings?.maxRestWindowHours ?? 14}
-              onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, maxRestWindowHours: Number(e.target.value) }))}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
-            />
-          </label>
-        </div>
 
-        <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "white", border: "1px solid #bbf7d0" }}>
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>Advanced onset/offset parameters</div>
-          <div style={{ color: "#475569", marginBottom: 12 }}>
-            Leave parameter mode on <strong>default</strong> for pyActigraphy's documented defaults, or choose <strong>custom</strong> and edit the values below. Roenneberg_AoT should be used cautiously unless your data are close to 10-minute bins or you set an appropriate resampling frequency.
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
-            {((sleepWindowSettings?.method || "crespo_aot") === "crespo_aot" ? crespoAotParams : roennebergAotParams).map((param) => {
-              const groupName = (sleepWindowSettings?.method || "crespo_aot") === "crespo_aot" ? "crespoParams" : "roennebergParams";
-              return (
-                <div key={`sleep-window-${groupName}-${param.name}`}>
-                  <div style={{ fontWeight: 600, marginBottom: 5 }}>{param.label}</div>
-                  {renderParamInput(
-                    param,
-                    sleepWindowSettings?.[groupName]?.[param.name],
-                    (value) => updateSleepWindowParam(groupName, param.name, value)
-                  )}
-                  {param.description && (
-                    <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
-                      {param.description}
+        <button
+          type="button"
+          onClick={() => setShowSleepWindowAdvanced((value) => !value)}
+          style={{
+            padding: "9px 12px",
+            borderRadius: 10,
+            border: "1px solid #86efac",
+            background: "white",
+            color: "#14532d",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          {showSleepWindowAdvanced ? "Hide advanced sleep window options" : "Show advanced sleep window options"}
+        </button>
+
+        {showSleepWindowAdvanced && (
+          <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
+            <div style={{ color: "#475569" }}>
+              Leave these defaults unless you are intentionally tuning the automatic onset/offset detector. Start with <strong>3–14 hours</strong> to avoid missing unusual sleep windows; for typical adult overnight sleep, <strong>4–12 hours</strong> is usually a tighter practical range.
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: 5 }}>Detection method</div>
+                <select
+                  value={sleepWindowSettings?.method || "crespo_aot"}
+                  onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, method: e.target.value }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
+                >
+                  <option value="crespo_aot">pyActigraphy Crespo_AoT</option>
+                  <option value="roenneberg_aot">pyActigraphy Roenneberg_AoT</option>
+                </select>
+              </label>
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: 5 }}>Min rest window (h)</div>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.5"
+                  value={sleepWindowSettings?.minRestWindowHours ?? 3}
+                  onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, minRestWindowHours: Number(e.target.value) }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
+                />
+              </label>
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: 5 }}>Max rest window (h)</div>
+                <input
+                  type="number"
+                  min="2"
+                  step="0.5"
+                  value={sleepWindowSettings?.maxRestWindowHours ?? 14}
+                  onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, maxRestWindowHours: Number(e.target.value) }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
+                />
+              </label>
+            </div>
+
+            <div style={{ padding: 12, borderRadius: 12, background: "white", border: "1px solid #bbf7d0" }}>
+              <div style={{ fontWeight: 800, marginBottom: 6 }}>Advanced onset/offset parameters</div>
+              <div style={{ color: "#475569", marginBottom: 12 }}>
+                Leave parameter mode on <strong>default</strong> for pyActigraphy's documented defaults, or choose <strong>custom</strong> and edit the values below.
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                {((sleepWindowSettings?.method || "crespo_aot") === "crespo_aot" ? crespoAotParams : roennebergAotParams).map((param) => {
+                  const groupName = (sleepWindowSettings?.method || "crespo_aot") === "crespo_aot" ? "crespoParams" : "roennebergParams";
+                  return (
+                    <div key={`sleep-window-${groupName}-${param.name}`}>
+                      <div style={{ fontWeight: 600, marginBottom: 5 }}>{param.label}</div>
+                      {renderParamInput(
+                        param,
+                        sleepWindowSettings?.[groupName]?.[param.name],
+                        (value) => updateSleepWindowParam(groupName, param.name, value)
+                      )}
+                      {param.description && (
+                        <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+                          {param.description}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {analysisMode !== "standard" && (

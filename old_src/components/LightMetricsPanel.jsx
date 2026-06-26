@@ -259,9 +259,9 @@ export default function LightMetricsPanel({ lightFile }) {
 
   return (
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
-      <h2 style={{ marginTop: 0, marginBottom: 8 }}>5. Light Analysis & Manipulation</h2>
+      <h2 style={{ marginTop: 0, marginBottom: 8 }}>Light Analysis & Manipulation</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        Run pyLight-style metrics and create manipulated previews using masking, truncation, resampling, binarization, and filtering.
+        Optional light-specific analysis for files with light channels. Run pyLight-style metrics and create manipulated previews using masking, truncation, resampling, binarization, and filtering.
       </p>
 
       {loadingChannels && <div style={{ marginBottom: 12 }}>Loading light channels…</div>}

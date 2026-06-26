@@ -139,15 +139,28 @@ def _read_text_head(file_path: str, n_chars: int = 20000) -> str:
 
 
 def infer_reader_type(file_path: str):
-    suffix = Path(file_path).suffix.lower().replace(".", "")
+    path = Path(file_path)
+    name = path.name.lower()
+    suffix = path.suffix.lower().replace(".", "")
 
-    if suffix in ("bin", "cwa"):
+    # Handle compound compressed names before looking only at the final suffix.
+    # Path("sample-timeSeries.csv.gz").suffix is just ".gz", so the old code
+    # treated uploaded Oxford outputs as generic tabular files.
+    if name.endswith((".bin", ".bin.gz", ".cwa", ".cwa.gz")):
         return "raw_accelerometer_needs_conversion"
+
+    if name.endswith((".csv.gz", ".txt.gz")):
+        try:
+            if looks_like_accelerometer_timeseries_file(file_path):
+                return "accelerometer_timeseries_csv"
+        except Exception:
+            pass
+        return "tabular"
 
     if suffix in ("awd", "agd", "atr", "bba", "dqt", "gt3x", "mesa", "mtn", "rpx", "tal"):
         return suffix
 
-    if suffix in ("csv", "txt", "gz"):
+    if suffix in ("csv", "txt"):
         head = _read_text_head(file_path).lower()
 
         if "actiware export file" in head or "actiware-exportdatei" in head or "fichier d'exportation actiware" in head:
@@ -166,12 +179,12 @@ def infer_reader_type(file_path: str):
             return "atr"
 
         # Oxford accelerometer output from accProcess, recommended for larger .bin/.cwa files.
-        if "time" in head and ("acc" in head or "enmo" in head or "activity" in head):
-            try:
-                if looks_like_accelerometer_timeseries_file(file_path):
-                    return "accelerometer_timeseries_csv"
-            except Exception:
-                pass
+        # Try the real parser even when the text-head heuristic is inconclusive.
+        try:
+            if looks_like_accelerometer_timeseries_file(file_path):
+                return "accelerometer_timeseries_csv"
+        except Exception:
+            pass
 
         return "tabular"
 
