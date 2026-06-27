@@ -7,7 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MAX_SERVER_SIDE_BIN_MB=1000 \
     ACCELEROMETER_JAVA_HEAP_MB=2048 \
     ACCELEROMETER_TIMEOUT_SECONDS=1800 \
-    GT3X_ACTIVITY_MODE=enmo 
+    GT3X_ACTIVITY_MODE=enmo \
+    CORS_ALLOW_ORIGINS=https://da-cc-ca-pyactigraphy-web-prod.ambitiousdune-1d61e5e0.canadacentral.azurecontainerapps.io,https://actigraphy-ui.vercel.app
     
 WORKDIR /app
 

@@ -72,6 +72,7 @@ _default_cors_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://actigraphy-ui.vercel.app",
+    "https://da-cc-ca-pyactigraphy-web-prod.ambitiousdune-1d61e5e0.canadacentral.azurecontainerapps.io"
 ]
 _extra_cors_origins = [
     origin.strip()
