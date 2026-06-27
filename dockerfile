@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.9-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -8,8 +8,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ACCELEROMETER_JAVA_HEAP_MB=2048 \
     ACCELEROMETER_TIMEOUT_SECONDS=1800 \
     GT3X_ACTIVITY_MODE=enmo \
-    CORS_ALLOW_ORIGINS=https://da-cc-ca-pyactigraphy-web-prod.ambitiousdune-1d61e5e0.canadacentral.azurecontainerapps.io,https://actigraphy-ui.vercel.app
-    
+    WORKDIR=/app
+
 WORKDIR /app
 
 RUN apt-get update \
@@ -22,7 +22,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY src/backend/requirements-docker.txt ./requirements.txt
-RUN pip install --no-cache-dir --upgrade pip setuptools==59.8.0 wheel \
+
+RUN pip install --no-cache-dir --upgrade "pip<25" "setuptools<70" wheel \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
