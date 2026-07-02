@@ -16,6 +16,8 @@ const RESULT_INFO_OVERRIDES = {
   time_in_bed_minutes: "Total minutes inside the diary-defined or estimated rest window. Sleep efficiency is calculated relative to this window.",
   sleep_window_estimated: "True means the sleep/rest window was estimated from the activity pattern rather than supplied by a sleep diary or manual interval.",
   sleep_window_notes: "Backend notes about how the sleep/rest window was selected or why a fallback was used.",
+  sleep_window_details_summary: "Human-readable summary of each estimated sleep/rest window, including the overnight search range and selected lowest-activity block when fallback detection was used.",
+  sleep_window_details: "Structured per-night diagnostics for the sleep/rest window detection method.",
   analysis_window_mode: "Shows whether metrics were calculated on the whole recording or selected analysis intervals.",
   analysis_window_count: "Number of selected analysis intervals used for this run.",
   analysis_window_summary: "Explanation of how selected-interval outputs were summarized in the top-level table.",
@@ -28,6 +30,8 @@ const RESULT_LABEL_OVERRIDES = {
   time_in_bed_minutes: "Time in bed / rest window",
   sleep_window_estimated: "Sleep window estimated",
   sleep_window_notes: "Sleep window notes",
+  sleep_window_details_summary: "Sleep window details summary",
+  sleep_window_details: "Sleep window details",
   analysis_window_mode: "Analysis window mode",
   analysis_window_count: "Analysis window count",
   analysis_window_summary: "Analysis window summary",
@@ -151,6 +155,70 @@ function lightResultScalarText(result) {
   return "Available";
 }
 
+function formatSleepDetailValue(value) {
+  if (value == null || value === "") return "—";
+  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(3);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
+function SleepWindowDetailsCard({ details }) {
+  if (!Array.isArray(details) || details.length === 0) return null;
+
+  return (
+    <div style={{ border: "1px solid #bae6fd", borderRadius: 16, padding: 16, background: "#f0f9ff", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <div style={{ fontWeight: 800 }}>Sleep Window Analysis Details</div>
+        <InfoBubble text="This section explains exactly how the sleep/rest window was selected. For fallback windows, the backend searches each overnight period, computes a rolling low-activity window, and uses the lowest sustained activity block as the estimated rest window." />
+      </div>
+      <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}>
+        These diagnostics are especially useful when Crespo_AoT or Roenneberg_AoT did not return usable activity onset/offset arrays and the fallback low-activity overnight window was used.
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Night/date</th>
+              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Expected overnight search range</th>
+              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Lowest sustained activity block found</th>
+              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Fallback sleep/rest window</th>
+              <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #bae6fd" }}>Duration</th>
+              <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #bae6fd" }}>Rolling mean activity</th>
+              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Detection details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {details.map((item, idx) => (
+              <tr key={`${item.start || item.date}-${idx}`}>
+                <td style={{ padding: 8, borderTop: "1px solid #bae6fd" }}>{formatSleepDetailValue(item.date)}</td>
+                <td style={{ padding: 8, borderTop: "1px solid #bae6fd" }}>
+                  <div>{formatSleepDetailValue(item.expected_search_range)}</div>
+                  {item.expected_search_start && item.expected_search_stop && (
+                    <div style={{ color: "#64748b", fontSize: 12 }}>{item.expected_search_start} → {item.expected_search_stop}</div>
+                  )}
+                </td>
+                <td style={{ padding: 8, borderTop: "1px solid #bae6fd" }}>{formatSleepDetailValue(item.lowest_sustained_activity_block || `${item.start || ""} to ${item.stop || ""}`)}</td>
+                <td style={{ padding: 8, borderTop: "1px solid #bae6fd" }}>{formatSleepDetailValue(`${item.start || "—"} → ${item.stop || "—"}`)}</td>
+                <td style={{ padding: 8, borderTop: "1px solid #bae6fd", textAlign: "right" }}>{item.duration_hours != null ? `${formatSleepDetailValue(item.duration_hours)} h` : "—"}</td>
+                <td style={{ padding: 8, borderTop: "1px solid #bae6fd", textAlign: "right" }}>{formatSleepDetailValue(item.rolling_mean_activity)}</td>
+                <td style={{ padding: 8, borderTop: "1px solid #bae6fd", fontSize: 13, color: "#475569" }}>
+                  <div>Method: {formatSleepDetailValue(item.method)}</div>
+                  <div>Estimated: {formatSleepDetailValue(item.estimated)}</div>
+                  {item.target_window_hours != null && <div>Target window: {item.target_window_hours} h</div>}
+                  {item.min_window_hours != null && item.max_window_hours != null && <div>Allowed range: {item.min_window_hours}–{item.max_window_hours} h</div>}
+                  {item.resample_frequency && <div>Search resolution: {item.resample_frequency}</div>}
+                  {item.points_in_search_range != null && <div>Search points: {item.points_in_search_range}</div>}
+                  {item.points_in_detected_window != null && <div>Window points: {item.points_in_detected_window}</div>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function renderLightResult(result) {
   if (!result) return null;
 
@@ -238,6 +306,7 @@ export default function ResultsPanel({
 }) {
   const lightResultKeys = Object.keys(lightResults || {});
   const analysisWindows = Array.isArray(summaryResults?.analysis_windows) ? summaryResults.analysis_windows : [];
+  const sleepWindowDetails = Array.isArray(summaryResults?.sleep_window_details) ? summaryResults.sleep_window_details : [];
   const activeAlgorithm = selectedAlgorithm
     ? getAlgorithmDefinition(algorithmRegistry, selectedAlgorithm)
     : null;
@@ -361,7 +430,7 @@ export default function ResultsPanel({
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Summary Table</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <tbody>
-                {Object.entries(summaryResults).filter(([key]) => key !== "analysis_windows").map(([key, value]) => {
+                {Object.entries(summaryResults).filter(([key]) => key !== "analysis_windows" && key !== "sleep_window_details").map(([key, value]) => {
                   const schema = getMetricResultSchema(metricRegistry, key);
                   return (
                     <tr key={key}>
@@ -378,6 +447,8 @@ export default function ResultsPanel({
               </tbody>
             </table>
           </div>
+
+          <SleepWindowDetailsCard details={sleepWindowDetails} />
 
           {analysisWindows.length > 0 && (
             <div style={{ border: "1px solid #c7d2fe", borderRadius: 16, padding: 16, background: "#eef2ff", marginBottom: 16 }}>

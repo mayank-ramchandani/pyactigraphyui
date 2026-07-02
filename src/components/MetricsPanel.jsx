@@ -628,6 +628,44 @@ export default function MetricsPanel({
                   style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
                 />
               </label>
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: 5 }}>Fallback target window (h)</div>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.5"
+                  value={sleepWindowSettings?.fallbackRestWindowHours ?? 8}
+                  onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, fallbackRestWindowHours: Number(e.target.value) }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
+                />
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 5 }}>Used only if Crespo/Roenneberg fail.</div>
+              </label>
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: 5 }}>Fallback search start hour</div>
+                <input
+                  type="number"
+                  min="0"
+                  max="23"
+                  step="1"
+                  value={sleepWindowSettings?.fallbackSearchStartHour ?? 20}
+                  onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, fallbackSearchStartHour: Number(e.target.value) }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
+                />
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 5 }}>24-hour clock. Default 20 = 8 PM.</div>
+              </label>
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: 5 }}>Fallback search stop hour</div>
+                <input
+                  type="number"
+                  min="0"
+                  max="23"
+                  step="1"
+                  value={sleepWindowSettings?.fallbackSearchStopHour ?? 12}
+                  onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, fallbackSearchStopHour: Number(e.target.value) }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
+                />
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 5 }}>24-hour clock. Default 12 = noon next day.</div>
+              </label>
             </div>
 
             <div style={{ padding: 12, borderRadius: 12, background: "white", border: "1px solid #bbf7d0" }}>

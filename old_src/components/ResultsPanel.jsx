@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   getAlgorithmDefinition,
   getAlgorithmLabel,
@@ -54,29 +54,74 @@ function lightMetricInfoText(metricId) {
 }
 
 function InfoBubble({ text }) {
+  const [open, setOpen] = useState(false);
   if (!text) return null;
+
   return (
     <span
-      title={text}
-      aria-label={text}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 18,
-        height: 18,
-        marginLeft: 8,
-        borderRadius: 999,
-        border: "1px solid #94a3b8",
-        color: "#475569",
-        background: "white",
-        fontSize: 12,
-        fontWeight: 800,
-        cursor: "help",
-        verticalAlign: "middle",
-      }}
+      className="metric-info-bubble-wrap"
+      style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
     >
-      i
+      <button
+        type="button"
+        aria-label={text}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen((value) => !value);
+        }}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 18,
+          height: 18,
+          marginLeft: 8,
+          borderRadius: 999,
+          border: "1px solid #94a3b8",
+          color: "#334155",
+          background: "#ffffff",
+          fontSize: 12,
+          fontWeight: 800,
+          lineHeight: 1,
+          cursor: "help",
+          padding: 0,
+          fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        }}
+      >
+        i
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          style={{
+            position: "absolute",
+            zIndex: 2000,
+            left: 28,
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: 320,
+            maxWidth: "min(320px, calc(100vw - 80px))",
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid #cbd5e1",
+            background: "#0f172a",
+            color: "#f8fafc",
+            boxShadow: "0 12px 35px rgba(15, 23, 42, 0.25)",
+            fontSize: 13,
+            lineHeight: 1.45,
+            fontWeight: 500,
+            whiteSpace: "pre-line",
+            textAlign: "left",
+          }}
+        >
+          {text}
+        </span>
+      )}
     </span>
   );
 }
