@@ -1029,15 +1029,53 @@ def build_native_preview(raw, activity_channel="data", resample_freq=None):
     }
 
 
+def _describe_light_scale(raw, channel_name):
+    metadata = getattr(raw, "metadata", None) or {}
+    channel_scales = metadata.get("light_channels") if isinstance(metadata, dict) else None
+    scale = None
+    if isinstance(channel_scales, dict) and channel_name:
+        scale = channel_scales.get(channel_name) or channel_scales.get(str(channel_name).upper())
+
+    if not scale and channel_name:
+        normalized = str(channel_name).strip().upper()
+        if normalized in {"LIGHT_LOG", "LOG_LIGHT", "LOG10_LUX", "LIGHT", "WHITE_LIGHT", "AMB_LIGHT"} and metadata.get("direct_geneactiv_reader"):
+            scale = "log10(lux + 1)"
+        elif "LUX" in normalized:
+            scale = "lux"
+
+    if not scale:
+        scale = "lux"
+
+    if str(scale).lower() == "log10(lux + 1)":
+        return {
+            "light_channel": channel_name,
+            "light_units": "log10(lux + 1)",
+            "light_scale": "log10_lux_plus_one",
+            "y_axis_label": "Light intensity, log10(lux + 1)",
+            "light_scale_note": "values are log10-transformed from lux to make low and high light exposure easier to view",
+        }
+
+    return {
+        "light_channel": channel_name,
+        "light_units": "lux",
+        "light_scale": "lux",
+        "y_axis_label": "Light intensity (lux)",
+        "light_scale_note": "values are shown in raw lux",
+    }
+
+
 def build_light_preview(raw, resample_freq=None):
     light_series = None
+    light_channel_name = None
 
     # Native pyActigraphy readers like ATR/MTN expose LightRecording plus
     # convenience properties such as white_light / amb_light.
     if hasattr(raw, "white_light") and raw.white_light is not None:
         light_series = raw.white_light
+        light_channel_name = "white_light"
     elif hasattr(raw, "amb_light") and raw.amb_light is not None:
         light_series = raw.amb_light
+        light_channel_name = "amb_light"
     else:
         light_obj = getattr(raw, "light", None)
 
@@ -1054,11 +1092,12 @@ def build_light_preview(raw, resample_freq=None):
 
         # If light is a LightRecording, try common channel names
         elif hasattr(light_obj, "get_channel"):
-            for channel_name in ["LIGHT", "whitelight", "AMB LIGHT"]:
+            for channel_name in ["LIGHT", "whitelight", "AMB LIGHT", "LIGHT_LUX", "Lux", "lux"]:
                 try:
                     candidate = light_obj.get_channel(channel_name)
                     if candidate is not None:
                         light_series = candidate
+                        light_channel_name = channel_name
                         break
                 except Exception:
                     pass
@@ -1068,6 +1107,7 @@ def build_light_preview(raw, resample_freq=None):
                 try:
                     if len(light_obj.data.columns) > 0:
                         light_series = light_obj.data.iloc[:, 0]
+                        light_channel_name = str(light_obj.data.columns[0])
                 except Exception:
                     pass
 
@@ -1090,6 +1130,7 @@ def build_light_preview(raw, resample_freq=None):
         preview_series = preview_series.resample(resample_freq).mean()
 
     timezone_info = _index_timezone_info(preview_series.index)
+    scale_info = _describe_light_scale(raw, light_channel_name)
     summary = {
         "rows": int(len(preview_series)),
         "start": str(preview_series.index.min()) if len(preview_series) else None,
@@ -1098,11 +1139,15 @@ def build_light_preview(raw, resample_freq=None):
         "max_light": _serialize_scalar(preview_series.max()) if len(preview_series) else None,
         "timezone_aware": timezone_info.get("timezone_aware"),
         "timezone": timezone_info.get("timezone") or "Not provided in file/index",
+        **scale_info,
     }
 
     return {
         "light_preview_available": True,
         "timezone_info": timezone_info,
+        "light_y_axis_label": scale_info.get("y_axis_label"),
+        "light_units": scale_info.get("light_units"),
+        "light_scale": scale_info.get("light_scale"),
         "light_preview": _sample_full_recording(preview_series, value_key="light"),
         "light_summary": summary,
     }

@@ -253,7 +253,34 @@ export default function Dashboard() {
     if (!text) {
       throw new Error(`Empty response from server (${res.status})`);
     }
-    return JSON.parse(text);
+
+    const contentType = res.headers.get("content-type") || "";
+    const looksLikeJson = contentType.includes("application/json") || /^[\s\r\n]*[\[{]/.test(text);
+
+    if (!looksLikeJson) {
+      const serverMessage = text
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 300);
+
+      throw new Error(
+        `Server returned ${res.status} ${res.statusText || "non-JSON response"} instead of JSON. ` +
+          `This usually means the upload was rejected, the backend ran out of memory, or the request timed out.` +
+          (serverMessage ? ` Server message: ${serverMessage}` : "")
+      );
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error(
+        `Server response was not valid JSON (${res.status}). ` +
+          `This can happen when a large raw file crashes the backend during conversion.`
+      );
+    }
   };
 
   const goToStep = (stepId) => {

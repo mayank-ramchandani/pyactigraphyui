@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { downloadBlob, downloadJson, resultPayloadToRows, rowsToCsv } from "../services/exportUtils";
+import InteractiveIntervalSelector from "./InteractiveIntervalSelector";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
 
@@ -9,126 +9,296 @@ function buildApiUrl(path) {
   return `${base}${cleanPath}`;
 }
 
-function formatValue(value) {
-  if (value == null || Number.isNaN(value)) return "";
-  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(2);
-  return String(value);
+function cardStyle(selected) {
+  return {
+    padding: 12,
+    borderRadius: 14,
+    border: selected ? "1px solid #0f172a" : "1px solid #cbd5e1",
+    background: selected ? "#0f172a" : "white",
+    color: selected ? "white" : "#0f172a",
+    cursor: "pointer",
+    textAlign: "left",
+    width: "100%",
+    minHeight: 130,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+  };
 }
 
-function renderResult(result) {
-  if (!result) return null;
-
-  if (result.kind === "scalar") {
-    return (
-      <div style={{ padding: 16, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: 18, fontWeight: 700 }}>
-        {formatValue(result.value)}
-      </div>
-    );
-  }
-
-  if (result.kind === "series") {
-    return (
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>Index</th>
-              <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #cbd5e1" }}>Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.index.map((label, idx) => (
-              <tr key={`${label}-${idx}`}>
-                <td style={{ padding: 8, borderTop: "1px solid #e2e8f0" }}>{label}</td>
-                <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>{formatValue(result.values[idx])}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
-  if (result.kind === "dataframe") {
-    return (
-      <div style={{ overflowX: "auto", maxHeight: 420, overflowY: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>Index</th>
-              {result.columns.map((col) => (
-                <th key={col} style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #cbd5e1" }}>{col}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {result.rows.map((row, rowIdx) => (
-              <tr key={`${row.index}-${rowIdx}`}>
-                <td style={{ padding: 8, borderTop: "1px solid #e2e8f0" }}>{row.index}</td>
-                {row.values.map((value, colIdx) => (
-                  <td key={`${rowIdx}-${colIdx}`} style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>{formatValue(value)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
-  return null;
+function toLocalDatetimeValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export default function LightMetricsPanel({ lightFile }) {
-  const [channels, setChannels] = useState([]);
-  const [selectedChannel, setSelectedChannel] = useState("");
-  const [metricId, setMetricId] = useState("exposure_level");
-  const [thresholdLux, setThresholdLux] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [stopTime, setStopTime] = useState("");
-  const [bins, setBins] = useState("24h");
-  const [agg, setAgg] = useState("mean");
-  const [aggFuncs, setAggFuncs] = useState("mean,median,sum,std,min,max");
-  const [outputFormat, setOutputFormat] = useState("minute");
-  const [lmxLength, setLmxLength] = useState("5h");
-  const [lowest, setLowest] = useState(true);
-  const [binarizeMetric, setBinarizeMetric] = useState(false);
+function formatDisplayDatetime(value) {
+  const local = toLocalDatetimeValue(value);
+  return local ? local.replace("T", " ") : "Not detected";
+}
 
-  const [truncateStart, setTruncateStart] = useState("");
-  const [truncateStop, setTruncateStop] = useState("");
-  const [dailyStartTime, setDailyStartTime] = useState("");
-  const [dailyStopTime, setDailyStopTime] = useState("");
-  const [manipResampleFreq, setManipResampleFreq] = useState("5min");
-  const [manipBinarize, setManipBinarize] = useState(false);
-  const [filterMethod, setFilterMethod] = useState("none");
-  const [filterWindow, setFilterWindow] = useState("15min");
+function getPreviewBounds(previewData) {
+  const points = previewData?.full_recording_preview || previewData?.light_preview || [];
+  const summary = previewData?.summary || previewData?.light_summary || {};
+  const start = summary.start || points[0]?.timestamp || points[0]?.time || "";
+  const stop = summary.end || points[points.length - 1]?.timestamp || points[points.length - 1]?.time || "";
+  return {
+    start,
+    stop,
+    minLocal: toLocalDatetimeValue(start),
+    maxLocal: toLocalDatetimeValue(stop),
+  };
+}
 
-  const [loadingChannels, setLoadingChannels] = useState(false);
-  const [loadingResult, setLoadingResult] = useState(false);
-  const [loadingManipulation, setLoadingManipulation] = useState(false);
-  const [error, setError] = useState("");
-  const [payload, setPayload] = useState(null);
-  const [manipulationPayload, setManipulationPayload] = useState(null);
+function normalizeDatetimeInput(value, bounds) {
+  if (!value) return "";
+  if (String(value).includes("T")) return value;
+  const base = bounds?.minLocal?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+  return `${base}T${String(value).slice(0, 5)}`;
+}
 
-  const metricOptions = useMemo(
-    () => [
-      { id: "exposure_level", label: "Exposure Level" },
-      { id: "summary_stats", label: "Summary Statistics" },
-      { id: "tat", label: "Time Above Threshold" },
-      { id: "tatp", label: "Time Above Threshold Per Day" },
-      { id: "mlit", label: "Mean Light Timing Above Threshold" },
-      { id: "l5", label: "L5: Least Bright 5 Hours" },
-      { id: "m10", label: "M10: Most Bright 10 Hours" },
-      { id: "ra", label: "Relative Amplitude" },
-      { id: "is", label: "Interdaily Stability" },
-      { id: "iv", label: "Intradaily Variability" },
-      { id: "extremum_min", label: "Minimum Light Timing/Value" },
-      { id: "extremum_max", label: "Maximum Light Timing/Value" },
-      { id: "lmx", label: "Custom LMX Window" },
-      { id: "vat", label: "Thresholded Light Series (VAT)" },
-    ],
-    []
+function validateDateWindow(start, stop, bounds) {
+  if (!start || !stop) return "";
+  const startDate = new Date(start);
+  const stopDate = new Date(stop);
+  const minDate = bounds?.start ? new Date(bounds.start) : null;
+  const maxDate = bounds?.stop ? new Date(bounds.stop) : null;
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(stopDate.getTime())) return "Choose valid start and stop date/times.";
+  if (stopDate <= startDate) return "Stop date/time must be after start date/time.";
+  if (minDate && !Number.isNaN(minDate.getTime()) && startDate < minDate) return "Start date/time must be within the detected recording window.";
+  if (maxDate && !Number.isNaN(maxDate.getTime()) && stopDate > maxDate) return "Stop date/time must be within the detected recording window.";
+  return "";
+}
+
+const THRESHOLD_PRESETS = [
+  { value: "", label: "No threshold / metric default" },
+  { value: "1", label: "1 lux — very dim light" },
+  { value: "10", label: "10 lux — dim indoor threshold" },
+  { value: "50", label: "50 lux — low indoor light" },
+  { value: "100", label: "100 lux — typical indoor bright-light cutoff" },
+  { value: "250", label: "250 lux — moderate bright light" },
+  { value: "500", label: "500 lux — bright indoor / outdoor exposure" },
+  { value: "1000", label: "1000 lux — strong bright light" },
+  { value: "2500", label: "2500 lux — daylight exposure" },
+  { value: "custom", label: "Custom threshold…" },
+];
+
+const SUMMARY_BIN_OPTIONS = ["1h", "2h", "6h", "12h", "24h", "7D"];
+const LMX_LENGTH_OPTIONS = ["1h", "2h", "5h", "10h", "12h"];
+
+export const LIGHT_METRIC_DEFINITIONS = {
+  exposure_level: {
+    id: "exposure_level",
+    label: "Exposure Level",
+    shortLabel: "Exposure",
+    summary: "Average, median, sum, or extreme light exposure within an optional clock-time window.",
+    description:
+      "Computes light exposure level for the selected channel. Use the aggregation setting to choose mean, median, sum, standard deviation, minimum, or maximum.",
+  },
+  summary_stats: {
+    id: "summary_stats",
+    label: "Summary Statistics",
+    shortLabel: "Summary",
+    summary: "Light summary statistics per time bin, such as mean, median, sum, standard deviation, min, and max.",
+    description:
+      "Groups light data into a selected bin length, such as 24h, and calculates one or more summary functions.",
+  },
+  tat: {
+    id: "tat",
+    label: "Time Above Threshold",
+    shortLabel: "TAT",
+    summary: "Total time spent above a selected lux threshold.",
+    description:
+      "Calculates the amount of time the selected light channel is above the threshold. Useful for bright-light exposure summaries.",
+  },
+  tatp: {
+    id: "tatp",
+    label: "Time Above Threshold Per Day",
+    shortLabel: "TATp",
+    summary: "Daily time spent above a selected lux threshold.",
+    description:
+      "Calculates time above threshold separately per day, which is useful for comparing daily bright-light exposure patterns.",
+  },
+  mlit: {
+    id: "mlit",
+    label: "Mean Light Timing Above Threshold",
+    shortLabel: "MLiT",
+    summary: "Average timing of light exposure above the selected threshold.",
+    description:
+      "Estimates the mean timing of above-threshold light exposure. Requires a lux threshold such as 10, 100, or 500.",
+  },
+  vat: {
+    id: "vat",
+    label: "Thresholded Light Series",
+    shortLabel: "VAT",
+    summary: "Creates a thresholded light exposure series using the selected lux threshold.",
+    description:
+      "Returns a binary/thresholded light exposure series. This is useful for inspecting when exposure exceeds the threshold.",
+  },
+  l5: {
+    id: "l5",
+    label: "L5: Least Bright 5 Hours",
+    shortLabel: "L5",
+    summary: "Least bright consolidated 5-hour window.",
+    description:
+      "Finds the least bright 5-hour period in the light recording for the selected channel.",
+  },
+  m10: {
+    id: "m10",
+    label: "M10: Most Bright 10 Hours",
+    shortLabel: "M10",
+    summary: "Most bright consolidated 10-hour window.",
+    description:
+      "Finds the most bright 10-hour period in the light recording for the selected channel.",
+  },
+  ra: {
+    id: "ra",
+    label: "Light Relative Amplitude",
+    shortLabel: "Light RA",
+    summary: "Relative amplitude between bright and dim light windows.",
+    description:
+      "Computes a light-based relative amplitude using M10 and L5 values for the selected channel.",
+  },
+  is: {
+    id: "is",
+    label: "Light Interdaily Stability",
+    shortLabel: "Light IS",
+    summary: "Day-to-day stability of the light exposure rhythm.",
+    description:
+      "Calculates interdaily stability for light exposure. Optional binarization can be applied before the metric.",
+  },
+  iv: {
+    id: "iv",
+    label: "Light Intradaily Variability",
+    shortLabel: "Light IV",
+    summary: "Fragmentation or transitions in the light exposure rhythm.",
+    description:
+      "Calculates intradaily variability for light exposure. Optional binarization can be applied before the metric.",
+  },
+  extremum_min: {
+    id: "extremum_min",
+    label: "Minimum Light Timing / Value",
+    shortLabel: "Min light",
+    summary: "Minimum light exposure timing and value.",
+    description:
+      "Finds the minimum light exposure point or window returned by the pyActigraphy light recording.",
+  },
+  extremum_max: {
+    id: "extremum_max",
+    label: "Maximum Light Timing / Value",
+    shortLabel: "Max light",
+    summary: "Maximum light exposure point or window returned by the pyActigraphy light recording.",
+    description:
+      "Finds the maximum light exposure point or window returned by the pyActigraphy light recording.",
+  },
+  lmx: {
+    id: "lmx",
+    label: "Custom LMX Window",
+    shortLabel: "LMX",
+    summary: "Custom least-bright or most-bright light window length.",
+    description:
+      "Runs a custom LMX window, such as 5h or 10h, and lets the user choose least-bright or most-bright mode.",
+  },
+};
+
+const LIGHT_METRIC_GROUPS = [
+  {
+    id: "light_exposure_group",
+    label: "Light Exposure Summaries",
+    description:
+      "General light exposure level and time-binned summaries. These are the most useful starting point for light data quality and descriptive reporting.",
+    metrics: ["exposure_level", "summary_stats"],
+  },
+  {
+    id: "threshold_timing_group",
+    label: "Threshold & Timing Metrics",
+    description:
+      "Metrics based on a lux threshold, including time above threshold and the timing of above-threshold exposure.",
+    metrics: ["tat", "tatp", "mlit", "vat"],
+  },
+  {
+    id: "light_rhythm_group",
+    label: "Light Rhythm Metrics",
+    description:
+      "Non-parametric rhythm metrics computed on light, including L5, M10, relative amplitude, stability, and variability.",
+    metrics: ["l5", "m10", "ra", "is", "iv", "lmx"],
+  },
+  {
+    id: "light_extrema_group",
+    label: "Light Extremes",
+    description:
+      "Minimum and maximum light timing/value outputs for identifying extreme exposure periods.",
+    metrics: ["extremum_min", "extremum_max"],
+  },
+];
+
+const DEFAULT_LIGHT_SETTINGS = {
+  channel: "",
+  thresholdLux: "",
+  startTime: "",
+  stopTime: "",
+  bins: "24h",
+  agg: "mean",
+  aggFuncs: "mean,median,sum,std,min,max",
+  outputFormat: "minute",
+  lmxLength: "5h",
+  lowest: true,
+  binarizeMetric: false,
+};
+
+function Section({ title, description, expanded, onToggle, summary, children }) {
+  return (
+    <div style={{ marginTop: 16, border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", background: "#f8fafc" }}>
+      <button type="button" onClick={onToggle} style={{ width: "100%", padding: 14, border: "none", background: "white", cursor: "pointer", textAlign: "left" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>{expanded ? "▾" : "▸"} {title}</div>
+            {description && <div style={{ marginTop: 4, color: "#64748b", fontSize: 14, lineHeight: 1.45 }}>{description}</div>}
+          </div>
+          {summary && <div style={{ color: "#475569", fontSize: 13, whiteSpace: "nowrap", marginTop: 2 }}>{summary}</div>}
+        </div>
+      </button>
+      {expanded && <div style={{ padding: 14, borderTop: "1px solid #e2e8f0" }}>{children}</div>}
+    </div>
   );
+}
+
+export default function LightMetricsPanel({
+  lightFile,
+  selectedLightMetrics = [],
+  setSelectedLightMetrics = () => {},
+  lightMetricSettings = {},
+  setLightMetricSettings = () => {},
+  previewData = null,
+}) {
+  const [channels, setChannels] = useState([]);
+  const [loadingChannels, setLoadingChannels] = useState(false);
+  const [error, setError] = useState("");
+  const [expandedMetric, setExpandedMetric] = useState(null);
+  const [expandedGroup, setExpandedGroup] = useState("light_exposure_group");
+  const [expandedSettings, setExpandedSettings] = useState({
+    basic: false,
+    threshold: false,
+    advanced: false,
+  });
+  const [thresholdInputMode, setThresholdInputMode] = useState("preset");
+
+  const settings = { ...DEFAULT_LIGHT_SETTINGS, ...(lightMetricSettings || {}) };
+  const bounds = useMemo(() => getPreviewBounds(previewData), [previewData]);
+  const selectedSet = useMemo(() => new Set(selectedLightMetrics || []), [selectedLightMetrics]);
+  const hasThresholdMetrics = selectedLightMetrics.some((metricId) => ["tat", "tatp", "mlit", "vat", "is", "iv"].includes(metricId));
+  const thresholdMatchesPreset = THRESHOLD_PRESETS.some((item) => item.value === String(settings.thresholdLux || "") && item.value !== "custom");
+  const thresholdPreset = thresholdInputMode === "custom" || !thresholdMatchesPreset ? "custom" : String(settings.thresholdLux || "");
+  const startDateTimeValue = normalizeDatetimeInput(settings.startTime, bounds);
+  const stopDateTimeValue = normalizeDatetimeInput(settings.stopTime, bounds);
+  const windowError = validateDateWindow(startDateTimeValue, stopDateTimeValue, bounds);
+  const lightPlotPoints = useMemo(
+    () => previewData?.light_preview || previewData?.full_recording_preview || [],
+    [previewData]
+  );
+  const lightPlotValueKey = lightPlotPoints?.[0]?.light !== undefined ? "light" : "activity";
 
   useEffect(() => {
     let cancelled = false;
@@ -136,7 +306,6 @@ export default function LightMetricsPanel({ lightFile }) {
     async function loadChannels() {
       if (!lightFile) {
         setChannels([]);
-        setSelectedChannel("");
         return;
       }
 
@@ -154,13 +323,15 @@ export default function LightMetricsPanel({ lightFile }) {
         if (!res.ok) throw new Error(data?.detail || "Failed to load light channels.");
         if (cancelled) return;
 
-        setChannels(data.channels || []);
-        setSelectedChannel(data.default_channel || "");
+        const nextChannels = data.channels || [];
+        setChannels(nextChannels);
+        if (!settings.channel && data.default_channel) {
+          setLightMetricSettings((prev) => ({ ...DEFAULT_LIGHT_SETTINGS, ...(prev || {}), channel: data.default_channel }));
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err.message || "Failed to load light channels.");
           setChannels([]);
-          setSelectedChannel("");
         }
       } finally {
         if (!cancelled) setLoadingChannels(false);
@@ -171,267 +342,252 @@ export default function LightMetricsPanel({ lightFile }) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightFile]);
 
-  const onRunAnalysis = async () => {
-    if (!lightFile) return;
-
-    try {
-      setLoadingResult(true);
-      setError("");
-      setPayload(null);
-
-      const formData = new FormData();
-      formData.append("file", lightFile);
-      formData.append("metricId", metricId);
-      formData.append("channel", selectedChannel);
-      formData.append("thresholdLux", thresholdLux);
-      formData.append("startTime", startTime);
-      formData.append("stopTime", stopTime);
-      formData.append("bins", bins);
-      formData.append("agg", agg);
-      formData.append("aggFuncs", aggFuncs);
-      formData.append("outputFormat", outputFormat);
-      formData.append("lmxLength", lmxLength);
-      formData.append("lowest", String(lowest));
-      formData.append("binarize", String(binarizeMetric));
-
-      const res = await fetch(buildApiUrl("api/light/analyze"), { method: "POST", body: formData });
-      const text = await res.text();
-      const data = text ? JSON.parse(text) : {};
-
-      if (!res.ok) throw new Error(data?.detail || "Failed to run light analysis.");
-      setPayload(data);
-    } catch (err) {
-      setError(err.message || "Failed to run light analysis.");
-    } finally {
-      setLoadingResult(false);
-    }
+  const updateSetting = (name, value) => {
+    setLightMetricSettings((prev) => ({ ...DEFAULT_LIGHT_SETTINGS, ...(prev || {}), [name]: value }));
   };
 
-  const onRunManipulation = async () => {
-    if (!lightFile) return;
-
-    try {
-      setLoadingManipulation(true);
-      setError("");
-      setManipulationPayload(null);
-
-      const formData = new FormData();
-      formData.append("file", lightFile);
-      formData.append("channels", selectedChannel);
-      formData.append("truncateStart", truncateStart);
-      formData.append("truncateStop", truncateStop);
-      formData.append("dailyStartTime", dailyStartTime);
-      formData.append("dailyStopTime", dailyStopTime);
-      formData.append("resampleFreq", manipResampleFreq);
-      formData.append("binarize", String(manipBinarize));
-      formData.append("thresholdLux", thresholdLux);
-      formData.append("filterMethod", filterMethod);
-      formData.append("filterWindow", filterWindow);
-
-      const res = await fetch(buildApiUrl("api/light/manipulate"), { method: "POST", body: formData });
-      const text = await res.text();
-      const data = text ? JSON.parse(text) : {};
-
-      if (!res.ok) throw new Error(data?.detail || "Failed to manipulate light data.");
-      setManipulationPayload(data);
-    } catch (err) {
-      setError(err.message || "Failed to manipulate light data.");
-    } finally {
-      setLoadingManipulation(false);
-    }
+  const toggleMetric = (metricId) => {
+    setSelectedLightMetrics((prev) =>
+      prev.includes(metricId) ? prev.filter((item) => item !== metricId) : [...prev, metricId]
+    );
   };
 
-  const exportLightCsv = () => {
-    if (!payload?.result) return;
-    downloadBlob(rowsToCsv(resultPayloadToRows(payload.result)), `light_${metricId}_${selectedChannel || "channel"}.csv`, "text/csv;charset=utf-8");
+  const toggleGroup = (metricIds) => {
+    const allSelected = metricIds.every((id) => selectedSet.has(id));
+    setSelectedLightMetrics((prev) => {
+      if (allSelected) return prev.filter((id) => !metricIds.includes(id));
+      return Array.from(new Set([...prev, ...metricIds]));
+    });
   };
 
-  const exportLightJson = () => {
-    if (payload) downloadJson(payload, `light_${metricId}_${selectedChannel || "channel"}.json`);
-  };
-
-  const exportManipulationCsv = () => {
-    if (!manipulationPayload?.preview) return;
-    downloadBlob(rowsToCsv(manipulationPayload.preview), `light_manipulated_${selectedChannel || "channel"}.csv`, "text/csv;charset=utf-8");
+  const toggleSettingsSection = (key) => {
+    setExpandedSettings((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
-      <h2 style={{ marginTop: 0, marginBottom: 8 }}>Light Analysis & Manipulation</h2>
+      <h2 style={{ marginTop: 0, marginBottom: 8 }}>Light Analysis Setup</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        Optional light-specific analysis for files with light channels. Run pyLight-style metrics and create manipulated previews using masking, truncation, resampling, binarization, and filtering.
+        Select light metrics in the same grouped workflow as activity and sleep metrics. Optional settings stay collapsed until the user opens them.
       </p>
 
-      {loadingChannels && <div style={{ marginBottom: 12 }}>Loading light channels…</div>}
+      {!lightFile && (
+        <div style={{ padding: 14, borderRadius: 14, border: "1px solid #fde68a", background: "#fffbeb", color: "#92400e", marginBottom: 16 }}>
+          No separate or embedded light file is selected. Light metrics can be selected, but generation will be skipped unless a light-capable file is available.
+        </div>
+      )}
 
+      {loadingChannels && <div style={{ marginBottom: 12 }}>Loading light channels…</div>}
       {error && (
         <div style={{ marginBottom: 16, padding: 12, borderRadius: 12, border: "1px solid #fecaca", background: "#fef2f2", color: "#991b1b", fontSize: 14 }}>
           {error}
         </div>
       )}
 
-      <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Light Metrics</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Metric</div>
-            <select value={metricId} onChange={(e) => setMetricId(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
-              {metricOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
-            </select>
-          </div>
+      <div style={{ border: "1px solid #dbeafe", borderRadius: 14, background: "#eff6ff", color: "#1e3a8a", padding: 14, marginBottom: 16, fontSize: 14, lineHeight: 1.55 }}>
+        Recording window detected for light calendar inputs: <strong>{formatDisplayDatetime(bounds.start)}</strong> to <strong>{formatDisplayDatetime(bounds.stop)}</strong>.
+      </div>
 
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Channel</div>
-            <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+      <Section
+        title="Basic light settings"
+        description="Choose the light channel and simple aggregation options. Leave these collapsed to use pyActigraphy/default values."
+        expanded={expandedSettings.basic}
+        onToggle={() => toggleSettingsSection("basic")}
+        summary={`${settings.channel || "Auto channel"} · ${settings.agg || "mean"}`}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Light channel</div>
+            <select value={settings.channel} onChange={(e) => updateSetting("channel", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+              <option value="">Auto/default channel</option>
               {channels.map((channel) => <option key={channel} value={channel}>{channel}</option>)}
             </select>
-          </div>
-
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Threshold (lux)</div>
-            <input value={thresholdLux} onChange={(e) => setThresholdLux(e.target.value)} placeholder="Optional, required for MLiT/VAT/binarization" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          </div>
-
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Aggregation</div>
-            <select value={agg} onChange={(e) => setAgg(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+          </label>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Aggregation</div>
+            <select value={settings.agg} onChange={(e) => updateSetting("agg", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
               {["mean", "median", "sum", "std", "min", "max"].map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-          </div>
-
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Start time</div>
-            <input value={startTime} onChange={(e) => setStartTime(e.target.value)} placeholder="HH:MM:SS" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          </div>
-
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Stop time</div>
-            <input value={stopTime} onChange={(e) => setStopTime(e.target.value)} placeholder="HH:MM:SS" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          </div>
-
-          {metricId === "summary_stats" && (
-            <>
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>Bins</div>
-                <input value={bins} onChange={(e) => setBins(e.target.value)} placeholder="24h" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-              </div>
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>Statistics</div>
-                <input value={aggFuncs} onChange={(e) => setAggFuncs(e.target.value)} placeholder="mean,median,sum,std,min,max" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-              </div>
-            </>
-          )}
-
-          {["tat", "tatp"].includes(metricId) && (
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Output format</div>
-              <select value={outputFormat} onChange={(e) => setOutputFormat(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
-                {["minute", "timedelta", "None"].map((fmt) => <option key={fmt} value={fmt === "None" ? "" : fmt}>{fmt}</option>)}
-              </select>
-            </div>
-          )}
-
-          {metricId === "lmx" && (
-            <>
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>LMX length</div>
-                <input value={lmxLength} onChange={(e) => setLmxLength(e.target.value)} placeholder="5h or 10h" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-              </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 28 }}>
-                <input type="checkbox" checked={lowest} onChange={(e) => setLowest(e.target.checked)} />
-                Least bright window
-              </label>
-            </>
-          )}
-
-          {["is", "iv"].includes(metricId) && (
-            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 28 }}>
-              <input type="checkbox" checked={binarizeMetric} onChange={(e) => setBinarizeMetric(e.target.checked)} />
-              Binarize before metric
-            </label>
-          )}
-        </div>
-
-        <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={onRunAnalysis} disabled={!lightFile || !selectedChannel || loadingResult} style={{ padding: "10px 16px", borderRadius: 12, background: !lightFile || !selectedChannel || loadingResult ? "#94a3b8" : "#0f172a", color: "white", border: "none", cursor: !lightFile || !selectedChannel || loadingResult ? "not-allowed" : "pointer", fontWeight: 600 }}>
-            {loadingResult ? "Running..." : "Run Light Analysis"}
-          </button>
-          <button onClick={exportLightCsv} disabled={!payload} style={{ padding: "10px 16px", borderRadius: 12, background: "white", border: "1px solid #cbd5e1", cursor: payload ? "pointer" : "not-allowed", opacity: payload ? 1 : 0.5 }}>
-            Export Light CSV
-          </button>
-          <button onClick={exportLightJson} disabled={!payload} style={{ padding: "10px 16px", borderRadius: 12, background: "white", border: "1px solid #cbd5e1", cursor: payload ? "pointer" : "not-allowed", opacity: payload ? 1 : 0.5 }}>
-            Export Light JSON
-          </button>
-        </div>
-
-        {payload && (
-          <div style={{ marginTop: 20 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Result: {payload.metric_id} · {payload.channel}</div>
-            {renderResult(payload.result)}
-          </div>
-        )}
-      </div>
-
-      <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc" }}>
-        <h3 style={{ marginTop: 0 }}>Light Data Manipulation</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
-          <input value={truncateStart} onChange={(e) => setTruncateStart(e.target.value)} placeholder="Truncate start: YYYY-MM-DD HH:MM:SS" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={truncateStop} onChange={(e) => setTruncateStop(e.target.value)} placeholder="Truncate stop: YYYY-MM-DD HH:MM:SS" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={dailyStartTime} onChange={(e) => setDailyStartTime(e.target.value)} placeholder="Daily mask start: HH:MM:SS" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={dailyStopTime} onChange={(e) => setDailyStopTime(e.target.value)} placeholder="Daily mask stop: HH:MM:SS" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={manipResampleFreq} onChange={(e) => setManipResampleFreq(e.target.value)} placeholder="Resample freq, e.g. 5min" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={filterWindow} onChange={(e) => setFilterWindow(e.target.value)} placeholder="Filter window, e.g. 15min" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <select value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
-            <option value="none">No filter</option>
-            <option value="mean">Rolling mean</option>
-            <option value="median">Rolling median</option>
-          </select>
-          <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <input type="checkbox" checked={manipBinarize} onChange={(e) => setManipBinarize(e.target.checked)} />
-            Binarize using threshold above
+          </label>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>TAT output format</div>
+            <select value={settings.outputFormat} onChange={(e) => updateSetting("outputFormat", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+              <option value="minute">minute</option>
+              <option value="timedelta">timedelta</option>
+              <option value="">None/default</option>
+            </select>
           </label>
         </div>
+      </Section>
 
-        <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={onRunManipulation} disabled={!lightFile || !selectedChannel || loadingManipulation} style={{ padding: "10px 16px", borderRadius: 12, background: !lightFile || !selectedChannel || loadingManipulation ? "#94a3b8" : "#0f172a", color: "white", border: "none", cursor: !lightFile || !selectedChannel || loadingManipulation ? "not-allowed" : "pointer", fontWeight: 600 }}>
-            {loadingManipulation ? "Applying..." : "Apply Light Manipulation"}
-          </button>
-          <button onClick={exportManipulationCsv} disabled={!manipulationPayload} style={{ padding: "10px 16px", borderRadius: 12, background: "white", border: "1px solid #cbd5e1", cursor: manipulationPayload ? "pointer" : "not-allowed", opacity: manipulationPayload ? 1 : 0.5 }}>
-            Export Manipulated Light CSV
-          </button>
+      <Section
+        title="Threshold and time-window options"
+        description="Use these for TAT, TATp, MLiT, VAT, and optional light IS/IV binarization thresholds."
+        expanded={expandedSettings.threshold}
+        onToggle={() => toggleSettingsSection("threshold")}
+        summary={`${settings.thresholdLux ? `${settings.thresholdLux} lux` : "No threshold"}${hasThresholdMetrics ? " · threshold metric selected" : ""}`}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Threshold preset</div>
+            <select value={thresholdPreset} onChange={(e) => {
+              if (e.target.value === "custom") {
+                setThresholdInputMode("custom");
+                updateSetting("thresholdLux", settings.thresholdLux || "100");
+              } else {
+                setThresholdInputMode("preset");
+                updateSetting("thresholdLux", e.target.value);
+              }
+            }} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+              {THRESHOLD_PRESETS.map((item) => <option key={item.value || "none"} value={item.value}>{item.label}</option>)}
+            </select>
+          </label>
+          {thresholdPreset === "custom" && (
+            <label>
+              <div style={{ fontWeight: 600, marginBottom: 5 }}>Custom threshold lux</div>
+              <input type="number" min="0" max="200000" step="1" value={settings.thresholdLux} onChange={(e) => updateSetting("thresholdLux", e.target.value)} placeholder="0–200000" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
+            </label>
+          )}
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Start date/time</div>
+            <input type="datetime-local" value={startDateTimeValue} min={bounds.minLocal || undefined} max={bounds.maxLocal || undefined} onChange={(e) => updateSetting("startTime", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
+          </label>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Stop date/time</div>
+            <input type="datetime-local" value={stopDateTimeValue} min={bounds.minLocal || undefined} max={bounds.maxLocal || undefined} onChange={(e) => updateSetting("stopTime", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
+          </label>
+        </div>
+        {windowError && <div style={{ color: "#b91c1c", marginTop: 10, fontSize: 14 }}>{windowError}</div>}
+        <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5, marginTop: 10 }}>
+          The calendar fields are bounded by the detected recording start/end. Leave them blank when you want the metric to use the full recording/default daily window.
         </div>
 
-        {manipulationPayload && (
-          <div style={{ marginTop: 20 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Manipulated light preview</div>
-            <div style={{ color: "#475569", marginBottom: 10, fontSize: 14 }}>
-              Rows: {manipulationPayload.summary?.rows} / original {manipulationPayload.summary?.original_rows}; Start: {manipulationPayload.summary?.start}; End: {manipulationPayload.summary?.end}
+        <InteractiveIntervalSelector
+          title="Light plot time-window selector"
+          description="Use the light trace to choose the start and stop date/time for threshold and exposure-window metrics."
+          plotPoints={lightPlotPoints}
+          valueKey={lightPlotValueKey}
+          valueLabel={lightPlotValueKey === "light" ? "Light" : "Activity"}
+          lineName={lightPlotValueKey === "light" ? "Light" : "Activity"}
+          bounds={bounds}
+          allowMultiple={false}
+          startValue={startDateTimeValue}
+          stopValue={stopDateTimeValue}
+          onWindowChange={({ start, stop }) => {
+            setLightMetricSettings((prev) => ({
+              ...DEFAULT_LIGHT_SETTINGS,
+              ...(prev || {}),
+              startTime: start,
+              stopTime: stop,
+            }));
+          }}
+          defaultState="LIGHT_WINDOW"
+          intervalLabel="Selected light analysis window"
+          emptyLabel="No light time window selected; light metrics will use their default/full-recording behavior."
+          noPlotMessage="Load the light preview first to enable light-plot window selection."
+        />
+      </Section>
+
+      {LIGHT_METRIC_GROUPS.map((group) => {
+        const selectedCount = group.metrics.filter((metricId) => selectedSet.has(metricId)).length;
+        const allSelected = selectedCount === group.metrics.length;
+        const isExpanded = expandedGroup === group.id;
+
+        return (
+          <div key={group.id} style={{ marginTop: 16, border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", background: "#f8fafc" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 10, alignItems: "center", padding: 14, background: "white", borderBottom: isExpanded ? "1px solid #e2e8f0" : "none" }}>
+              <button type="button" onClick={() => setExpandedGroup(isExpanded ? null : group.id)} style={{ padding: 0, border: "none", background: "transparent", textAlign: "left", cursor: "pointer" }}>
+                <div style={{ fontWeight: 800, fontSize: 17 }}>{isExpanded ? "▾" : "▸"} {group.label}</div>
+                <div style={{ color: "#64748b", fontSize: 14, marginTop: 4, lineHeight: 1.45 }}>{group.description}</div>
+              </button>
+              <div style={{ color: "#475569", fontSize: 14 }}>{selectedCount}/{group.metrics.length} selected</div>
+              <button type="button" onClick={() => toggleGroup(group.metrics)} style={{ padding: "9px 12px", borderRadius: 10, border: allSelected ? "1px solid #0f172a" : "1px solid #cbd5e1", background: allSelected ? "#0f172a" : "white", color: allSelected ? "white" : "#0f172a", cursor: "pointer", fontWeight: 700 }}>
+                {allSelected ? "Clear group" : "Select group"}
+              </button>
             </div>
-            <div style={{ overflowX: "auto", maxHeight: 300, overflowY: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {Object.keys(manipulationPayload.preview?.[0] || {}).map((key) => (
-                      <th key={key} style={{ padding: 8, borderBottom: "1px solid #cbd5e1", textAlign: key === "timestamp" ? "left" : "right" }}>{key}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(manipulationPayload.preview || []).slice(0, 200).map((row, idx) => (
-                    <tr key={`${row.timestamp}-${idx}`}>
-                      {Object.entries(row).map(([key, value]) => (
-                        <td key={key} style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: key === "timestamp" ? "left" : "right" }}>{formatValue(value)}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+
+            {isExpanded && (
+              <div style={{ padding: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                  {group.metrics.map((metricId) => {
+                    const metric = LIGHT_METRIC_DEFINITIONS[metricId];
+                    const isSelected = selectedSet.has(metricId);
+                    return (
+                      <button key={metricId} type="button" onClick={() => toggleMetric(metricId)} style={cardStyle(isSelected)}>
+                        <div>
+                          <div style={{ fontWeight: 1000, fontSize: 17 }}>{metric.label}</div>
+                          <div style={{ marginTop: 8, fontSize: 15, lineHeight: 1.45, color: isSelected ? "rgba(255,255,255,0.92)" : "#475569", minHeight: 38 }}>{metric.summary}</div>
+                        </div>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedMetric(expandedMetric === metricId ? null : metricId);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setExpandedMetric(expandedMetric === metricId ? null : metricId);
+                            }
+                          }}
+                          style={{ marginTop: 10, color: isSelected ? "white" : "#2563eb", cursor: "pointer", fontSize: 15 }}
+                        >
+                          {expandedMetric === metricId ? "Hide details" : "Show details"}
+                        </span>
+                        {expandedMetric === metricId && (
+                          <div style={{ marginTop: 10, fontSize: 15, lineHeight: 1.55, color: isSelected ? "rgba(255,255,255,0.92)" : "#475569" }}>
+                            {metric.description}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })}
+
+      <Section
+        title="Advanced light metric settings"
+        description="Optional controls for summary bins, custom LMX windows, and light IS/IV binarization."
+        expanded={expandedSettings.advanced}
+        onToggle={() => toggleSettingsSection("advanced")}
+        summary="Optional"
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Summary bins</div>
+            <select value={settings.bins} onChange={(e) => updateSetting("bins", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+              {SUMMARY_BIN_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>Summary statistics</div>
+            <input value={settings.aggFuncs} onChange={(e) => updateSetting("aggFuncs", e.target.value)} placeholder="mean,median,sum,std,min,max" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
+          </label>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 5 }}>LMX length</div>
+            <select value={settings.lmxLength} onChange={(e) => updateSetting("lmxLength", e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+              {LMX_LENGTH_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+            <input type="checkbox" checked={Boolean(settings.lowest)} onChange={(e) => updateSetting("lowest", e.target.checked)} />
+            Custom LMX uses least-bright window
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+            <input type="checkbox" checked={Boolean(settings.binarizeMetric)} onChange={(e) => updateSetting("binarizeMetric", e.target.checked)} />
+            Binarize before light IS/IV
+          </label>
+        </div>
+      </Section>
     </div>
   );
 }

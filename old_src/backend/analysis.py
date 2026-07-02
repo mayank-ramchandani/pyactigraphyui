@@ -1,3 +1,4 @@
+import copy
 import math
 import numbers
 import pandas as pd
@@ -29,6 +30,22 @@ def _pick_default_light_channel(channels):
             return lowered[preferred]
     return channels[0]
 
+
+
+
+def _normalize_light_time_arg(value):
+    if value is None or value == "":
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if "T" in text or ("-" in text and ":" in text):
+        parsed = pd.to_datetime(text, errors="coerce")
+        if parsed is not pd.NaT and not pd.isna(parsed):
+            return parsed.strftime("%H:%M:%S")
+    if len(text) == 5 and text.count(":") == 1:
+        return text + ":00"
+    return text
 
 def _lux_to_log10_threshold(threshold_lux):
     if threshold_lux is None or threshold_lux == "":
@@ -120,6 +137,8 @@ def run_basic_pylight_analysis(raw, metric_id, channel=None, threshold_lux=None,
     if channel is None:
         channel = _pick_default_light_channel(channels)
     threshold = _lux_to_log10_threshold(threshold_lux)
+    start_time = _normalize_light_time_arg(start_time)
+    stop_time = _normalize_light_time_arg(stop_time)
 
     if metric_id == "exposure_level":
         result = light_obj.light_exposure_level(threshold=threshold, start_time=start_time or None, stop_time=stop_time or None, agg=agg or "mean")
@@ -765,7 +784,7 @@ def _run_advanced_family_placeholder(family_id):
     }
 
 
-def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=None, analysis_scope="metric", algorithm_request=None, sleep_window_settings=None):
+def _run_basic_pyactigraphy_analysis_single(raw, metric_requests=None, family_requests=None, analysis_scope="metric", algorithm_request=None, sleep_window_settings=None):
     metric_requests = metric_requests or []
     family_requests = family_requests or []
     results = {}
@@ -798,6 +817,130 @@ def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=N
             results[metric_id] = None
 
     return results
+
+
+def _normalize_analysis_windows(analysis_window_settings=None):
+    settings = analysis_window_settings or {}
+    if settings.get("mode") != "selected":
+        return []
+
+    windows = []
+    for idx, interval in enumerate(settings.get("manualIntervals", []) or []):
+        try:
+            start = pd.to_datetime(interval.get("start"))
+            stop = pd.to_datetime(interval.get("stop"))
+            if pd.isna(start) or pd.isna(stop) or stop <= start:
+                continue
+            windows.append({
+                "index": idx + 1,
+                "label": interval.get("label") or "Analysis interval {}".format(idx + 1),
+                "state": interval.get("state") or "ANALYSIS",
+                "start": start,
+                "stop": stop,
+                "source": interval.get("source") or "manual_ui",
+            })
+        except Exception:
+            continue
+    return windows
+
+
+def _slice_raw_to_window(raw, start, stop):
+    window_raw = copy.copy(raw)
+    if not hasattr(raw, "data") or raw.data is None:
+        raise ValueError("Selected-interval analysis requires raw.data to be available on the loaded recording.")
+
+    window_data = raw.data.loc[start:stop]
+    if window_data is None or len(window_data) == 0:
+        raise ValueError("No activity samples were found inside this selected interval.")
+
+    try:
+        window_raw.data = window_data.copy()
+    except Exception:
+        window_raw.data = window_data
+
+    # Keep only sleep diary/rest windows that overlap this selected analysis interval.
+    try:
+        scoped_sleep_windows = []
+        for window in getattr(raw, "_ui_sleep_windows", []) or []:
+            w_start = pd.to_datetime(window.get("start"))
+            w_stop = pd.to_datetime(window.get("stop"))
+            if pd.isna(w_start) or pd.isna(w_stop) or w_stop <= start or w_start >= stop:
+                continue
+            next_window = dict(window)
+            next_window["start"] = max(w_start, start).isoformat()
+            next_window["stop"] = min(w_stop, stop).isoformat()
+            scoped_sleep_windows.append(next_window)
+        window_raw._ui_sleep_windows = scoped_sleep_windows
+    except Exception:
+        pass
+
+    return window_raw
+
+
+def _average_numeric_window_results(window_results, metric_ids):
+    aggregate = {}
+    for metric_id in metric_ids:
+        values = []
+        for item in window_results:
+            value = (item.get("results") or {}).get(metric_id)
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, numbers.Number) and math.isfinite(float(value)):
+                values.append(float(value))
+        if values:
+            aggregate[metric_id] = round(sum(values) / len(values), 4)
+        else:
+            aggregate[metric_id] = None
+    return aggregate
+
+
+def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=None, analysis_scope="metric", algorithm_request=None, sleep_window_settings=None, analysis_window_settings=None):
+    metric_requests = metric_requests or []
+    family_requests = family_requests or []
+    selected_metric_ids = [item.get("id") for item in metric_requests if item.get("id")]
+    windows = _normalize_analysis_windows(analysis_window_settings)
+
+    if not windows:
+        return _run_basic_pyactigraphy_analysis_single(
+            raw,
+            metric_requests=metric_requests,
+            family_requests=family_requests,
+            analysis_scope=analysis_scope,
+            algorithm_request=algorithm_request,
+            sleep_window_settings=sleep_window_settings,
+        )
+
+    window_results = []
+    for window in windows:
+        payload = {
+            "index": window["index"],
+            "label": window["label"],
+            "state": window["state"],
+            "start": window["start"].isoformat(),
+            "stop": window["stop"].isoformat(),
+            "duration_hours": round((window["stop"] - window["start"]).total_seconds() / 3600.0, 4),
+        }
+        try:
+            scoped_raw = _slice_raw_to_window(raw, window["start"], window["stop"])
+            payload["results"] = _run_basic_pyactigraphy_analysis_single(
+                scoped_raw,
+                metric_requests=metric_requests,
+                family_requests=family_requests,
+                analysis_scope=analysis_scope,
+                algorithm_request=algorithm_request,
+                sleep_window_settings=sleep_window_settings,
+            )
+        except Exception as exc:
+            payload["results"] = {}
+            payload["error"] = str(exc)
+        window_results.append(payload)
+
+    aggregate = _average_numeric_window_results(window_results, selected_metric_ids)
+    aggregate["analysis_window_mode"] = "selected_intervals"
+    aggregate["analysis_window_count"] = len(window_results)
+    aggregate["analysis_window_summary"] = "Top-level numeric metrics are means across selected intervals; open Analysis window details for per-interval values."
+    aggregate["analysis_windows"] = window_results
+    return aggregate
 
 
 

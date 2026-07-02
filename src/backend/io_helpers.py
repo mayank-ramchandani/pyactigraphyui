@@ -11,6 +11,7 @@ from .accelerometer_loader import (
     looks_like_accelerometer_timeseries_file,
 )
 from .gt3x_loader import load_gt3x_as_baseraw
+from .geneactiv_bin import looks_like_geneactiv_bin, read_raw_geneactiv_bin
 
 try:
     from pyActigraphy.io import BaseRaw
@@ -146,7 +147,15 @@ def infer_reader_type(file_path: str):
     # Handle compound compressed names before looking only at the final suffix.
     # Path("sample-timeSeries.csv.gz").suffix is just ".gz", so the old code
     # treated uploaded Oxford outputs as generic tabular files.
-    if name.endswith((".bin", ".bin.gz", ".cwa", ".cwa.gz")):
+    if name.endswith((".bin", ".bin.gz")):
+        try:
+            if looks_like_geneactiv_bin(file_path):
+                return "geneactiv_bin_accelerometer"
+        except Exception:
+            pass
+        return "raw_accelerometer_needs_conversion"
+
+    if name.endswith((".cwa", ".cwa.gz")):
         return "raw_accelerometer_needs_conversion"
 
     if name.endswith((".csv.gz", ".txt.gz")):
@@ -386,7 +395,7 @@ def load_native_file(file_path: str, reader_type: str):
         return load_accelerometer_as_baseraw(file_path, epoch_period=30)
     
     if reader_type == "geneactiv_bin_accelerometer":
-        return load_accelerometer_as_baseraw(file_path, epoch_period=30)
+        return read_raw_geneactiv_bin(file_path, resample_freq="30s")
 
     if reader_type == "accelerometer_timeseries_csv":
         return load_accelerometer_csv_as_baseraw(file_path, epoch_period=30)

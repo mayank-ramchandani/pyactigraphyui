@@ -6,6 +6,7 @@ import {
   getMetricLabel,
   getMetricResultSchema,
 } from "../services/configUtils";
+import { LIGHT_METRIC_DEFINITIONS } from "./LightMetricsPanel";
 
 const RESULT_LABEL_OVERRIDES = {
   sleep_window_source: "Sleep window source",
@@ -14,6 +15,9 @@ const RESULT_LABEL_OVERRIDES = {
   time_in_bed_minutes: "Time in bed / rest window",
   sleep_window_estimated: "Sleep window estimated",
   sleep_window_notes: "Sleep window notes",
+  analysis_window_mode: "Analysis window mode",
+  analysis_window_count: "Analysis window count",
+  analysis_window_summary: "Analysis window summary",
 };
 
 function resultLabel(metricRegistry, key) {
@@ -29,6 +33,84 @@ function formatResultValue(value, schema) {
   }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function formatLightValue(value) {
+  if (value == null || Number.isNaN(value)) return "";
+  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  return String(value);
+}
+
+function lightResultScalarText(result) {
+  if (!result) return "Not available";
+  if (result.kind === "scalar") return formatLightValue(result.value);
+  if (result.kind === "series") return `${result.values?.length || 0} value(s)`;
+  if (result.kind === "dataframe") return `${result.rows?.length || 0} row(s)`;
+  return "Available";
+}
+
+function renderLightResult(result) {
+  if (!result) return null;
+
+  if (result.kind === "scalar") {
+    return (
+      <div style={{ padding: 16, borderRadius: 12, background: "white", border: "1px solid #e2e8f0", fontSize: 18, fontWeight: 700 }}>
+        {formatLightValue(result.value)}
+      </div>
+    );
+  }
+
+  if (result.kind === "series") {
+    return (
+      <div style={{ overflowX: "auto", maxHeight: 360, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>Index</th>
+              <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #cbd5e1" }}>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(result.index || []).slice(0, 300).map((label, idx) => (
+              <tr key={`${label}-${idx}`}>
+                <td style={{ padding: 8, borderTop: "1px solid #e2e8f0" }}>{label}</td>
+                <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>{formatLightValue(result.values?.[idx])}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (result.kind === "dataframe") {
+    return (
+      <div style={{ overflowX: "auto", maxHeight: 420, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>Index</th>
+              {(result.columns || []).map((col) => (
+                <th key={col} style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #cbd5e1" }}>{col}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(result.rows || []).slice(0, 300).map((row, rowIdx) => (
+              <tr key={`${row.index}-${rowIdx}`}>
+                <td style={{ padding: 8, borderTop: "1px solid #e2e8f0" }}>{row.index}</td>
+                {(row.values || []).map((value, colIdx) => (
+                  <td key={`${rowIdx}-${colIdx}`} style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>{formatLightValue(value)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default function ResultsPanel({
@@ -48,8 +130,14 @@ export default function ResultsPanel({
   analysisLoading,
   analysisMode,
   supportFileSummary,
+  lightResults = {},
+  selectedLightMetrics = [],
+  lightMetricSettings = {},
+  lightAnalysisError = "",
 }) {
   const resultKeys = Object.keys(summaryResults || {});
+  const lightResultKeys = Object.keys(lightResults || {});
+  const analysisWindows = Array.isArray(summaryResults?.analysis_windows) ? summaryResults.analysis_windows : [];
   const activeMetricDefinition = selectedResultMetric
     ? getMetricDefinition(metricRegistry, selectedResultMetric)
     : null;
@@ -57,7 +145,8 @@ export default function ResultsPanel({
     ? getAlgorithmDefinition(algorithmRegistry, selectedAlgorithm)
     : null;
 
-  const selectableMetricIds = [...new Set([...(selectedMetrics || []), ...resultKeys])];
+  const hiddenResultKeys = new Set(["analysis_windows"]);
+  const selectableMetricIds = [...new Set([...(selectedMetrics || []), ...resultKeys.filter((key) => !hiddenResultKeys.has(key))])];
 
   return (
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
@@ -108,6 +197,22 @@ export default function ResultsPanel({
         </div>
       )}
 
+      {lightAnalysisError && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid #fed7aa",
+            background: "#fff7ed",
+            color: "#9a3412",
+            fontSize: 14,
+          }}
+        >
+          Light analysis warning: {lightAnalysisError}
+        </div>
+      )}
+
       {resultsGenerated && (
         <>
           <div style={{ marginBottom: 16 }}>
@@ -123,7 +228,7 @@ export default function ResultsPanel({
                 </option>
               ))}
               {Object.keys(summaryResults || {})
-                .filter((key) => !selectableMetricIds.includes(key))
+                .filter((key) => !selectableMetricIds.includes(key) && !hiddenResultKeys.has(key))
                 .map((key) => (
                   <option key={key} value={key}>
                     {key}
@@ -148,7 +253,7 @@ export default function ResultsPanel({
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Summary Table</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <tbody>
-                {Object.entries(summaryResults).map(([key, value]) => {
+                {Object.entries(summaryResults).filter(([key]) => key !== "analysis_windows").map(([key, value]) => {
                   const schema = getMetricResultSchema(metricRegistry, key);
                   return (
                     <tr key={key}>
@@ -165,6 +270,45 @@ export default function ResultsPanel({
             </table>
           </div>
 
+          {analysisWindows.length > 0 && (
+            <div style={{ border: "1px solid #c7d2fe", borderRadius: 16, padding: 16, background: "#eef2ff", marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>Analysis Window Details</div>
+              <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}>
+                Metrics were calculated separately for each selected interval. The main summary table reports the mean of numeric metrics across intervals when possible.
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Interval</th>
+                      <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Start</th>
+                      <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Stop</th>
+                      <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Duration</th>
+                      <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Results</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysisWindows.map((window, idx) => (
+                      <tr key={`${window.start}-${window.stop}-${idx}`}>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.label || `Interval ${idx + 1}`}</td>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.start}</td>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.stop}</td>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", textAlign: "right" }}>{window.duration_hours ?? "—"} h</td>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", fontSize: 13 }}>
+                          {window.error ? (
+                            <span style={{ color: "#991b1b" }}>{window.error}</span>
+                          ) : (
+                            Object.entries(window.results || {}).map(([key, value]) => `${resultLabel(metricRegistry, key)}: ${formatResultValue(value, getMetricResultSchema(metricRegistry, key))}`).join("; ") || "No values"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Methods Summary</div>
             <div style={{ color: "#475569", lineHeight: 1.7, fontSize: 14 }}>
@@ -177,6 +321,10 @@ export default function ResultsPanel({
               Sleep/rest algorithm: {selectedAlgorithm ? getAlgorithmLabel(algorithmRegistry, selectedAlgorithm) : "None"}
               <br />
               Analysis mode: {analysisMode === "standard" ? "Standard defaults" : "Customized settings"}
+              <br />
+              Analysis window mode: {analysisConfig?.analysisWindowSettings?.mode === "selected" ? "Selected intervals" : "Whole cleaned recording"}
+              <br />
+              Selected analysis intervals: {(analysisConfig?.analysisWindowSettings?.manualIntervals || []).length}
               <br />
               No-diary sleep-window estimation: {analysisConfig?.sleepWindowSettings?.estimateWithoutDiary === false ? "Disabled" : "Enabled"}
               {analysisConfig?.sleepWindowSettings?.estimateWithoutDiary !== false && (
@@ -194,6 +342,56 @@ export default function ResultsPanel({
             </div>
           </div>
 
+
+          {lightResultKeys.length > 0 && (
+            <div style={{ border: "1px solid #dbeafe", borderRadius: 16, padding: 16, background: "#eff6ff", marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>Light Metrics Results</div>
+              <div style={{ color: "#475569", lineHeight: 1.7, fontSize: 14, marginBottom: 12 }}>
+                Channel: <strong>{lightMetricSettings.channel || lightResults[lightResultKeys[0]]?.channel || "Auto/default"}</strong>
+                <br />
+                Selected light metrics: {(selectedLightMetrics || []).map((metricId) => LIGHT_METRIC_DEFINITIONS[metricId]?.label || metricId).join(", ") || "None"}
+              </div>
+
+              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+                <tbody>
+                  {lightResultKeys.map((metricId) => {
+                    const payload = lightResults[metricId];
+                    const metric = LIGHT_METRIC_DEFINITIONS[metricId];
+                    return (
+                      <tr key={`light-summary-${metricId}`}>
+                        <td style={{ padding: 8, borderTop: "1px solid #bfdbfe", textAlign: "left" }}>
+                          {metric?.label || metricId}
+                        </td>
+                        <td style={{ padding: 8, borderTop: "1px solid #bfdbfe", textAlign: "right" }}>
+                          {lightResultScalarText(payload?.result)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              <div style={{ display: "grid", gap: 14 }}>
+                {lightResultKeys.map((metricId) => {
+                  const payload = lightResults[metricId];
+                  const metric = LIGHT_METRIC_DEFINITIONS[metricId];
+                  return (
+                    <details key={`light-detail-${metricId}`} style={{ border: "1px solid #bfdbfe", borderRadius: 14, padding: 12, background: "white" }}>
+                      <summary style={{ cursor: "pointer", fontWeight: 800 }}>
+                        {metric?.label || metricId} · {payload?.channel || "channel"}
+                      </summary>
+                      {metric?.description && (
+                        <div style={{ color: "#475569", marginTop: 10, marginBottom: 10, lineHeight: 1.5 }}>
+                          {metric.description}
+                        </div>
+                      )}
+                      {renderLightResult(payload?.result)}
+                    </details>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {supportFileSummary && (
             <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#eef2ff", marginBottom: 16 }}>

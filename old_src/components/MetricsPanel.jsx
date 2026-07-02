@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import InteractiveIntervalSelector from "./InteractiveIntervalSelector";
 import {
   getAlgorithmDescription,
   getAlgorithmParameters,
@@ -132,6 +133,9 @@ export default function MetricsPanel({
   setAlgorithmParams = () => {},
   sleepWindowSettings = {},
   setSleepWindowSettings = () => {},
+  previewData = null,
+  analysisWindowSettings = {},
+  setAnalysisWindowSettings = () => {},
 }) {
   const [expandedAlgorithm, setExpandedAlgorithm] = useState(null);
   const [expandedMetric, setExpandedMetric] = useState(null);
@@ -140,6 +144,9 @@ export default function MetricsPanel({
 
   const resolvedInputType = inputType || "csv";
   const detectedInputLabel = INPUT_TYPE_LABELS[resolvedInputType] || resolvedInputType;
+  const analysisWindowMode = analysisWindowSettings?.mode || "full";
+  const analysisIntervals = analysisWindowSettings?.manualIntervals || [];
+  const activityPlotPoints = previewData?.full_recording_preview || [];
 
   const allMetrics = useMemo(() => metricRegistry.metrics || [], [metricRegistry]);
   const allAlgorithms = useMemo(() => algorithmRegistry.algorithms || [], [algorithmRegistry]);
@@ -267,6 +274,15 @@ export default function MetricsPanel({
         ...(prev?.[groupName] || {}),
         [name]: value,
       },
+    }));
+  };
+
+  const updateAnalysisWindowSettings = (patch) => {
+    setAnalysisWindowSettings((prev) => ({
+      mode: "full",
+      manualIntervals: [],
+      ...(prev || {}),
+      ...patch,
     }));
   };
 
@@ -678,6 +694,71 @@ export default function MetricsPanel({
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          border: "1px solid #e0e7ff",
+          borderRadius: 14,
+          background: "#eef2ff",
+          color: "#312e81",
+          padding: 14,
+          marginBottom: 24,
+          fontSize: 14,
+          lineHeight: 1.55,
+        }}
+      >
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>Physical activity and sleep analysis window</div>
+        <div style={{ marginBottom: 10 }}>
+          By default, selected activity and sleep metrics use the whole cleaned recording. Choose selected intervals when you want the same metrics calculated only for specific date/time windows.
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: analysisWindowMode === "selected" ? 12 : 0 }}>
+          {[
+            { id: "full", label: "Analyze whole file" },
+            { id: "selected", label: "Analyze selected intervals" },
+          ].map((option) => {
+            const selected = analysisWindowMode === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => updateAnalysisWindowSettings({ mode: option.id })}
+                style={{
+                  padding: "9px 12px",
+                  borderRadius: 10,
+                  border: selected ? "1px solid #312e81" : "1px solid #c7d2fe",
+                  background: selected ? "#312e81" : "white",
+                  color: selected ? "white" : "#312e81",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {analysisWindowMode === "selected" && (
+          <InteractiveIntervalSelector
+            title="Activity plot interval selector"
+            description="Use the activity trace to choose exact date/time intervals for physical activity and sleep-window analysis."
+            plotPoints={activityPlotPoints}
+            valueKey="activity"
+            valueLabel="Activity"
+            lineName="Activity"
+            intervals={analysisIntervals}
+            onIntervalsChange={(manualIntervals) => updateAnalysisWindowSettings({ manualIntervals })}
+            allowMultiple={true}
+            defaultState="ANALYSIS"
+            intervalTypeOptions={[{ value: "ANALYSIS", label: "Analysis interval" }]}
+            intervalLabel="Selected analysis intervals"
+            emptyLabel="No analysis intervals selected yet. The app will ask for at least one interval before using selected-interval mode."
+            noPlotMessage="Load the activity preview first to enable plot-based analysis interval selection."
+            addButtonLabel="Add analysis interval"
+          />
         )}
       </div>
 

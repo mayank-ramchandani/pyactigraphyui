@@ -199,7 +199,7 @@ export default function FileSelectionPanel({
   <div style={{ fontWeight: 700 }}>
     <BubbleInfo
       label="Accepted actigraphy files"
-      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. ActiGraph .gt3x files can now be read with pygt3x and converted to epoch activity through agcounts when available. GENEActiv/Axivity .bin/.cwa files are converted in the backend with the Oxford accelerometer package before entering the pandas/pyActigraphy workflow.`}
+      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. ActiGraph .gt3x files can be read with pygt3x and converted to epoch activity through agcounts when available. GENEActiv .bin files can be read directly by the app; other raw .bin/.cwa files use the Oxford accelerometer conversion path when the server has enough memory.`}
     />
   </div>
 
@@ -210,16 +210,6 @@ export default function FileSelectionPanel({
     />
   </div>
 
-  <div style={{ fontWeight: 700, display: "flex", gap: 16, flexWrap: "wrap" }}>
-    <BubbleInfo
-      label="Crespo_AoT"
-      content="Crespo_AoT estimates activity offset/onset periods from the rest-activity pattern. It is the default automatic sleep/rest window method when no sleep diary is uploaded."
-    />
-    <BubbleInfo
-      label="Roenneberg_AoT"
-      content="Roenneberg_AoT is an alternative automatic sleep/rest detector based on consolidated rest periods and threshold/trend-style detection. Use it when you intentionally want that detector instead of Crespo_AoT."
-    />
-  </div>
 
   <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.6 }}>
     Masking excludes invalid or non-wear periods. Sleep diary files describe reported sleep timing. Start/stop files define the intended analysis interval.
