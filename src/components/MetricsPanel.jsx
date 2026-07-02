@@ -291,9 +291,10 @@ export default function MetricsPanel({
     const current = value ?? param.default;
 
     if (param.type === "select") {
+      const selectValue = Array.isArray(current) ? current[0] : current;
       return (
         <select
-          value={current ?? ""}
+          value={selectValue ?? ""}
           onChange={(e) => onChange(e.target.value)}
           style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
         >

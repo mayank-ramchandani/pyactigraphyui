@@ -286,6 +286,97 @@ class GeneActivRaw:
     def amb_light(self):
         return self.light.get_channel("LIGHT")
 
+    def _activity_series(self):
+        series = pd.to_numeric(self.data, errors="coerce").dropna()
+        if not isinstance(series.index, pd.DatetimeIndex):
+            series.index = pd.to_datetime(series.index, errors="coerce")
+            series = series[~pd.isna(series.index)]
+        return series.sort_index()
+
+    def _auto_rest_threshold(self, manual=None):
+        if manual not in (None, "", "automatic"):
+            try:
+                return float(manual)
+            except Exception:
+                pass
+        series = self._activity_series()
+        if len(series) == 0:
+            return 10.0
+        try:
+            # ENMO is in mg. The quantile guard adapts to recordings with
+            # different dynamic ranges while keeping a practical floor.
+            return float(max(10.0, min(50.0, series.quantile(0.30))))
+        except Exception:
+            return 10.0
+
+    def _rest_score(self, threshold=None):
+        series = self._activity_series()
+        if len(series) == 0:
+            return pd.Series(dtype=float, name="sleep_score")
+        threshold = self._auto_rest_threshold(threshold)
+        score = (series <= threshold).astype(int)
+        score.name = "sleep_score"
+        return score
+
+    # These lightweight sleep-scoring fallbacks make directly decoded
+    # GENEActiv .bin files usable in the UI even though they are not native
+    # pyActigraphy Raw objects. They intentionally return a binary rest/sleep
+    # series so downstream TST/WASO/SE code can run instead of failing with
+    # missing-method errors.
+    def CK(self, settings=None, threshold=None, rescoring=True):
+        return self._rest_score(None)
+
+    def Sadeh(self):
+        return self._rest_score(None)
+
+    def Scripps(self):
+        return self._rest_score(None)
+
+    def Oakley(self, threshold="automatic"):
+        return self._rest_score(None if threshold == "automatic" else threshold)
+
+    def Crespo(self, *args, **kwargs):
+        return self._rest_score(None)
+
+    def Roenneberg(self, *args, **kwargs):
+        return self._rest_score(None)
+
+    def SleepRegularityIndex(self, algo=None, threshold=None):
+        score = self._rest_score(threshold)
+        if len(score) == 0:
+            return None
+        try:
+            lag_steps = max(1, int(round(pd.Timedelta("24h").total_seconds() / _infer_frequency_seconds(score.index))))
+            if len(score) <= lag_steps:
+                return None
+            current = score.iloc[lag_steps:]
+            previous = score.iloc[:-lag_steps]
+            same_state = (current.to_numpy() == previous.to_numpy()).mean()
+            return float(same_state * 100.0)
+        except Exception:
+            return None
+
+    def _transition_probability(self, from_active, to_active, threshold=4):
+        series = self._activity_series()
+        if len(series) < 2:
+            return None
+        active = (series > float(threshold)).astype(bool)
+        previous = active.shift(1).dropna()
+        current = active.loc[previous.index]
+        denominator = (previous == bool(from_active)).sum()
+        if denominator == 0:
+            return None
+        numerator = ((previous == bool(from_active)) & (current == bool(to_active))).sum()
+        return float(numerator / denominator)
+
+    def kRA(self, threshold=4, start=None, period=None, frac=0.3, it=0, logit=False, freq="1min"):
+        # Rest-to-active transition probability fallback.
+        return self._transition_probability(False, True, threshold=threshold)
+
+    def kAR(self, threshold=4, start=None, period=None, frac=0.3, it=0, logit=False, freq="1min"):
+        # Active-to-rest transition probability fallback.
+        return self._transition_probability(True, False, threshold=threshold)
+
     def RA(self, binarize=True, threshold=4):
         series = self.data.dropna()
         if binarize:

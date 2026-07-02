@@ -57,6 +57,13 @@ export default function PreviewPanel({
   const hasLight = Boolean(previewData?.light_preview_available);
   const meanActivityWave = previewData?.mean_activity_wave || [];
   const timezoneInfo = previewData?.timezone_info || {};
+  const lightAxisLabel =
+    previewData?.light_summary?.y_axis_label ||
+    previewData?.light_y_axis_label ||
+    "Light intensity";
+  const activityAxisLabel = "Activity";
+  const yAxisLabel = mode === "light" ? lightAxisLabel : activityAxisLabel;
+  const yValueLabel = mode === "light" ? lightAxisLabel : activityAxisLabel;
 
 
   const onExportPreviewCsv = () => {
@@ -341,7 +348,7 @@ export default function PreviewPanel({
                             Timestamp
                           </th>
                           <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #cbd5e1" }}>
-                            {mode === "light" ? "Light" : "Activity"}
+                            {yValueLabel}
                           </th>
                         </tr>
                       </thead>
@@ -374,6 +381,15 @@ export default function PreviewPanel({
                   {mode === "light" ? "Light Preview Plot" : "Activity Preview Plot"}
                 </div>
 
+                {mode === "light" && (
+                  <div style={{ color: "#64748b", fontSize: 13, marginBottom: 10 }}>
+                    Y-axis: {lightAxisLabel}
+                    {previewData?.light_summary?.light_scale_note
+                      ? ` — ${previewData.light_summary.light_scale_note}`
+                      : ""}
+                  </div>
+                )}
+
                 {points.length === 0 ? (
                   <div style={{ color: "#64748b" }}>No preview points were returned.</div>
                 ) : (
@@ -382,9 +398,17 @@ export default function PreviewPanel({
                       <LineChart data={points}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="timestamp" tick={false} minTickGap={40} />
-                        <YAxis />
+                        <YAxis
+                          width={88}
+                          label={{
+                            value: yAxisLabel,
+                            angle: -90,
+                            position: "insideLeft",
+                            style: { textAnchor: "middle", fill: "#475569", fontSize: 12 },
+                          }}
+                        />
                         <Tooltip
-                          formatter={(value) => [value, mode === "light" ? "Light" : "Activity"]}
+                          formatter={(value) => [value, yValueLabel]}
                           labelFormatter={(label) => `Time: ${label}`}
                         />
                         <Line

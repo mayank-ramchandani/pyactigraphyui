@@ -8,6 +8,19 @@ import {
 } from "../services/configUtils";
 import { LIGHT_METRIC_DEFINITIONS } from "./LightMetricsPanel";
 
+
+const RESULT_INFO_OVERRIDES = {
+  sleep_window_source: "Shows whether TST, WASO, and sleep efficiency used a sleep diary/user-defined window, an estimated rest window, or no available sleep window.",
+  sleep_window_method: "Shows which method produced the sleep/rest window used for window-dependent sleep metrics.",
+  sleep_window_count: "Number of sleep/rest windows used in the sleep metric calculations.",
+  time_in_bed_minutes: "Total minutes inside the diary-defined or estimated rest window. Sleep efficiency is calculated relative to this window.",
+  sleep_window_estimated: "True means the sleep/rest window was estimated from the activity pattern rather than supplied by a sleep diary or manual interval.",
+  sleep_window_notes: "Backend notes about how the sleep/rest window was selected or why a fallback was used.",
+  analysis_window_mode: "Shows whether metrics were calculated on the whole recording or selected analysis intervals.",
+  analysis_window_count: "Number of selected analysis intervals used for this run.",
+  analysis_window_summary: "Explanation of how selected-interval outputs were summarized in the top-level table.",
+};
+
 const RESULT_LABEL_OVERRIDES = {
   sleep_window_source: "Sleep window source",
   sleep_window_method: "Sleep window method",
@@ -22,6 +35,50 @@ const RESULT_LABEL_OVERRIDES = {
 
 function resultLabel(metricRegistry, key) {
   return RESULT_LABEL_OVERRIDES[key] || getMetricLabel(metricRegistry, key);
+}
+
+function metricInfoText(metricRegistry, key) {
+  const metric = getMetricDefinition(metricRegistry, key);
+  const pieces = [];
+  if (metric?.description) pieces.push(metric.description);
+  else if (metric?.summary) pieces.push(metric.summary);
+  if (RESULT_INFO_OVERRIDES[key]) pieces.push(RESULT_INFO_OVERRIDES[key]);
+  if ((metric?.references || []).length > 0) pieces.push(`References: ${metric.references.join("; ")}`);
+  return pieces.join("\n");
+}
+
+function lightMetricInfoText(metricId) {
+  const metric = LIGHT_METRIC_DEFINITIONS[metricId];
+  if (!metric) return "";
+  return [metric.summary, metric.description].filter(Boolean).join("\n");
+}
+
+function InfoBubble({ text }) {
+  if (!text) return null;
+  return (
+    <span
+      title={text}
+      aria-label={text}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 18,
+        height: 18,
+        marginLeft: 8,
+        borderRadius: 999,
+        border: "1px solid #94a3b8",
+        color: "#475569",
+        background: "white",
+        fontSize: 12,
+        fontWeight: 800,
+        cursor: "help",
+        verticalAlign: "middle",
+      }}
+    >
+      i
+    </span>
+  );
 }
 
 function formatResultValue(value, schema) {
@@ -117,9 +174,6 @@ export default function ResultsPanel({
   title,
   resultsGenerated,
   onGenerate,
-  selectedResultMetric,
-  setSelectedResultMetric,
-  selectedMetrics,
   summaryResults,
   qcWarnings,
   metricRegistry,
@@ -135,18 +189,11 @@ export default function ResultsPanel({
   lightMetricSettings = {},
   lightAnalysisError = "",
 }) {
-  const resultKeys = Object.keys(summaryResults || {});
   const lightResultKeys = Object.keys(lightResults || {});
   const analysisWindows = Array.isArray(summaryResults?.analysis_windows) ? summaryResults.analysis_windows : [];
-  const activeMetricDefinition = selectedResultMetric
-    ? getMetricDefinition(metricRegistry, selectedResultMetric)
-    : null;
   const activeAlgorithm = selectedAlgorithm
     ? getAlgorithmDefinition(algorithmRegistry, selectedAlgorithm)
     : null;
-
-  const hiddenResultKeys = new Set(["analysis_windows"]);
-  const selectableMetricIds = [...new Set([...(selectedMetrics || []), ...resultKeys.filter((key) => !hiddenResultKeys.has(key))])];
 
   return (
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
@@ -215,40 +262,6 @@ export default function ResultsPanel({
 
       {resultsGenerated && (
         <>
-          <div style={{ marginBottom: 16 }}>
-            <select
-              value={selectedResultMetric}
-              onChange={(e) => setSelectedResultMetric(e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}
-            >
-              <option value="">Select result to inspect</option>
-              {selectableMetricIds.map((metricId) => (
-                <option key={metricId} value={metricId}>
-                  {getMetricLabel(metricRegistry, metricId)}
-                </option>
-              ))}
-              {Object.keys(summaryResults || {})
-                .filter((key) => !selectableMetricIds.includes(key) && !hiddenResultKeys.has(key))
-                .map((key) => (
-                  <option key={key} value={key}>
-                    {key}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          {activeMetricDefinition && (
-            <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>{activeMetricDefinition.label}</div>
-              <div style={{ color: "#475569", lineHeight: 1.6, marginBottom: 8 }}>{activeMetricDefinition.description}</div>
-              {(activeMetricDefinition.references || []).length > 0 && (
-                <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
-                  <strong>References:</strong> {activeMetricDefinition.references.join("; ")}
-                </div>
-              )}
-            </div>
-          )}
-
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Summary Table</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -259,6 +272,7 @@ export default function ResultsPanel({
                     <tr key={key}>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>
                         {resultLabel(metricRegistry, key)}
+                        <InfoBubble text={metricInfoText(metricRegistry, key)} />
                       </td>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
                         {formatResultValue(value, schema)}
@@ -361,6 +375,7 @@ export default function ResultsPanel({
                       <tr key={`light-summary-${metricId}`}>
                         <td style={{ padding: 8, borderTop: "1px solid #bfdbfe", textAlign: "left" }}>
                           {metric?.label || metricId}
+                          <InfoBubble text={lightMetricInfoText(metricId)} />
                         </td>
                         <td style={{ padding: 8, borderTop: "1px solid #bfdbfe", textAlign: "right" }}>
                           {lightResultScalarText(payload?.result)}

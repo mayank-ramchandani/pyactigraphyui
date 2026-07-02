@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import pandas as pd
+import numpy as np
 
 
 _KEY_VALUE_RE = re.compile(r"^([^:]+):\s*(.*)$")
@@ -74,6 +75,52 @@ def _decode_measurement(hex12: str, calibration: Dict[str, float]):
         "light_lux": lux,
         "button": button,
     }
+
+
+def _decode_measurement_array(page_hex: str, calibration: Dict[str, float]):
+    """Vectorized decoder for GENEActiv 48-bit samples."""
+    usable_len = (len(page_hex) // 12) * 12
+    if usable_len <= 0:
+        return None, None
+    try:
+        raw = np.frombuffer(bytes.fromhex(page_hex[:usable_len]), dtype=np.uint8).reshape(-1, 6).astype(np.uint64)
+    except Exception:
+        return None, None
+
+    values = (
+        (raw[:, 0] << 40)
+        | (raw[:, 1] << 32)
+        | (raw[:, 2] << 24)
+        | (raw[:, 3] << 16)
+        | (raw[:, 4] << 8)
+        | raw[:, 5]
+    )
+
+    x_raw = ((values >> 36) & 0xFFF).astype(np.int32)
+    y_raw = ((values >> 24) & 0xFFF).astype(np.int32)
+    z_raw = ((values >> 12) & 0xFFF).astype(np.int32)
+    light_raw = ((values >> 2) & 0x3FF).astype(np.float64)
+
+    x_raw = np.where(x_raw >= 2048, x_raw - 4096, x_raw).astype(np.float64)
+    y_raw = np.where(y_raw >= 2048, y_raw - 4096, y_raw).astype(np.float64)
+    z_raw = np.where(z_raw >= 2048, z_raw - 4096, z_raw).astype(np.float64)
+
+    x_gain = calibration.get("x_gain") or 1.0
+    y_gain = calibration.get("y_gain") or 1.0
+    z_gain = calibration.get("z_gain") or 1.0
+    x_offset = calibration.get("x_offset") or 0.0
+    y_offset = calibration.get("y_offset") or 0.0
+    z_offset = calibration.get("z_offset") or 0.0
+    volts = calibration.get("volts") or 1.0
+    lux_cal = calibration.get("lux") or 1.0
+
+    x = ((x_raw * 100.0) - x_offset) / x_gain
+    y = ((y_raw * 100.0) - y_offset) / y_gain
+    z = ((z_raw * 100.0) - z_offset) / z_gain
+    vm = np.sqrt((x * x) + (y * y) + (z * z))
+    enmo = np.maximum(vm - 1.0, 0.0) * 1000.0
+    light_lux = light_raw * lux_cal / volts
+    return enmo, light_lux
 
 
 class SimpleLightRecording:
@@ -280,10 +327,38 @@ def looks_like_geneactiv_bin(file_path: str) -> bool:
     return "device type:geneactiv" in head and "recorded data" in head and "page time:" in head
 
 
-def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneActivRaw:
-    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-        lines = [line.strip() for line in f]
+def _add_to_bucket(buckets: Dict[int, Dict[str, float]], bucket_ns: int, decoded: Dict[str, float]) -> None:
+    bucket = buckets.setdefault(
+        int(bucket_ns),
+        {"enmo_sum": 0.0, "light_lux_sum": 0.0, "temperature_sum": 0.0, "count": 0, "temperature_count": 0},
+    )
+    bucket["enmo_sum"] += float(decoded.get("enmo") or 0.0)
+    bucket["light_lux_sum"] += float(decoded.get("light_lux") or 0.0)
+    temperature = decoded.get("temperature")
+    if temperature is not None:
+        bucket["temperature_sum"] += float(temperature)
+        bucket["temperature_count"] += 1
+    bucket["count"] += 1
 
+
+def _parse_resample_freq_ns(resample_freq: Optional[str]) -> Optional[int]:
+    if not resample_freq:
+        return None
+    try:
+        return int(pd.Timedelta(resample_freq).value)
+    except Exception:
+        return int(pd.Timedelta("1min").value)
+
+
+def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneActivRaw:
+    """Read a GENEActiv .bin file without shelling out to accProcess.
+
+    GENEActiv .bin exports are text-like files containing hex-encoded samples. The
+    previous implementation materialized every raw sample before resampling, which
+    is risky for participant-sized files. This version streams page-by-page and
+    aggregates directly into the requested epoch buckets, so 100+ MB files can be
+    previewed/analyzed without hitting the Oxford accProcess size gate.
+    """
     header: Dict[str, str] = {}
     calibration = {
         "x_gain": 1.0,
@@ -296,81 +371,158 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
         "lux": 1.0,
     }
 
-    for line in lines:
-        if line == "Recorded Data":
-            break
-        match = _KEY_VALUE_RE.match(line)
-        if not match:
-            continue
-        key = match.group(1).strip().lower()
-        value = match.group(2).strip()
-        header[key] = value
-        normalized = key.replace(" ", "_")
-        if normalized in calibration:
-            calibration[normalized] = _parse_float(value, calibration[normalized])
+    buckets: Dict[int, Dict[str, float]] = {}
+    rows: List[Dict] = []
+    in_header = True
+    current_page: Dict[str, str] = {}
+    hex_data = ""
+    pages_decoded = 0
+    samples_decoded = 0
+    resample_ns = _parse_resample_freq_ns(resample_freq)
 
-    records: List[Dict] = []
-    i = 0
-    while i < len(lines):
-        if lines[i] != "Recorded Data":
-            i += 1
-            continue
-
-        page: Dict[str, str] = {}
-        i += 1
-        while i < len(lines):
-            line = lines[i]
-            if not line:
-                i += 1
-                continue
-            if _HEX_RE.match(line) and len(line) >= 12:
-                break
-            match = _KEY_VALUE_RE.match(line)
-            if match:
-                page[match.group(1).strip().lower()] = match.group(2).strip()
-            i += 1
-
-        hex_data = ""
-        while i < len(lines) and lines[i] != "Recorded Data":
-            line = lines[i].strip()
-            if _HEX_RE.match(line):
-                hex_data += line
-            i += 1
+    def consume_page(page: Dict[str, str], page_hex: str) -> None:
+        nonlocal pages_decoded, samples_decoded
+        if not page or not page_hex:
+            return
 
         page_time = _parse_geneactiv_timestamp(page.get("page time"))
-        freq = _parse_float(page.get("measurement frequency"), _parse_float(header.get("measurement frequency"), 1.0)) or 1.0
-        if page_time is None or pd.isna(page_time) or not hex_data:
-            continue
+        freq = _parse_float(
+            page.get("measurement frequency"),
+            _parse_float(header.get("measurement frequency"), 1.0),
+        ) or 1.0
+        if page_time is None or pd.isna(page_time) or freq <= 0:
+            return
 
-        n = len(hex_data) // 12
-        for sample_idx in range(n):
-            decoded = _decode_measurement(hex_data[sample_idx * 12:(sample_idx + 1) * 12], calibration)
-            if decoded is None:
+        page_time = pd.Timestamp(page_time)
+        page_ns = int(page_time.value)
+        ns_per_sample = int(round(1_000_000_000 / float(freq)))
+        temperature = _parse_float(page.get("temperature"))
+        enmo_values, light_lux_values = _decode_measurement_array(page_hex, calibration)
+        if enmo_values is None or light_lux_values is None or len(enmo_values) == 0:
+            return
+
+        n = len(enmo_values)
+        if resample_ns:
+            ts_ns = page_ns + (np.arange(n, dtype=np.int64) * ns_per_sample)
+            bucket_ids = (ts_ns // resample_ns) * resample_ns
+            unique_buckets, inverse = np.unique(bucket_ids, return_inverse=True)
+            enmo_sums = np.bincount(inverse, weights=enmo_values)
+            light_sums = np.bincount(inverse, weights=light_lux_values)
+            counts = np.bincount(inverse)
+
+            for idx, bucket_ns in enumerate(unique_buckets):
+                bucket = buckets.setdefault(
+                    int(bucket_ns),
+                    {"enmo_sum": 0.0, "light_lux_sum": 0.0, "temperature_sum": 0.0, "count": 0, "temperature_count": 0},
+                )
+                bucket["enmo_sum"] += float(enmo_sums[idx])
+                bucket["light_lux_sum"] += float(light_sums[idx])
+                bucket["count"] += int(counts[idx])
+                if temperature is not None:
+                    bucket["temperature_sum"] += float(temperature) * int(counts[idx])
+                    bucket["temperature_count"] += int(counts[idx])
+        else:
+            for sample_idx in range(n):
+                light_lux = float(light_lux_values[sample_idx])
+                row = {
+                    "timestamp": pd.Timestamp(page_ns + sample_idx * ns_per_sample),
+                    "enmo": float(enmo_values[sample_idx]),
+                    "light_lux": light_lux,
+                    "light_log": math.log10(max(light_lux, 0.0) + 1.0),
+                }
+                if temperature is not None:
+                    row["temperature"] = temperature
+                rows.append(row)
+
+        samples_decoded += int(n)
+        pages_decoded += 1
+
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line:
                 continue
-            decoded["timestamp"] = page_time + pd.to_timedelta(sample_idx / freq, unit="s")
-            decoded["temperature"] = _parse_float(page.get("temperature"))
-            records.append(decoded)
 
-    if not records:
-        raise ValueError("This looks like a GENEActiv .bin file, but no page data could be decoded.")
+            if line == "Recorded Data":
+                if not in_header:
+                    consume_page(current_page, hex_data)
+                in_header = False
+                current_page = {}
+                hex_data = ""
+                continue
 
-    df = pd.DataFrame(records).set_index("timestamp").sort_index()
-    activity = df["enmo"].astype(float)
-    light_lux = df["light_lux"].astype(float)
-    light_log = light_lux.map(lambda x: math.log10(max(x, 0.0) + 1.0))
+            if in_header:
+                match = _KEY_VALUE_RE.match(line)
+                if not match:
+                    continue
+                key = match.group(1).strip().lower()
+                value = match.group(2).strip()
+                header[key] = value
+                normalized = key.replace(" ", "_")
+                if normalized in calibration:
+                    calibration[normalized] = _parse_float(value, calibration[normalized])
+                continue
 
-    if resample_freq:
-        activity = activity.resample(resample_freq).mean().dropna()
-        light_lux = light_lux.resample(resample_freq).mean().dropna()
-        light_log = light_log.resample(resample_freq).mean().dropna()
+            if _HEX_RE.match(line):
+                hex_data += line
+                continue
+
+            match = _KEY_VALUE_RE.match(line)
+            if match:
+                current_page[match.group(1).strip().lower()] = match.group(2).strip()
+
+    if not in_header:
+        consume_page(current_page, hex_data)
+
+    if resample_ns:
+        if not buckets:
+            raise ValueError("This looks like a GENEActiv .bin file, but no page data could be decoded.")
+        records = []
+        for bucket_ns in sorted(buckets):
+            bucket = buckets[bucket_ns]
+            count = bucket.get("count", 0) or 0
+            if count <= 0:
+                continue
+            light_lux = bucket["light_lux_sum"] / count
+            row = {
+                "timestamp": pd.Timestamp(bucket_ns),
+                "enmo": bucket["enmo_sum"] / count,
+                "light_lux": light_lux,
+                "light_log": math.log10(max(light_lux, 0.0) + 1.0),
+            }
+            temp_count = bucket.get("temperature_count", 0) or 0
+            if temp_count > 0:
+                row["temperature"] = bucket["temperature_sum"] / temp_count
+            records.append(row)
+        df = pd.DataFrame(records).set_index("timestamp").sort_index()
+    else:
+        if not rows:
+            raise ValueError("This looks like a GENEActiv .bin file, but no page data could be decoded.")
+        df = pd.DataFrame(rows).set_index("timestamp").sort_index()
+        df["light_log"] = df["light_lux"].astype(float).map(lambda x: math.log10(max(x, 0.0) + 1.0))
+
+    activity = df["enmo"].astype(float).rename("ENMO_mg")
+    light_lux = df["light_lux"].astype(float).rename("LIGHT_LUX")
+    light_log = df["light_log"].astype(float).rename("LIGHT")
 
     light = SimpleLightRecording({
-        "LIGHT": light_log.rename("LIGHT"),
-        "LIGHT_LUX": light_lux.rename("LIGHT_LUX"),
+        "LIGHT": light_log,
+        "LIGHT_LUX": light_lux,
     })
 
     return GeneActivRaw(
-        data=activity.rename("ENMO_mg"),
+        data=activity,
         light=light,
-        metadata={"header": header, "samples_decoded": len(df), "resample_freq": resample_freq},
+        metadata={
+            "header": header,
+            "pages_decoded": pages_decoded,
+            "samples_decoded": samples_decoded,
+            "resample_freq": resample_freq,
+            "light_channels": {
+                "LIGHT": "log10(lux + 1)",
+                "LIGHT_LUX": "lux",
+            },
+            "direct_geneactiv_reader": True,
+        },
     )
+

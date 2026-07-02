@@ -169,16 +169,14 @@
         {
           "name": "thresholdMode",
           "label": "Threshold mode",
-          "type": "multiselect",
-          "default": [
-            "auto"
-          ],
+          "type": "select",
+          "default": "auto",
           "options": [
             "auto",
             "manual"
           ],
           "backendArgName": "thresholdMode",
-          "description": "Run Oakley with automatically determined threshold, user-defined threshold, or both."
+          "description": "Choose either automatic thresholding or a user-defined manual threshold. These modes are mutually exclusive."
         },
         {
           "name": "manualThreshold",
@@ -198,7 +196,7 @@
       "backendMethod": "Scripps",
       "label": "Scripps",
       "shortLabel": "Scripps",
-      "summary": "Epoch-by-epoch rest/activity scoring algorithm available in pyActigraphy\u2019s sleep-algorithm toolkit.",
+      "summary": "Epoch-by-epoch rest/activity scoring algorithm available in pyActigraphy’s sleep-algorithm toolkit.",
       "description": "Scripps can be exposed alongside the other binary rest/activity scoring algorithms and previewed as an overlay over the full recording.",
       "citationText": "Scripps Clinic / actigraphy sleep-wake scoring reference.",
       "context": "Alternative epoch-by-epoch sleep-rest scoring",
@@ -242,7 +240,7 @@
       "shortLabel": "Crespo",
       "summary": "Pattern-based rest/activity detection with optional Crespo_AoT sleep-window estimation.",
       "description": "Crespo is useful for identifying rest-activity transitions. Crespo_AoT estimates activity onset and offset times by detecting sustained low-activity/zero-activity structure and can derive no-diary rest windows.",
-      "citationText": "Crespo C, Aboy M, Fern\u00e1ndez JR, Moj\u00f3n A. Automatic identification of activity-rest periods based on actigraphy. Medical & Biological Engineering & Computing. 2012;50(4):329-340.",
+      "citationText": "Crespo C, Aboy M, Fernández JR, Mojón A. Automatic identification of activity-rest periods based on actigraphy. Medical & Biological Engineering & Computing. 2012;50(4):329-340.",
       "context": "Pattern-based rest detection",
       "warnings": [],
       "scoringType": "rest_period_detection",

@@ -17,6 +17,7 @@ const INPUT_TYPE_LABELS = {
   csv: "CSV / mapped to Pandas",
   dqt: "Daqtometer",
   gt3x: "ActiGraph GT3X",
+  geneactiv_bin_accelerometer: "GENEActiv BIN",
   mesa: "MESA",
   mtn: "MotionWatch MTN",
   rpx: "Respironics RPX",
@@ -137,7 +138,7 @@ export default function MetricsPanel({
   analysisWindowSettings = {},
   setAnalysisWindowSettings = () => {},
 }) {
-  const [expandedAlgorithm, setExpandedAlgorithm] = useState(null);
+  const [detailsAlgorithmId, setDetailsAlgorithmId] = useState(null);
   const [expandedMetric, setExpandedMetric] = useState(null);
   const [expandedMetricGroup, setExpandedMetricGroup] = useState("rest_activity_group");
   const [showSleepWindowAdvanced, setShowSleepWindowAdvanced] = useState(false);
@@ -406,6 +407,11 @@ export default function MetricsPanel({
     );
   };
 
+  const detailsAlgorithm = allAlgorithms.find((algo) => algo.id === detailsAlgorithmId);
+  const detailsAlgorithmParams = detailsAlgorithm
+    ? getAlgorithmParameters(algorithmRegistry, detailsAlgorithm.id) || []
+    : [];
+
   return (
     <div
       style={{
@@ -491,7 +497,7 @@ export default function MetricsPanel({
                       type="button"
                       onClick={(e) => {
                         e.preventDefault();
-                        setExpandedAlgorithm(expandedAlgorithm === algo.id ? null : algo.id);
+                        setDetailsAlgorithmId(algo.id);
                       }}
                       style={{
                         marginTop: 6,
@@ -503,7 +509,7 @@ export default function MetricsPanel({
                         cursor: "pointer",
                       }}
                     >
-                      {expandedAlgorithm === algo.id ? "Hide details" : "Show details"}
+                      Details
                     </button>
                   </div>
 
@@ -519,51 +525,7 @@ export default function MetricsPanel({
                   </div>
                 </label>
 
-                {expandedAlgorithm === algo.id && (
-                  <div
-                    style={{
-                      padding: "0 12px 12px 12px",
-                      color: "#475569",
-                      fontSize: 14,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    <div style={{ marginBottom: 8 }}>{algo.note}</div>
 
-                    {(algo.warnings || []).length > 0 && (
-                      <div style={{ marginBottom: 8, color: "#9a3412" }}>
-                        <strong>Warnings:</strong> {algo.warnings.join(" ")}
-                      </div>
-                    )}
-
-                    {getAlgorithmReferences(algorithmRegistry, algo.id).length > 0 && (
-                      <div style={{ marginBottom: 12 }}>
-                        <strong>Citation:</strong>{" "}
-                        {getAlgorithmReferences(algorithmRegistry, algo.id).join("; ")}
-                      </div>
-                    )}
-
-                    {(getAlgorithmParameters(algorithmRegistry, algo.id) || []).length > 0 && (
-                      <div style={{ display: "grid", gap: 10 }}>
-                        {(getAlgorithmParameters(algorithmRegistry, algo.id) || []).map((param) => (
-                          <div key={`${algo.id}-${param.name}`}>
-                            <div style={{ fontWeight: 600, marginBottom: 6 }}>{param.label}</div>
-                            {renderParamInput(
-                              param,
-                              algorithmParams?.[algo.id]?.[param.name],
-                              (value) => updateAlgorithmParam(algo.id, param.name, value)
-                            )}
-                            {param.description && (
-                              <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
-                                {param.description}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -1060,6 +1022,114 @@ export default function MetricsPanel({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {detailsAlgorithm && (
+        <div
+          role="presentation"
+          onClick={() => setDetailsAlgorithmId(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="algorithm-details-title"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(720px, 100%)",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              background: "white",
+              color: "#0f172a",
+              borderRadius: 18,
+              boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)",
+              padding: 20,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
+              <div>
+                <h3 id="algorithm-details-title" style={{ margin: 0, fontSize: 22 }}>
+                  {detailsAlgorithm.label}
+                </h3>
+                {detailsAlgorithm.context && (
+                  <div style={{ color: "#64748b", marginTop: 4, lineHeight: 1.5 }}>
+                    {detailsAlgorithm.context}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailsAlgorithmId(null)}
+                aria-label="Close algorithm details"
+                style={{
+                  border: "none",
+                  background: "#f1f5f9",
+                  color: "#0f172a",
+                  borderRadius: 999,
+                  width: 34,
+                  height: 34,
+                  cursor: "pointer",
+                  fontSize: 22,
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.65, display: "grid", gap: 12 }}>
+              {detailsAlgorithm.description && <div>{detailsAlgorithm.description}</div>}
+              {detailsAlgorithm.note && <div>{detailsAlgorithm.note}</div>}
+
+              {(detailsAlgorithm.warnings || []).length > 0 && (
+                <div style={{ padding: 12, borderRadius: 12, background: "#fff7ed", border: "1px solid #fed7aa", color: "#9a3412" }}>
+                  <strong>Warnings:</strong> {detailsAlgorithm.warnings.join(" ")}
+                </div>
+              )}
+
+              {getAlgorithmReferences(algorithmRegistry, detailsAlgorithm.id).length > 0 && (
+                <div>
+                  <strong>Citation:</strong>{" "}
+                  {getAlgorithmReferences(algorithmRegistry, detailsAlgorithm.id).join("; ")}
+                </div>
+              )}
+
+              {detailsAlgorithmParams.length > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: 10 }}>
+                    Advanced algorithm parameters
+                  </div>
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {detailsAlgorithmParams.map((param) => (
+                      <div key={`${detailsAlgorithm.id}-${param.name}`}>
+                        <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: 6 }}>{param.label}</div>
+                        {renderParamInput(
+                          param,
+                          algorithmParams?.[detailsAlgorithm.id]?.[param.name],
+                          (value) => updateAlgorithmParam(detailsAlgorithm.id, param.name, value)
+                        )}
+                        {param.description && (
+                          <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+                            {param.description}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

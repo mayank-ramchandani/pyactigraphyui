@@ -8,7 +8,30 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Brush,
 } from "recharts";
+
+
+function formatTimestampTick(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatTooltipTimestamp(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
 
 function formatValue(value) {
   if (value == null || Number.isNaN(value)) return "Not available";
@@ -32,6 +55,7 @@ export default function PreviewPanel({
   onPreview,
 }) {
   const [search, setSearch] = useState("");
+  const [previewZoomKey, setPreviewZoomKey] = useState(0);
 
   const filteredActigraphyFiles = useMemo(() => {
     return actigraphyFiles.filter((file) =>
@@ -377,16 +401,39 @@ export default function PreviewPanel({
                   background: "#f8fafc",
                 }}
               >
-                <div style={{ fontWeight: 700, marginBottom: 10 }}>
-                  {mode === "light" ? "Light Preview Plot" : "Activity Preview Plot"}
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700 }}>
+                    {mode === "light" ? "Light Preview Plot" : "Activity Preview Plot"}
+                  </div>
+                  {mode === "activity" && points.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewZoomKey((value) => value + 1)}
+                      style={{
+                        padding: "7px 10px",
+                        borderRadius: 10,
+                        background: "white",
+                        color: "#0f172a",
+                        border: "1px solid #cbd5e1",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Reset zoom
+                    </button>
+                  )}
                 </div>
 
-                {mode === "light" && (
+                {mode === "light" ? (
                   <div style={{ color: "#64748b", fontSize: 13, marginBottom: 10 }}>
                     Y-axis: {lightAxisLabel}
                     {previewData?.light_summary?.light_scale_note
                       ? ` — ${previewData.light_summary.light_scale_note}`
                       : ""}
+                  </div>
+                ) : (
+                  <div style={{ color: "#64748b", fontSize: 13, marginBottom: 10 }}>
+                    X-axis: recording time. Drag the range selector under the plot to zoom into a specific time window.
                   </div>
                 )}
 
@@ -394,10 +441,15 @@ export default function PreviewPanel({
                   <div style={{ color: "#64748b" }}>No preview points were returned.</div>
                 ) : (
                   <div style={{ width: "100%", height: 320 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={points}>
+                    <ResponsiveContainer key={mode === "activity" ? previewZoomKey : undefined} width="100%" height="100%">
+                      <LineChart data={points} margin={{ top: 8, right: 24, left: 8, bottom: mode === "activity" ? 48 : 8 }}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="timestamp" tick={false} minTickGap={40} />
+                        <XAxis
+                          dataKey="timestamp"
+                          tick={mode === "activity" ? { fontSize: 11 } : false}
+                          minTickGap={40}
+                          tickFormatter={mode === "activity" ? formatTimestampTick : undefined}
+                        />
                         <YAxis
                           width={88}
                           label={{
@@ -409,14 +461,16 @@ export default function PreviewPanel({
                         />
                         <Tooltip
                           formatter={(value) => [value, yValueLabel]}
-                          labelFormatter={(label) => `Time: ${label}`}
+                          labelFormatter={(label) => `Time: ${formatTooltipTimestamp(label)}`}
                         />
                         <Line
                           type="monotone"
                           dataKey={mode === "light" ? "light" : "activity"}
                           dot={false}
                           strokeWidth={2}
+                          isAnimationActive={false}
                         />
+                        {mode === "activity" && <Brush dataKey="timestamp" height={26} travellerWidth={10} tickFormatter={formatTimestampTick} />}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
