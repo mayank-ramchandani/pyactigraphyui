@@ -75,6 +75,12 @@ export default function Dashboard() {
 
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
+  const [analysisProgress, setAnalysisProgress] = useState({
+    phase: "",
+    current: 0,
+    total: 0,
+    percent: 0,
+  });
 
   const [selectedMetrics, setSelectedMetrics] = useState(
     getDefaultSelectedMetrics(metricRegistry)
@@ -247,6 +253,17 @@ export default function Dashboard() {
       lightMetricSettings,
     ]
   );
+
+  const setProgressStage = (phase, current, total) => {
+    const safeTotal = Math.max(1, Number(total) || 1);
+    const safeCurrent = Math.min(Math.max(0, Number(current) || 0), safeTotal);
+    setAnalysisProgress({
+      phase,
+      current: safeCurrent,
+      total: safeTotal,
+      percent: Math.round((safeCurrent / safeTotal) * 100),
+    });
+  };
 
   const parseJsonResponse = async (res) => {
     const text = await res.text();
@@ -424,7 +441,7 @@ export default function Dashboard() {
     }
   };
 
-  const runSelectedLightMetrics = async () => {
+  const runSelectedLightMetrics = async (startingStep = 1, totalSteps = 1) => {
     if (!lightFile || selectedLightMetrics.length === 0) {
       return {};
     }
@@ -432,7 +449,15 @@ export default function Dashboard() {
     const nextLightResults = {};
     const errors = [];
 
-    for (const metricId of selectedLightMetrics) {
+    for (let index = 0; index < selectedLightMetrics.length; index += 1) {
+      const metricId = selectedLightMetrics[index];
+      const metricNumber = index + 1;
+      setProgressStage(
+        `Running light metric ${metricNumber} of ${selectedLightMetrics.length}: ${metricId}`,
+        startingStep + index,
+        totalSteps
+      );
+
       try {
         const formData = new FormData();
         formData.append("file", lightFile);
@@ -459,6 +484,12 @@ export default function Dashboard() {
         nextLightResults[metricId] = data;
       } catch (err) {
         errors.push(`${metricId}: ${err.message || "failed"}`);
+      } finally {
+        setProgressStage(
+          `Finished light metric ${metricNumber} of ${selectedLightMetrics.length}`,
+          startingStep + metricNumber,
+          totalSteps
+        );
       }
     }
 
@@ -476,6 +507,8 @@ export default function Dashboard() {
       setLightAnalysisError("");
       setLightResults({});
       setResultsGenerated(false);
+      const totalSteps = 1 + (lightFile && selectedLightMetrics.length > 0 ? selectedLightMetrics.length : 0);
+      setProgressStage("Uploading file and running activity/sleep metrics", 0, totalSteps);
 
       const formData = new FormData();
       formData.append("file", actigraphyFile);
@@ -500,12 +533,15 @@ export default function Dashboard() {
         throw new Error(data?.detail || "Failed to generate results.");
       }
 
+      setProgressStage("Activity/sleep metrics complete", 1, totalSteps);
+
       const results = data.results || {};
       setSummaryResults(results);
       setQcWarnings(data.qcWarnings || []);
       setSupportFileSummary(data.supportFileSummary || null);
-      const generatedLightResults = await runSelectedLightMetrics();
+      const generatedLightResults = await runSelectedLightMetrics(1, totalSteps);
       setSelectedResultMetric(Object.keys(results)[0] || "");
+      setProgressStage("Analysis complete", totalSteps, totalSteps);
       setResultsGenerated(true);
       unlockAndGoToStep("10");
       void saveRunRecord({
@@ -519,6 +555,10 @@ export default function Dashboard() {
     } catch (err) {
       const message = err.message || "Failed to generate results.";
       setAnalysisError(message);
+      setAnalysisProgress((prev) => ({
+        ...prev,
+        phase: message,
+      }));
       setResultsGenerated(false);
       void saveRunRecord({ status: "failed", errorMessage: message });
     } finally {
@@ -890,6 +930,7 @@ export default function Dashboard() {
         analysisConfig={resolvedAnalysisConfig}
         analysisError={analysisError}
         analysisLoading={analysisLoading}
+        analysisProgress={analysisProgress}
         analysisMode={analysisMode}
         supportFileSummary={supportFileSummary}
         lightResults={lightResults}

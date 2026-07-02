@@ -548,6 +548,94 @@ def _rest_windows_from_activity_onset_offset(onsets, offsets, min_hours=3.0, max
     return deduped
 
 
+def _detect_low_activity_rest_windows(raw, min_hours=3.0, max_hours=14.0, target_hours=None):
+    """Fallback rest-window detector for raw objects without usable AOT arrays.
+
+    It finds the lowest-activity overnight window for each recording day. This is
+    deliberately labelled as a fallback estimate so users know it is not a
+    pyActigraphy Crespo/Roenneberg AOT result.
+    """
+    series = getattr(raw, "data", None)
+    if series is None:
+        return []
+    try:
+        series = pd.to_numeric(series, errors="coerce").dropna().sort_index()
+    except Exception:
+        return []
+    if len(series) == 0 or not isinstance(series.index, pd.DatetimeIndex):
+        return []
+
+    try:
+        # Five-minute bins keep this fallback fast on large GENEActiv files and
+        # make the rolling overnight search less sensitive to single-epoch spikes.
+        work = series.resample("5min").mean().dropna()
+    except Exception:
+        work = series
+
+    if len(work) == 0:
+        return []
+
+    target_hours = float(target_hours or min(max(8.0, min_hours), max_hours))
+    target_hours = min(max(target_hours, min_hours), max_hours)
+    duration = pd.Timedelta(hours=target_hours)
+    min_duration = pd.Timedelta(hours=min_hours)
+
+    start_date = work.index.min().normalize() - pd.Timedelta(days=1)
+    end_date = work.index.max().normalize() + pd.Timedelta(days=1)
+    dates = pd.date_range(start_date, end_date, freq="1D")
+    windows = []
+
+    for date in dates:
+        night_start = date + pd.Timedelta(hours=18)
+        night_stop = date + pd.Timedelta(days=1, hours=12)
+        segment = work.loc[night_start:night_stop].dropna()
+        if segment.empty:
+            continue
+        if (segment.index.max() - segment.index.min()) < min_duration:
+            continue
+
+        try:
+            rolling = segment.rolling(duration, min_periods=max(2, int((min_hours * 60) / 5))).mean().dropna()
+        except Exception:
+            rolling = segment.rolling(max(2, int((target_hours * 60) / 5)), min_periods=max(2, int((min_hours * 60) / 5))).mean().dropna()
+        if rolling.empty:
+            continue
+
+        stop = pd.Timestamp(rolling.idxmin())
+        start = stop - duration
+        if start < segment.index.min():
+            start = segment.index.min()
+            stop = start + duration
+        if stop > segment.index.max():
+            stop = segment.index.max()
+            start = stop - duration
+        if stop <= start or (stop - start) < min_duration:
+            continue
+
+        duration_hours = (stop - start).total_seconds() / 3600.0
+        if not (min_hours <= duration_hours <= max_hours):
+            continue
+
+        windows.append({
+            "start": start,
+            "stop": stop,
+            "state": "ESTIMATED_REST",
+            "source": "estimated_rest_period",
+            "method": "fallback_low_activity_window",
+            "estimated": True,
+        })
+
+    deduped = []
+    seen_dates = set()
+    for window in sorted(windows, key=lambda item: item["start"]):
+        key = window["start"].date().isoformat()
+        if key in seen_dates:
+            continue
+        seen_dates.add(key)
+        deduped.append(window)
+    return deduped
+
+
 def _detect_rest_windows_with_pyactigraphy(raw, sleep_window_settings=None):
     settings = sleep_window_settings or {}
     enabled = bool(settings.get("estimateWithoutDiary", True))
@@ -592,6 +680,25 @@ def _detect_rest_windows_with_pyactigraphy(raw, sleep_window_settings=None):
                 "notes": notes + [f"Detected {len(windows)} rest window(s) from activity offset/onset times."],
             }
         notes.append(f"{label} ran, but no rest windows passed the duration filters ({min_hours}-{max_hours} h).")
+
+    if settings.get("fallbackToLowActivity", True):
+        fallback_windows = _detect_low_activity_rest_windows(
+            raw,
+            min_hours=min_hours,
+            max_hours=max_hours,
+            target_hours=settings.get("fallbackRestWindowHours") or settings.get("targetRestWindowHours"),
+        )
+        if fallback_windows:
+            return fallback_windows, {
+                "source": "estimated_rest_period",
+                "method": "fallback_low_activity_window",
+                "estimated": True,
+                "notes": notes + [
+                    "Crespo/Roenneberg AOT did not return usable arrays, so the UI used a fallback lowest-activity overnight window estimate.",
+                    f"Detected {len(fallback_windows)} fallback rest window(s).",
+                ],
+            }
+        notes.append("Fallback lowest-activity rest-window detection did not find a usable overnight window.")
 
     return [], {"source": "none", "method": None, "estimated": False, "notes": notes}
 
@@ -717,10 +824,12 @@ def compute_metric(raw, metric_id, params=None):
         return _safe_call(raw.RAp, period=params.get("period", "7D"), binarize=params.get("binarize", True), threshold=params.get("threshold", 4), verbose=params.get("verbose", False))
 
     if metric_id == "kra":
-        return _safe_call(raw.kRA, threshold=params.get("threshold", 4), start=params.get("start") or None, period=params.get("period") or None, frac=params.get("frac", 0.3), it=params.get("it", 0), logit=params.get("logit", False), freq=params.get("freq", "1min"))
+        method = getattr(raw, "kRA", None)
+        return _safe_call(method, threshold=params.get("threshold", 4), start=params.get("start") or None, period=params.get("period") or None, frac=params.get("frac", 0.3), it=params.get("it", 0), logit=params.get("logit", False), freq=params.get("freq", "1min")) if callable(method) else None
 
     if metric_id == "kar":
-        return _safe_call(raw.kAR, threshold=params.get("threshold", 4), start=params.get("start") or None, period=params.get("period") or None, frac=params.get("frac", 0.3), it=params.get("it", 0), logit=params.get("logit", False), freq=params.get("freq", "1min"))
+        method = getattr(raw, "kAR", None)
+        return _safe_call(method, threshold=params.get("threshold", 4), start=params.get("start") or None, period=params.get("period") or None, frac=params.get("frac", 0.3), it=params.get("it", 0), logit=params.get("logit", False), freq=params.get("freq", "1min")) if callable(method) else None
 
     return None
 
@@ -742,7 +851,8 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
         if algo_key is None:
             results["sri"] = None
         else:
-            results["sri"] = _safe_call(raw.SleepRegularityIndex, algo=algo_key)
+            sri_method = getattr(raw, "SleepRegularityIndex", None)
+            results["sri"] = _safe_call(sri_method, algo=algo_key) if callable(sri_method) else None
 
     if "tst" in selected_metrics:
         results["tst"] = round(rest_minutes, 2) if rest_minutes is not None else None
@@ -1253,20 +1363,35 @@ def build_light_rgb_preview(raw, resample_freq="5min"):
 
     preview_df = pd.concat(channel_series.values(), axis=1)
 
+    channel_scale_info = {channel: _describe_light_scale(raw, channel) for channel in preview_df.columns}
+    y_axis_labels = sorted({info.get("y_axis_label") for info in channel_scale_info.values() if info.get("y_axis_label")})
+    if len(y_axis_labels) == 1:
+        y_axis_label = y_axis_labels[0]
+        scale_note = next((info.get("light_scale_note") for info in channel_scale_info.values() if info.get("light_scale_note")), "")
+    else:
+        y_axis_label = "Light intensity (mixed units/scales)"
+        scale_note = "selected channels may use different units; check each channel card for units"
+
     summary = {
         "rows": int(len(preview_df)),
         "start": str(preview_df.index.min()) if len(preview_df) else None,
         "end": str(preview_df.index.max()) if len(preview_df) else None,
         "channels_used": list(preview_df.columns),
+        "y_axis_label": y_axis_label,
+        "light_scale_note": scale_note,
         "channel_stats": {},
     }
 
     for channel in preview_df.columns:
         series = preview_df[channel].dropna()
+        scale_info = channel_scale_info.get(channel, {})
         summary["channel_stats"][channel] = {
             "mean": _serialize_scalar(series.mean()) if len(series) else None,
             "max": _serialize_scalar(series.max()) if len(series) else None,
             "min": _serialize_scalar(series.min()) if len(series) else None,
+            "units": scale_info.get("light_units"),
+            "scale": scale_info.get("light_scale"),
+            "y_axis_label": scale_info.get("y_axis_label"),
         }
 
     return {

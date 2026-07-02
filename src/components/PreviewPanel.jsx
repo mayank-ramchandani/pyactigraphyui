@@ -405,7 +405,7 @@ export default function PreviewPanel({
                   <div style={{ fontWeight: 700 }}>
                     {mode === "light" ? "Light Preview Plot" : "Activity Preview Plot"}
                   </div>
-                  {mode === "activity" && points.length > 0 && (
+                  {points.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setPreviewZoomKey((value) => value + 1)}
@@ -426,6 +426,8 @@ export default function PreviewPanel({
 
                 {mode === "light" ? (
                   <div style={{ color: "#64748b", fontSize: 13, marginBottom: 10 }}>
+                    X-axis: recording time. Drag the range selector under the plot to zoom into a specific time window.
+                    <br />
                     Y-axis: {lightAxisLabel}
                     {previewData?.light_summary?.light_scale_note
                       ? ` — ${previewData.light_summary.light_scale_note}`
@@ -441,14 +443,14 @@ export default function PreviewPanel({
                   <div style={{ color: "#64748b" }}>No preview points were returned.</div>
                 ) : (
                   <div style={{ width: "100%", height: 320 }}>
-                    <ResponsiveContainer key={mode === "activity" ? previewZoomKey : undefined} width="100%" height="100%">
-                      <LineChart data={points} margin={{ top: 8, right: 24, left: 8, bottom: mode === "activity" ? 48 : 8 }}>
+                    <ResponsiveContainer key={previewZoomKey} width="100%" height="100%">
+                      <LineChart data={points} margin={{ top: 8, right: 24, left: 8, bottom: 48 }}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis
                           dataKey="timestamp"
-                          tick={mode === "activity" ? { fontSize: 11 } : false}
+                          tick={{ fontSize: 11 }}
                           minTickGap={40}
-                          tickFormatter={mode === "activity" ? formatTimestampTick : undefined}
+                          tickFormatter={formatTimestampTick}
                         />
                         <YAxis
                           width={88}
@@ -470,7 +472,7 @@ export default function PreviewPanel({
                           strokeWidth={2}
                           isAnimationActive={false}
                         />
-                        {mode === "activity" && <Brush dataKey="timestamp" height={26} travellerWidth={10} tickFormatter={formatTimestampTick} />}
+                        <Brush dataKey="timestamp" height={26} travellerWidth={10} tickFormatter={formatTimestampTick} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

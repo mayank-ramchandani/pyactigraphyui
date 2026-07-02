@@ -7,6 +7,7 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  Brush,
 } from "recharts";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
@@ -17,6 +18,14 @@ function buildApiUrl(path) {
   return `${base}${cleanPath}`;
 }
 
+
+
+function formatTimestampTick(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
 function formatTimestampLabel(value) {
   if (!value) return "";
@@ -48,6 +57,7 @@ export default function LightRGBPanel({ lightFile }) {
   const [payload, setPayload] = useState(null);
   const [visibleChannels, setVisibleChannels] = useState([]);
   const [resampleFreq, setResampleFreq] = useState("5min");
+  const [zoomKey, setZoomKey] = useState(0);
 
   const channels = payload?.rgb_summary?.channels_used || [];
   const yAxisLabel = payload?.rgb_summary?.y_axis_label || "Light intensity";
@@ -102,6 +112,7 @@ export default function LightRGBPanel({ lightFile }) {
             ? defaultChannels
             : data?.rgb_summary?.channels_used || []
         );
+        setZoomKey((value) => value + 1);
       } catch (err) {
         if (!cancelled) {
           setError(err.message || "Failed to load RGB light preview.");
@@ -228,8 +239,29 @@ export default function LightRGBPanel({ lightFile }) {
               marginBottom: 16,
             }}
           >
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Light Channel Plot</div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontWeight: 700 }}>Light Channel Plot</div>
+              {chartData.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setZoomKey((value) => value + 1)}
+                  style={{
+                    padding: "7px 10px",
+                    borderRadius: 10,
+                    background: "white",
+                    color: "#0f172a",
+                    border: "1px solid #cbd5e1",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                  }}
+                >
+                  Reset zoom
+                </button>
+              )}
+            </div>
             <div style={{ color: "#64748b", fontSize: 13, marginBottom: 12 }}>
+              X-axis: recording time. Drag the range selector under the plot to zoom into a specific time window.
+              <br />
               Y-axis: {yAxisLabel}{yAxisNote ? ` — ${yAxisNote}` : ""}
             </div>
 
@@ -237,10 +269,15 @@ export default function LightRGBPanel({ lightFile }) {
               <div style={{ color: "#64748b" }}>No RGB preview points available.</div>
             ) : (
               <div style={{ width: "100%", height: 340 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
+                <ResponsiveContainer key={zoomKey} width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 8, right: 24, left: 8, bottom: 48 }}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="timestamp" tick={false} minTickGap={40} />
+                    <XAxis
+                      dataKey="timestamp"
+                      tick={{ fontSize: 11 }}
+                      minTickGap={40}
+                      tickFormatter={formatTimestampTick}
+                    />
                     <YAxis
                       width={88}
                       label={{
@@ -261,6 +298,7 @@ export default function LightRGBPanel({ lightFile }) {
                         dot={false}
                       />
                     ))}
+                    <Brush dataKey="timestamp" height={26} travellerWidth={10} tickFormatter={formatTimestampTick} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

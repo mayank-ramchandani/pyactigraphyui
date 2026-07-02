@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   getAlgorithmDefinition,
   getAlgorithmLabel,
@@ -54,29 +54,74 @@ function lightMetricInfoText(metricId) {
 }
 
 function InfoBubble({ text }) {
+  const [open, setOpen] = useState(false);
   if (!text) return null;
+
   return (
     <span
-      title={text}
-      aria-label={text}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 18,
-        height: 18,
-        marginLeft: 8,
-        borderRadius: 999,
-        border: "1px solid #94a3b8",
-        color: "#475569",
-        background: "white",
-        fontSize: 12,
-        fontWeight: 800,
-        cursor: "help",
-        verticalAlign: "middle",
-      }}
+      className="metric-info-bubble-wrap"
+      style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
     >
-      i
+      <button
+        type="button"
+        aria-label={text}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen((value) => !value);
+        }}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 18,
+          height: 18,
+          marginLeft: 8,
+          borderRadius: 999,
+          border: "1px solid #94a3b8",
+          color: "#334155",
+          background: "#ffffff",
+          fontSize: 12,
+          fontWeight: 800,
+          lineHeight: 1,
+          cursor: "help",
+          padding: 0,
+          fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        }}
+      >
+        i
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          style={{
+            position: "absolute",
+            zIndex: 2000,
+            left: 28,
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: 320,
+            maxWidth: "min(320px, calc(100vw - 80px))",
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid #cbd5e1",
+            background: "#0f172a",
+            color: "#f8fafc",
+            boxShadow: "0 12px 35px rgba(15, 23, 42, 0.25)",
+            fontSize: 13,
+            lineHeight: 1.45,
+            fontWeight: 500,
+            whiteSpace: "pre-line",
+            textAlign: "left",
+          }}
+        >
+          {text}
+        </span>
+      )}
     </span>
   );
 }
@@ -174,6 +219,7 @@ export default function ResultsPanel({
   title,
   resultsGenerated,
   onGenerate,
+  selectedMetrics = [],
   summaryResults,
   qcWarnings,
   metricRegistry,
@@ -182,6 +228,7 @@ export default function ResultsPanel({
   analysisConfig,
   analysisError,
   analysisLoading,
+  analysisProgress = {},
   analysisMode,
   supportFileSummary,
   lightResults = {},
@@ -194,6 +241,8 @@ export default function ResultsPanel({
   const activeAlgorithm = selectedAlgorithm
     ? getAlgorithmDefinition(algorithmRegistry, selectedAlgorithm)
     : null;
+  const selectedMetricCount = (analysisConfig?.metrics || []).length || (selectedMetrics || []).length;
+  const selectedLightMetricCount = (selectedLightMetrics || []).length;
 
   return (
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
@@ -227,6 +276,52 @@ export default function ResultsPanel({
           Selected algorithm: <strong>{selectedAlgorithm ? getAlgorithmLabel(algorithmRegistry, selectedAlgorithm) : "Not selected"}</strong>
         </div>
       </div>
+
+      <div
+        style={{
+          marginBottom: 16,
+          padding: 12,
+          borderRadius: 12,
+          border: "1px solid #bfdbfe",
+          background: "#eff6ff",
+          color: "#1e3a8a",
+          fontSize: 14,
+          lineHeight: 1.5,
+        }}
+      >
+        Selecting all activity/sleep metrics plus all light metrics can be slow, especially for large raw .bin or .gt3x files. This run has {selectedMetricCount} activity/sleep metric(s) and {selectedLightMetricCount} light metric(s) selected. Keep this page open while the progress indicator updates.
+      </div>
+
+      {analysisLoading && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 14,
+            borderRadius: 14,
+            border: "1px solid #cbd5e1",
+            background: "#f8fafc",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8, color: "#334155", fontSize: 14 }}>
+            <strong>{analysisProgress.phase || "Running analysis"}</strong>
+            <span>{analysisProgress.percent ?? 0}%</span>
+          </div>
+          <div style={{ width: "100%", height: 10, borderRadius: 999, background: "#e2e8f0", overflow: "hidden" }}>
+            <div
+              style={{
+                width: `${analysisProgress.percent ?? 0}%`,
+                height: "100%",
+                borderRadius: 999,
+                background: "#0f172a",
+                transition: "width 200ms ease",
+              }}
+            />
+          </div>
+          <div style={{ marginTop: 8, color: "#64748b", fontSize: 13 }}>
+            Stage {analysisProgress.current ?? 0} of {analysisProgress.total || 1}. The main activity/sleep-metrics request reports as one stage because it runs inside the backend.
+          </div>
+        </div>
+      )}
 
       {analysisError && (
         <div
