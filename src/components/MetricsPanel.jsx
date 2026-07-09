@@ -562,7 +562,7 @@ export default function MetricsPanel({
       >
         <div style={{ fontWeight: 800, marginBottom: 8 }}>Sleep window source for TST, WASO, and sleep efficiency</div>
         <div style={{ marginBottom: 10 }}>
-          Use sleep diary windows when available. If no diary is uploaded, the app can estimate the main sleep/rest window automatically.
+          Use sleep diary windows when available. If no diary is uploaded, the app can estimate the main sleep/rest window only with pyActigraphy onset/offset detection.
           The default automatic method is <BubbleInfo
             label="Crespo_AoT"
             content="Crespo_AoT estimates activity offset/onset periods from the rest-activity pattern. It is a practical default for detecting the main rest window when no sleep diary is uploaded."
@@ -583,7 +583,7 @@ export default function MetricsPanel({
             style={{ marginTop: 3 }}
           />
           <span>
-            If no sleep diary is uploaded, estimate the sleep/rest window automatically. Results will be labelled as estimated.
+            If no sleep diary is uploaded, estimate the sleep/rest window using only the selected pyActigraphy Crespo_AoT or Roenneberg_AoT method. No lowest-activity fallback window will be used.
           </span>
         </label>
 
@@ -606,7 +606,7 @@ export default function MetricsPanel({
         {showSleepWindowAdvanced && (
           <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
             <div style={{ color: "#475569" }}>
-              Leave these defaults unless you are intentionally tuning the automatic onset/offset detector. Start with <strong>3–14 hours</strong> to avoid missing unusual sleep windows; for typical adult overnight sleep, <strong>4–12 hours</strong> is usually a tighter practical range.
+              Leave these defaults unless you are intentionally tuning the selected pyActigraphy onset/offset detector. If the selected method does not return a usable window, window-dependent sleep metrics will be marked unavailable instead of using a fallback estimate. Start with <strong>3–14 hours</strong> to avoid missing unusual sleep windows; for typical adult overnight sleep, <strong>4–12 hours</strong> is usually a tighter practical range.
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
@@ -642,44 +642,6 @@ export default function MetricsPanel({
                   onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, maxRestWindowHours: Number(e.target.value) }))}
                   style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
                 />
-              </label>
-              <label>
-                <div style={{ fontWeight: 600, marginBottom: 5 }}>Fallback target window (h)</div>
-                <input
-                  type="number"
-                  min="1"
-                  step="0.5"
-                  value={sleepWindowSettings?.fallbackRestWindowHours ?? 8}
-                  onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, fallbackRestWindowHours: Number(e.target.value) }))}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
-                />
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 5 }}>Used only if Crespo/Roenneberg fail.</div>
-              </label>
-              <label>
-                <div style={{ fontWeight: 600, marginBottom: 5 }}>Fallback search start hour</div>
-                <input
-                  type="number"
-                  min="0"
-                  max="23"
-                  step="1"
-                  value={sleepWindowSettings?.fallbackSearchStartHour ?? 20}
-                  onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, fallbackSearchStartHour: Number(e.target.value) }))}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
-                />
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 5 }}>24-hour clock. Default 20 = 8 PM.</div>
-              </label>
-              <label>
-                <div style={{ fontWeight: 600, marginBottom: 5 }}>Fallback search stop hour</div>
-                <input
-                  type="number"
-                  min="0"
-                  max="23"
-                  step="1"
-                  value={sleepWindowSettings?.fallbackSearchStopHour ?? 12}
-                  onChange={(e) => setSleepWindowSettings((prev) => ({ ...prev, fallbackSearchStopHour: Number(e.target.value) }))}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #86efac" }}
-                />
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 5 }}>24-hour clock. Default 12 = noon next day.</div>
               </label>
             </div>
 

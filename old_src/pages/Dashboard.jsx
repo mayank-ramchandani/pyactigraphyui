@@ -70,6 +70,7 @@ export default function Dashboard() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [previewData, setPreviewData] = useState(null);
+  const [activityPreviewByFile, setActivityPreviewByFile] = useState({});
 
   const [lightPreviewLoaded, setLightPreviewLoaded] = useState(false);
   const [lightPreviewData, setLightPreviewData] = useState(null);
@@ -355,6 +356,7 @@ export default function Dashboard() {
   const resetPreviewAndResults = () => {
     setPreviewLoaded(false);
     setPreviewData(null);
+    setActivityPreviewByFile({});
     setLightPreviewLoaded(false);
     setLightPreviewData(null);
     setPreviewError("");
@@ -401,17 +403,18 @@ export default function Dashboard() {
     unlockAndGoToStep("2");
   };
 
-  const onActivityPreview = async () => {
-    if (!actigraphyFile) return;
+  const loadActivityPreviewForFile = async (fileName = selectedPreviewFile) => {
+    const targetFile =
+      actigraphyFiles.find((file) => file.name === fileName) ||
+      actigraphyFile;
+    if (!targetFile) return null;
 
     try {
       setPreviewLoading(true);
       setPreviewError("");
-      setPreviewLoaded(false);
-      setPreviewData(null);
 
       const formData = new FormData();
-      formData.append("file", actigraphyFile);
+      formData.append("file", targetFile);
       formData.append("activityChannel", activityChannel);
       formData.append("resampleFreq", "1min");
       formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
@@ -430,14 +433,27 @@ export default function Dashboard() {
         throw new Error(data?.detail || "Failed to load activity preview.");
       }
 
-      setPreviewData(data);
+      const labeledData = { ...data, preview_file_name: targetFile.name };
+      setSelectedPreviewFile(targetFile.name);
+      setPreviewData(labeledData);
+      setActivityPreviewByFile((prev) => ({ ...prev, [targetFile.name]: labeledData }));
       setPreviewLoaded(true);
       unlockStep("4");
+      return labeledData;
     } catch (err) {
       setPreviewError(err.message || "Failed to load activity preview.");
       setPreviewLoaded(false);
+      throw err;
     } finally {
       setPreviewLoading(false);
+    }
+  };
+
+  const onActivityPreview = async () => {
+    try {
+      await loadActivityPreviewForFile(selectedPreviewFile);
+    } catch (error) {
+      // loadActivityPreviewForFile already updates previewError for the UI.
     }
   };
 
@@ -565,6 +581,7 @@ export default function Dashboard() {
 
           const formData = new FormData();
           formData.append("file", sourceFile);
+          formData.append("sourceFileName", sourceFile.name);
           formData.append("activityChannel", activityChannel);
           formData.append("activityTransform", activityTransform);
           formData.append("lightTransform", lightTransform);
@@ -958,6 +975,9 @@ export default function Dashboard() {
           { id: "apply", label: "Apply uploaded or manually selected start/stop intervals", defaultValue: true },
         ]}
         previewData={previewData}
+        previewDataByFile={activityPreviewByFile}
+        actigraphyFiles={actigraphyFiles}
+        onLoadPreviewForFile={loadActivityPreviewForFile}
       />
     );
   } else if (currentStep === "7") {
@@ -977,6 +997,9 @@ export default function Dashboard() {
           { id: "respectNonwear", label: "Respect detected non-wear when available", defaultValue: true },
         ]}
         previewData={previewData}
+        previewDataByFile={activityPreviewByFile}
+        actigraphyFiles={actigraphyFiles}
+        onLoadPreviewForFile={loadActivityPreviewForFile}
       />
     );
   } else if (currentStep === "8") {
@@ -995,6 +1018,9 @@ export default function Dashboard() {
           { id: "apply", label: "Use uploaded or manually selected diary windows when available", defaultValue: true },
         ]}
         previewData={previewData}
+        previewDataByFile={activityPreviewByFile}
+        actigraphyFiles={actigraphyFiles}
+        onLoadPreviewForFile={loadActivityPreviewForFile}
       />
     );
   } else if (currentStep === "9") {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -12,34 +12,35 @@ import {
 } from "recharts";
 
 const supportFileExtensions = ".csv,.ods,.xls,.xlsx,.txt";
+const ALL_FILES_ID = "__all__";
 
 const SUPPORT_HELP = {
   startStop: {
-    fileHint: "Expected columns: start/stop, Start_time/Stop_time, onset/offset, or similar.",
+    fileHint: "Expected columns: file_id/filename if per-file, plus start/stop, Start_time/Stop_time, onset/offset, or similar.",
     visualTitle: "Recording interval preview",
     intervalLabel: "Recording interval",
     startLabel: "Start time",
     stopLabel: "Stop time",
     emptyLabel: "No start/stop intervals selected yet.",
-    plotHelp: "Use this to define the effective wear/recording window. Analysis will be truncated to the selected interval.",
+    plotHelp: "Use this to define the effective wear/recording window. Analysis will be truncated to the selected interval for the matching file.",
   },
   masking: {
-    fileHint: "Expected columns: start/stop intervals to exclude from analysis, such as non-wear or invalid periods.",
+    fileHint: "Expected columns: file_id/filename if per-file, plus start/stop intervals to exclude from analysis, such as non-wear or invalid periods.",
     visualTitle: "Mask / non-wear interval preview",
     intervalLabel: "Excluded interval",
     startLabel: "Mask / non-wear start",
     stopLabel: "Mask / non-wear stop",
     emptyLabel: "No mask or non-wear intervals selected yet.",
-    plotHelp: "Use this to mark intervals that should be excluded, including non-wear or invalid activity periods.",
+    plotHelp: "Use this to mark intervals that should be excluded, including non-wear or invalid activity periods, for the matching file.",
   },
   sleepDiary: {
-    fileHint: "Expected columns: state/type plus start/stop, bedtime/waketime, or lights_off/rise_time.",
+    fileHint: "Expected columns: file_id/filename if per-file, plus state/type and start/stop, bedtime/waketime, or lights_off/rise_time.",
     visualTitle: "Sleep diary window preview",
     intervalLabel: "Diary sleep window",
     startLabel: "Bed / lights-off time",
     stopLabel: "Wake / rise time",
     emptyLabel: "No sleep diary windows selected yet.",
-    plotHelp: "Use this to mark sleep diary windows while seeing where they fall in the recording.",
+    plotHelp: "Use this to mark sleep diary windows while seeing where they fall in the selected recording.",
   },
 };
 
@@ -96,6 +97,21 @@ function intervalInBounds(start, stop, bounds) {
   return true;
 }
 
+function axisValue(value) {
+  if (!value) return value;
+  return String(value).replace("T", " ").replace("Z", "");
+}
+
+function fileLabel(fileId) {
+  if (!fileId || fileId === ALL_FILES_ID) return "All files";
+  return fileId;
+}
+
+function intervalAppliesToSelectedFile(interval, selectedFileId) {
+  const fileId = interval.fileId || interval.fileName || ALL_FILES_ID;
+  return fileId === ALL_FILES_ID || !selectedFileId || fileId === selectedFileId;
+}
+
 export default function SupportFilesStep({
   title,
   description,
@@ -106,18 +122,48 @@ export default function SupportFilesStep({
   settings = {},
   onSettingsChange = () => {},
   previewData = null,
+  previewDataByFile = {},
+  actigraphyFiles = [],
+  onLoadPreviewForFile = null,
 }) {
   const help = SUPPORT_HELP[type] || SUPPORT_HELP.masking;
   const optionDefaults = useMemo(() => defaultSettings(options), [options]);
   const mergedSettings = { ...optionDefaults, manualIntervals: [], ...settings };
-  const [draft, setDraft] = useState({ state: type === "sleepDiary" ? "NIGHT" : type === "masking" ? "NOWEAR" : "", start: "", stop: "" });
+  const firstFileName = actigraphyFiles?.[0]?.name || previewData?.preview_file_name || "";
+  const [selectedFileId, setSelectedFileId] = useState(firstFileName || ALL_FILES_ID);
+  const [draft, setDraft] = useState({
+    state: type === "sleepDiary" ? "NIGHT" : type === "masking" ? "NOWEAR" : "",
+    start: "",
+    stop: "",
+  });
   const [plotPickMode, setPlotPickMode] = useState("start");
   const [draftError, setDraftError] = useState("");
   const [plotZoomKey, setPlotZoomKey] = useState(0);
+  const [plotLoading, setPlotLoading] = useState(false);
+  const [plotError, setPlotError] = useState("");
 
-  const plotPoints = previewData?.full_recording_preview || [];
-  const bounds = useMemo(() => getPreviewBounds(previewData), [previewData]);
+  useEffect(() => {
+    if (!actigraphyFiles?.length) {
+      setSelectedFileId(ALL_FILES_ID);
+      return;
+    }
+    setSelectedFileId((prev) => {
+      if (prev && actigraphyFiles.some((file) => file.name === prev)) return prev;
+      return actigraphyFiles[0].name;
+    });
+  }, [actigraphyFiles]);
+
+  const selectedPreviewData = useMemo(() => {
+    if (selectedFileId && previewDataByFile?.[selectedFileId]) return previewDataByFile[selectedFileId];
+    if (previewData?.preview_file_name === selectedFileId) return previewData;
+    if (actigraphyFiles.length <= 1) return previewData;
+    return null;
+  }, [actigraphyFiles.length, previewData, previewDataByFile, selectedFileId]);
+
+  const plotPoints = selectedPreviewData?.full_recording_preview || [];
+  const bounds = useMemo(() => getPreviewBounds(selectedPreviewData), [selectedPreviewData]);
   const hasPlot = plotPoints.length > 0;
+  const visiblePlotIntervals = (mergedSettings.manualIntervals || []).filter((interval) => intervalAppliesToSelectedFile(interval, selectedFileId));
 
   const updateSettings = (patch) => {
     onSettingsChange({ ...mergedSettings, ...patch });
@@ -127,14 +173,35 @@ export default function SupportFilesStep({
     updateSettings({ [id]: value });
   };
 
+  const loadSelectedPlot = async () => {
+    if (!onLoadPreviewForFile || !selectedFileId || selectedFileId === ALL_FILES_ID) return;
+    setPlotError("");
+    setPlotLoading(true);
+    try {
+      await onLoadPreviewForFile(selectedFileId);
+    } catch (err) {
+      setPlotError(err.message || "Could not load this file preview.");
+    } finally {
+      setPlotLoading(false);
+    }
+  };
+
   const addManualInterval = () => {
     setDraftError("");
+    if (!selectedFileId || selectedFileId === ALL_FILES_ID) {
+      setDraftError("Choose the file this interval belongs to, or use uploaded support files for global intervals.");
+      return;
+    }
     if (!draft.start || !draft.stop) {
       setDraftError("Choose both start and stop times.");
       return;
     }
-    if (!intervalInBounds(draft.start, draft.stop, bounds)) {
-      setDraftError("The selected interval must be within the detected recording start/end and stop must be after start.");
+    if (hasPlot && !intervalInBounds(draft.start, draft.stop, bounds)) {
+      setDraftError("The selected interval must be within the selected file's detected recording start/end and stop must be after start.");
+      return;
+    }
+    if (!hasPlot && parseDatetime(draft.stop) <= parseDatetime(draft.start)) {
+      setDraftError("Stop must be after start. For overnight intervals, choose the next calendar date for the stop time.");
       return;
     }
 
@@ -143,6 +210,8 @@ export default function SupportFilesStep({
     const next = [
       ...(mergedSettings.manualIntervals || []),
       {
+        fileId: selectedFileId,
+        fileName: selectedFileId,
         state: draft.state || (type === "sleepDiary" ? "NIGHT" : type === "masking" ? "NOWEAR" : type.toUpperCase()),
         start: start.toISOString(),
         stop: stop.toISOString(),
@@ -183,7 +252,7 @@ export default function SupportFilesStep({
       <p style={{ color: "#64748b", lineHeight: 1.6 }}>{description}</p>
 
       <div style={{ border: "1px solid #dbeafe", background: "#eff6ff", borderRadius: 14, padding: 14, color: "#1e3a8a", lineHeight: 1.55, fontSize: 14, marginBottom: 14 }}>
-        <strong>pyActigraphy-style support file workflow:</strong> upload a file with intervals, manually add intervals with the calendar fields, or click points on the activity plot. {help.fileHint} Uploaded files are parsed on the backend; manual intervals are sent with the analysis request.
+        <strong>pyActigraphy-style support file workflow:</strong> upload a file with intervals, manually add intervals with the calendar fields, or click points on the selected file's activity plot. {help.fileHint} Uploaded files are parsed on the backend; manual intervals are sent with a file ID so each interval only applies to the matching file.
       </div>
 
       <label style={{ display: "block", border: "2px dashed #cbd5e1", borderRadius: 16, padding: 20, background: "#f8fafc", cursor: "pointer", marginTop: 12 }}>
@@ -212,14 +281,25 @@ export default function SupportFilesStep({
       )}
 
       <div style={{ marginTop: 16, border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#ffffff" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
-          <div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 260, flex: 1 }}>
             <div style={{ fontWeight: 800 }}>Interactive interval selection</div>
             <div style={{ color: "#64748b", fontSize: 14, lineHeight: 1.5 }}>
-              {help.plotHelp} Calendar inputs are limited to the detected recording window: <strong>{formatDisplayDatetime(bounds.start)}</strong> to <strong>{formatDisplayDatetime(bounds.stop)}</strong>.
+              {help.plotHelp} Current file bounds: <strong>{formatDisplayDatetime(bounds.start)}</strong> to <strong>{formatDisplayDatetime(bounds.stop)}</strong>.
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <label style={{ minWidth: 240 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>Plot / interval file</div>
+              <select value={selectedFileId} onChange={(e) => setSelectedFileId(e.target.value)} style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+                {(actigraphyFiles || []).map((file) => <option key={file.name} value={file.name}>{file.name}</option>)}
+              </select>
+            </label>
+            {onLoadPreviewForFile && selectedFileId && (
+              <button type="button" onClick={loadSelectedPlot} disabled={plotLoading} style={{ padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", color: "#0f172a", cursor: plotLoading ? "wait" : "pointer", fontWeight: 700 }}>
+                {plotLoading ? "Loading plot..." : hasPlot ? "Refresh plot" : "Load plot"}
+              </button>
+            )}
             <span style={{ color: "#64748b", fontSize: 14 }}>Plot click sets:</span>
             {[
               { id: "start", label: "Start" },
@@ -237,10 +317,12 @@ export default function SupportFilesStep({
           </div>
         </div>
 
+        {plotError && <div style={{ padding: 10, borderRadius: 10, border: "1px solid #fecaca", background: "#fef2f2", color: "#991b1b", marginBottom: 12, fontSize: 14 }}>{plotError}</div>}
+
         {hasPlot ? (
           <>
             <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5, marginBottom: 8 }}>
-              Drag the small range selector under the plot to zoom into a fine-grained time window. Click the zoomed line to set start/stop points.
+              Drag the small range selector under the plot to zoom into a fine-grained time window. Click the zoomed line to set start/stop points for <strong>{selectedFileId}</strong>.
             </div>
             <div style={{ height: 330, border: "1px solid #e2e8f0", borderRadius: 14, padding: 12, background: "#f8fafc", marginBottom: 16 }}>
               <ResponsiveContainer key={plotZoomKey} width="100%" height="100%">
@@ -249,11 +331,11 @@ export default function SupportFilesStep({
                   <XAxis dataKey="timestamp" minTickGap={40} tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  {(mergedSettings.manualIntervals || []).map((interval, idx) => (
-                    <ReferenceArea key={`interval-${idx}`} x1={interval.start ? String(interval.start).replace("T", " ").replace("Z", "") : interval.start} x2={interval.stop ? String(interval.stop).replace("T", " ").replace("Z", "") : interval.stop} ifOverflow="extendDomain" />
+                  {visiblePlotIntervals.map((interval, idx) => (
+                    <ReferenceArea key={`interval-${idx}`} x1={axisValue(interval.start)} x2={axisValue(interval.stop)} ifOverflow="extendDomain" />
                   ))}
                   {draft.start && draft.stop && (
-                    <ReferenceArea x1={String(draft.start).replace("T", " ")} x2={String(draft.stop).replace("T", " ")} ifOverflow="extendDomain" />
+                    <ReferenceArea x1={axisValue(draft.start)} x2={axisValue(draft.stop)} ifOverflow="extendDomain" />
                   )}
                   <Line type="monotone" dataKey="activity" dot={false} strokeWidth={1.5} isAnimationActive={false} />
                   <Brush dataKey="timestamp" height={26} travellerWidth={10} />
@@ -263,12 +345,18 @@ export default function SupportFilesStep({
           </>
         ) : (
           <div style={{ padding: 14, borderRadius: 14, border: "1px solid #fde68a", background: "#fffbeb", color: "#92400e", marginBottom: 16 }}>
-            Load the activity preview first to enable plot-based interval selection.
+            Choose a file and load its activity preview to enable plot-based interval selection. Manual date/time entry still works, but the plot helps verify that intervals are inside that file.
           </div>
         )}
 
         <div style={{ fontWeight: 800, marginBottom: 10 }}>Add interval</div>
-        <div style={{ display: "grid", gridTemplateColumns: type === "sleepDiary" || type === "masking" ? "1fr 1fr 1fr auto" : "1fr 1fr auto", gap: 10, alignItems: "end" }}>
+        <div style={{ display: "grid", gridTemplateColumns: type === "sleepDiary" || type === "masking" ? "1fr 1fr 1fr 1fr auto" : "1fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
+          <label>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>File ID</div>
+            <select value={selectedFileId} onChange={(e) => setSelectedFileId(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+              {(actigraphyFiles || []).map((file) => <option key={file.name} value={file.name}>{file.name}</option>)}
+            </select>
+          </label>
           {type === "sleepDiary" && (
             <label>
               <div style={{ fontWeight: 600, marginBottom: 6 }}>Diary state</div>
@@ -292,17 +380,20 @@ export default function SupportFilesStep({
           )}
           <label>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>{help.startLabel}</div>
-            <input type="datetime-local" value={draft.start} min={bounds.minLocal || undefined} max={bounds.maxLocal || undefined} onChange={(e) => setDraft((prev) => ({ ...prev, start: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
+            <input type="datetime-local" value={draft.start} min={hasPlot ? bounds.minLocal || undefined : undefined} max={hasPlot ? bounds.maxLocal || undefined : undefined} onChange={(e) => setDraft((prev) => ({ ...prev, start: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
           </label>
           <label>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>{help.stopLabel}</div>
-            <input type="datetime-local" value={draft.stop} min={bounds.minLocal || undefined} max={bounds.maxLocal || undefined} onChange={(e) => setDraft((prev) => ({ ...prev, stop: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
+            <input type="datetime-local" value={draft.stop} min={hasPlot ? bounds.minLocal || undefined : undefined} max={hasPlot ? bounds.maxLocal || undefined : undefined} onChange={(e) => setDraft((prev) => ({ ...prev, stop: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
           </label>
           <button type="button" onClick={addManualInterval} style={{ padding: "11px 14px", borderRadius: 12, border: "none", background: "#0f172a", color: "white", fontWeight: 700, cursor: "pointer" }}>
             Add
           </button>
         </div>
 
+        <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5, marginTop: 8 }}>
+          Overnight intervals work when the stop date/time is on the next calendar day, for example 2026-07-01 23:00 to 2026-07-02 02:00.
+        </div>
         {draftError && <div style={{ color: "#b91c1c", marginTop: 10, fontSize: 14 }}>{draftError}</div>}
 
         <div style={{ marginTop: 16 }}>
@@ -312,7 +403,8 @@ export default function SupportFilesStep({
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
               {(mergedSettings.manualIntervals || []).map((interval, idx) => (
-                <div key={`${interval.start}-${interval.stop}-${idx}`} style={{ display: "grid", gridTemplateColumns: "0.7fr 1.2fr 1.2fr 0.7fr auto", gap: 10, alignItems: "center", border: "1px solid #e2e8f0", borderRadius: 12, padding: 10, background: "#f8fafc", fontSize: 14 }}>
+                <div key={`${interval.fileId}-${interval.start}-${interval.stop}-${idx}`} style={{ display: "grid", gridTemplateColumns: "1.3fr 0.8fr 1.15fr 1.15fr 0.6fr auto", gap: 10, alignItems: "center", border: "1px solid #e2e8f0", borderRadius: 12, padding: 10, background: "#f8fafc", fontSize: 14 }}>
+                  <div><strong>File ID</strong><br />{fileLabel(interval.fileId || interval.fileName)}</div>
                   <div><strong>Type</strong><br />{interval.state || type.toUpperCase()}</div>
                   <div><strong>{help.intervalLabel}</strong><br />{formatDisplayDatetime(interval.start)}</div>
                   <div><strong>Stop</strong><br />{formatDisplayDatetime(interval.stop)}</div>
