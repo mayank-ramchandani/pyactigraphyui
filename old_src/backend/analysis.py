@@ -548,12 +548,119 @@ def _rest_windows_from_activity_onset_offset(onsets, offsets, min_hours=3.0, max
     return deduped
 
 
-def _detect_low_activity_rest_windows(raw, min_hours=3.0, max_hours=14.0, target_hours=None):
+def _format_clock_hour(hour):
+    try:
+        hour = int(hour) % 24
+    except Exception:
+        hour = 0
+    suffix = "AM" if hour < 12 else "PM"
+    display_hour = hour % 12
+    if display_hour == 0:
+        display_hour = 12
+    return f"{display_hour}:00 {suffix}"
+
+
+def _safe_iso_timestamp(value):
+    try:
+        return pd.Timestamp(value).isoformat()
+    except Exception:
+        return str(value)
+
+
+def _safe_round(value, digits=4):
+    try:
+        if value is None or pd.isna(value):
+            return None
+        return round(float(value), digits)
+    except Exception:
+        return None
+
+
+def _format_window_label(start, stop):
+    try:
+        start_ts = pd.Timestamp(start)
+        stop_ts = pd.Timestamp(stop)
+        return f"{start_ts.strftime('%Y-%m-%d %I:%M %p')} to {stop_ts.strftime('%Y-%m-%d %I:%M %p')}"
+    except Exception:
+        return f"{start} to {stop}"
+
+
+def _sleep_window_detail_payload(windows, window_metadata=None):
+    metadata = window_metadata or {}
+    details = []
+    for idx, window in enumerate(windows or [], start=1):
+        start = window.get("start")
+        stop = window.get("stop")
+        duration_hours = None
+        try:
+            duration_hours = (pd.Timestamp(stop) - pd.Timestamp(start)).total_seconds() / 3600.0
+        except Exception:
+            duration_hours = window.get("duration_hours")
+
+        detail = {
+            "index": idx,
+            "date": window.get("night") or window.get("date") or _safe_iso_timestamp(start)[:10],
+            "method": window.get("method") or metadata.get("method"),
+            "source": window.get("source") or metadata.get("source"),
+            "estimated": bool(window.get("estimated", metadata.get("estimated", False))),
+            "start": _safe_iso_timestamp(start),
+            "stop": _safe_iso_timestamp(stop),
+            "duration_hours": _safe_round(duration_hours, 3),
+        }
+
+        diagnostics = window.get("diagnostics") or {}
+        if diagnostics:
+            detail.update({
+                "expected_search_start": diagnostics.get("search_start"),
+                "expected_search_stop": diagnostics.get("search_stop"),
+                "expected_search_range": diagnostics.get("search_range_label"),
+                "lowest_sustained_activity_block_start": diagnostics.get("candidate_start"),
+                "lowest_sustained_activity_block_stop": diagnostics.get("candidate_stop"),
+                "lowest_sustained_activity_block": diagnostics.get("candidate_range_label"),
+                "target_window_hours": diagnostics.get("target_hours"),
+                "min_window_hours": diagnostics.get("min_hours"),
+                "max_window_hours": diagnostics.get("max_hours"),
+                "resample_frequency": diagnostics.get("resample_frequency"),
+                "rolling_mean_activity": diagnostics.get("rolling_mean_activity"),
+                "segment_mean_activity": diagnostics.get("segment_mean_activity"),
+                "segment_min_activity": diagnostics.get("segment_min_activity"),
+                "segment_max_activity": diagnostics.get("segment_max_activity"),
+                "points_in_search_range": diagnostics.get("points_in_search_range"),
+                "points_in_detected_window": diagnostics.get("points_in_detected_window"),
+            })
+        details.append(detail)
+    return details
+
+
+def _summarize_sleep_window_details(details, max_items=4):
+    if not details:
+        return ""
+    lines = []
+    for item in details[:max_items]:
+        lines.append(
+            "Date {date}: expected overnight search range {search}; "
+            "lowest sustained activity block {block}; fallback sleep/rest window {window}; "
+            "duration {duration} h; rolling mean activity {activity}.".format(
+                date=item.get("date") or "unknown",
+                search=item.get("expected_search_range") or "not recorded",
+                block=item.get("lowest_sustained_activity_block") or f"{item.get('start')} to {item.get('stop')}",
+                window=f"{item.get('start')} to {item.get('stop')}",
+                duration=item.get("duration_hours") if item.get("duration_hours") is not None else "not available",
+                activity=item.get("rolling_mean_activity") if item.get("rolling_mean_activity") is not None else "not available",
+            )
+        )
+    if len(details) > max_items:
+        lines.append(f"Additional fallback windows detected: {len(details) - max_items}.")
+    return " | ".join(lines)
+
+
+def _detect_low_activity_rest_windows(raw, min_hours=3.0, max_hours=14.0, target_hours=None, search_start_hour=20, search_stop_hour=12):
     """Fallback rest-window detector for raw objects without usable AOT arrays.
 
     It finds the lowest-activity overnight window for each recording day. This is
     deliberately labelled as a fallback estimate so users know it is not a
-    pyActigraphy Crespo/Roenneberg AOT result.
+    pyActigraphy Crespo/Roenneberg AOT result. The returned windows include
+    diagnostic metadata so the UI can show the search range and selected block.
     """
     series = getattr(raw, "data", None)
     if series is None:
@@ -580,18 +687,33 @@ def _detect_low_activity_rest_windows(raw, min_hours=3.0, max_hours=14.0, target
     duration = pd.Timedelta(hours=target_hours)
     min_duration = pd.Timedelta(hours=min_hours)
 
+    try:
+        search_start_hour = int(search_start_hour) % 24
+    except Exception:
+        search_start_hour = 20
+    try:
+        search_stop_hour = int(search_stop_hour) % 24
+    except Exception:
+        search_stop_hour = 12
+
     start_date = work.index.min().normalize() - pd.Timedelta(days=1)
     end_date = work.index.max().normalize() + pd.Timedelta(days=1)
     dates = pd.date_range(start_date, end_date, freq="1D")
     windows = []
 
     for date in dates:
-        night_start = date + pd.Timedelta(hours=18)
-        night_stop = date + pd.Timedelta(days=1, hours=12)
+        night_start = date + pd.Timedelta(hours=search_start_hour)
+        night_stop = date + pd.Timedelta(hours=search_stop_hour)
+        if night_stop <= night_start:
+            night_stop = night_stop + pd.Timedelta(days=1)
         segment = work.loc[night_start:night_stop].dropna()
         if segment.empty:
             continue
         if (segment.index.max() - segment.index.min()) < min_duration:
+            continue
+        if (segment.index.max() - segment.index.min()) < duration:
+            # Do not report a target-length fallback window if the recording only
+            # contains a partial edge of the overnight search range.
             continue
 
         try:
@@ -616,19 +738,43 @@ def _detect_low_activity_rest_windows(raw, min_hours=3.0, max_hours=14.0, target
         if not (min_hours <= duration_hours <= max_hours):
             continue
 
+        window_segment = segment.loc[start:stop].dropna()
+        diagnostics = {
+            "night": date.date().isoformat(),
+            "search_start": _safe_iso_timestamp(night_start),
+            "search_stop": _safe_iso_timestamp(night_stop),
+            "search_range_label": f"{_format_clock_hour(search_start_hour)} to {_format_clock_hour(search_stop_hour)} next day",
+            "candidate_start": _safe_iso_timestamp(start),
+            "candidate_stop": _safe_iso_timestamp(stop),
+            "candidate_range_label": _format_window_label(start, stop),
+            "target_hours": _safe_round(target_hours, 3),
+            "min_hours": _safe_round(min_hours, 3),
+            "max_hours": _safe_round(max_hours, 3),
+            "resample_frequency": "5min",
+            "rolling_mean_activity": _safe_round(rolling.loc[stop] if stop in rolling.index else rolling.min(), 6),
+            "segment_mean_activity": _safe_round(segment.mean(), 6),
+            "segment_min_activity": _safe_round(segment.min(), 6),
+            "segment_max_activity": _safe_round(segment.max(), 6),
+            "points_in_search_range": int(len(segment)),
+            "points_in_detected_window": int(len(window_segment)),
+        }
+
         windows.append({
             "start": start,
             "stop": stop,
+            "night": date.date().isoformat(),
+            "duration_hours": duration_hours,
             "state": "ESTIMATED_REST",
             "source": "estimated_rest_period",
             "method": "fallback_low_activity_window",
             "estimated": True,
+            "diagnostics": diagnostics,
         })
 
     deduped = []
     seen_dates = set()
     for window in sorted(windows, key=lambda item: item["start"]):
-        key = window["start"].date().isoformat()
+        key = str(window.get("night") or window["start"].date().isoformat())
         if key in seen_dates:
             continue
         seen_dates.add(key)
@@ -687,16 +833,24 @@ def _detect_rest_windows_with_pyactigraphy(raw, sleep_window_settings=None):
             min_hours=min_hours,
             max_hours=max_hours,
             target_hours=settings.get("fallbackRestWindowHours") or settings.get("targetRestWindowHours"),
+            search_start_hour=settings.get("fallbackSearchStartHour", 20),
+            search_stop_hour=settings.get("fallbackSearchStopHour", 12),
         )
         if fallback_windows:
+            details = _sleep_window_detail_payload(fallback_windows, {"method": "fallback_low_activity_window", "source": "estimated_rest_period", "estimated": True})
+            summary = _summarize_sleep_window_details(details)
+            fallback_notes = [
+                "Crespo/Roenneberg AOT did not return usable arrays, so the UI used a fallback lowest-activity overnight window estimate.",
+                f"Detected {len(fallback_windows)} fallback rest window(s).",
+            ]
+            if summary:
+                fallback_notes.append(summary)
             return fallback_windows, {
                 "source": "estimated_rest_period",
                 "method": "fallback_low_activity_window",
                 "estimated": True,
-                "notes": notes + [
-                    "Crespo/Roenneberg AOT did not return usable arrays, so the UI used a fallback lowest-activity overnight window estimate.",
-                    f"Detected {len(fallback_windows)} fallback rest window(s).",
-                ],
+                "details": details,
+                "notes": notes + fallback_notes,
             }
         notes.append("Fallback lowest-activity rest-window detection did not find a usable overnight window.")
 
@@ -871,6 +1025,10 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
         results["sleep_window_count"] = int(window_metadata.get("count") or sleep_window_summary.get("sleep_window_count") or 0)
         results["time_in_bed_minutes"] = round(sleep_window_summary.get("time_in_bed_minutes"), 2) if sleep_window_summary.get("time_in_bed_minutes") is not None else None
         results["sleep_window_estimated"] = bool(window_metadata.get("estimated"))
+        details = window_metadata.get("details") or _sleep_window_detail_payload(sleep_windows, window_metadata)
+        if details:
+            results["sleep_window_details"] = details
+            results["sleep_window_details_summary"] = _summarize_sleep_window_details(details) or None
         if window_metadata.get("notes"):
             results["sleep_window_notes"] = " | ".join([str(note) for note in window_metadata.get("notes", [])])
 

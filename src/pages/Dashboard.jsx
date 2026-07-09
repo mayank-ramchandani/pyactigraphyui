@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import appConfig from "../config/appConfig.json";
 import metricRegistry from "../config/metricRegistry.json";
@@ -59,6 +59,7 @@ export default function Dashboard() {
 
   const [selectedPreviewFile, setSelectedPreviewFile] = useState("");
   const [selectedLightPreviewFile, setSelectedLightPreviewFile] = useState("");
+  const [selectedAnalysisFileNames, setSelectedAnalysisFileNames] = useState([]);
 
   const [analysisMode, setAnalysisMode] = useState("standard");
   const [analysisScope, setAnalysisScope] = useState("metric");
@@ -131,6 +132,10 @@ export default function Dashboard() {
   });
   const [analysisWindowSettings, setAnalysisWindowSettings] = useState({
     mode: "full",
+    intervalPreset: "manual",
+    specificDays: [],
+    dailyStartTime: "",
+    dailyStopTime: "",
     manualIntervals: [],
   });
 
@@ -171,6 +176,7 @@ export default function Dashboard() {
   const [qcWarnings, setQcWarnings] = useState([]);
   const [summaryResults, setSummaryResults] = useState({});
   const [supportFileSummary, setSupportFileSummary] = useState(null);
+  const [multiFileResults, setMultiFileResults] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [runSaveStatus, setRunSaveStatus] = useState("");
   const [runHistoryRefresh, setRunHistoryRefresh] = useState(0);
@@ -188,6 +194,24 @@ export default function Dashboard() {
     lightFiles[0] ||
     actigraphyFile ||
     null;
+
+  const selectedAnalysisFiles = useMemo(() => {
+    if (!actigraphyFiles.length) return [];
+    const selectedNames = new Set(selectedAnalysisFileNames || []);
+    return actigraphyFiles.filter((file) => selectedNames.has(file.name));
+  }, [actigraphyFiles, selectedAnalysisFileNames]);
+
+  useEffect(() => {
+    if (!actigraphyFiles.length) {
+      setSelectedAnalysisFileNames([]);
+      return;
+    }
+    setSelectedAnalysisFileNames((prev) => {
+      const available = new Set(actigraphyFiles.map((file) => file.name));
+      const kept = (prev || []).filter((name) => available.has(name));
+      return kept.length ? kept : actigraphyFiles.map((file) => file.name);
+    });
+  }, [actigraphyFiles]);
 
   const workflowSteps = useMemo(
     () =>
@@ -336,18 +360,27 @@ export default function Dashboard() {
     setPreviewError("");
     setResultsGenerated(false);
     setSummaryResults({});
+    setMultiFileResults([]);
     setQcWarnings([]);
     setAnalysisError("");
     setLightAnalysisError("");
     setLightResults({});
     setSupportFileSummary(null);
-    setAnalysisWindowSettings({ mode: "full", manualIntervals: [] });
+    setAnalysisWindowSettings({
+      mode: "full",
+      intervalPreset: "manual",
+      specificDays: [],
+      dailyStartTime: "",
+      dailyStopTime: "",
+      manualIntervals: [],
+    });
   };
 
   const handleActigraphyFilesChange = (files) => {
     setUploadedFiles((prev) => ({ ...prev, actigraphy: files }));
     setSelectedPreviewFile(files?.[0]?.name || "");
     setSelectedLightPreviewFile("");
+    setSelectedAnalysisFileNames((files || []).map((file) => file.name));
     resetPreviewAndResults();
 
     setShowManualMapping(false);
@@ -444,8 +477,8 @@ export default function Dashboard() {
     }
   };
 
-  const runSelectedLightMetrics = async (startingStep = 1, totalSteps = 1) => {
-    if (!lightFile || selectedLightMetrics.length === 0) {
+  const runSelectedLightMetrics = async (targetFile = lightFile, startingStep = 1, totalSteps = 1, fileLabel = "") => {
+    if (!targetFile || selectedLightMetrics.length === 0) {
       return {};
     }
 
@@ -456,14 +489,14 @@ export default function Dashboard() {
       const metricId = selectedLightMetrics[index];
       const metricNumber = index + 1;
       setProgressStage(
-        `Running light metric ${metricNumber} of ${selectedLightMetrics.length}: ${metricId}`,
+        `${fileLabel ? `${fileLabel}: ` : ""}Running light metric ${metricNumber} of ${selectedLightMetrics.length}: ${metricId}`,
         startingStep + index,
         totalSteps
       );
 
       try {
         const formData = new FormData();
-        formData.append("file", lightFile);
+        formData.append("file", targetFile);
         formData.append("metricId", metricId);
         formData.append("channel", lightMetricSettings.channel || "");
         formData.append("thresholdLux", lightMetricSettings.thresholdLux || "");
@@ -489,7 +522,7 @@ export default function Dashboard() {
         errors.push(`${metricId}: ${err.message || "failed"}`);
       } finally {
         setProgressStage(
-          `Finished light metric ${metricNumber} of ${selectedLightMetrics.length}`,
+          `${fileLabel ? `${fileLabel}: ` : ""}Finished light metric ${metricNumber} of ${selectedLightMetrics.length}`,
           startingStep + metricNumber,
           totalSteps
         );
@@ -502,7 +535,17 @@ export default function Dashboard() {
   };
 
   const handleGenerateResults = async () => {
-    if (!actigraphyFile) return;
+    const filesToAnalyze = selectedAnalysisFiles;
+    if (!filesToAnalyze.length) {
+      setAnalysisError("Select at least one file to analyze.");
+      unlockAndGoToStep("10");
+      return;
+    }
+
+    const lightMetricCount = selectedLightMetrics.length;
+    const totalSteps = Math.max(1, filesToAnalyze.length * (1 + lightMetricCount));
+    let completedSteps = 0;
+    const batchResults = [];
 
     try {
       setAnalysisLoading(true);
@@ -510,51 +553,116 @@ export default function Dashboard() {
       setLightAnalysisError("");
       setLightResults({});
       setResultsGenerated(false);
-      const totalSteps = 1 + (lightFile && selectedLightMetrics.length > 0 ? selectedLightMetrics.length : 0);
-      setProgressStage("Uploading file and running activity/sleep metrics", 0, totalSteps);
+      setMultiFileResults([]);
+      setProgressStage(`Preparing ${filesToAnalyze.length} file(s) for analysis`, 0, totalSteps);
 
-      const formData = new FormData();
-      formData.append("file", actigraphyFile);
-      formData.append("activityChannel", activityChannel);
-      formData.append("activityTransform", activityTransform);
-      formData.append("lightTransform", lightTransform);
-      formData.append("analysisMode", analysisMode);
-      formData.append("analysisConfig", JSON.stringify(resolvedAnalysisConfig));
-      formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
-      formData.append("csvSeparator", csvSeparator);
-      (uploadedFiles.masking || []).forEach((file) => formData.append("maskingFiles", file));
-      (uploadedFiles.sleepDiary || []).forEach((file) => formData.append("sleepDiaryFiles", file));
-      (uploadedFiles.startStop || []).forEach((file) => formData.append("startStopFiles", file));
+      for (let fileIndex = 0; fileIndex < filesToAnalyze.length; fileIndex += 1) {
+        const sourceFile = filesToAnalyze[fileIndex];
+        const fileLabel = `${sourceFile.name} (${fileIndex + 1}/${filesToAnalyze.length})`;
 
-      const res = await fetch(buildApiUrl("api/analyze/basic"), {
-        method: "POST",
-        body: formData,
-      });
+        try {
+          setProgressStage(`Uploading and analyzing ${fileLabel}`, completedSteps, totalSteps);
 
-      const data = await parseJsonResponse(res);
-      if (!res.ok) {
-        throw new Error(data?.detail || "Failed to generate results.");
+          const formData = new FormData();
+          formData.append("file", sourceFile);
+          formData.append("activityChannel", activityChannel);
+          formData.append("activityTransform", activityTransform);
+          formData.append("lightTransform", lightTransform);
+          formData.append("analysisMode", analysisMode);
+          formData.append("analysisConfig", JSON.stringify(resolvedAnalysisConfig));
+          formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
+          formData.append("csvSeparator", csvSeparator);
+          (uploadedFiles.masking || []).forEach((file) => formData.append("maskingFiles", file));
+          (uploadedFiles.sleepDiary || []).forEach((file) => formData.append("sleepDiaryFiles", file));
+          (uploadedFiles.startStop || []).forEach((file) => formData.append("startStopFiles", file));
+
+          const res = await fetch(buildApiUrl("api/analyze/basic"), {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await parseJsonResponse(res);
+          if (!res.ok) {
+            throw new Error(data?.detail || "Failed to generate results.");
+          }
+
+          completedSteps += 1;
+          setProgressStage(`Activity/sleep metrics complete for ${fileLabel}`, completedSteps, totalSteps);
+
+          const results = data.results || {};
+          const lightTargetFile = lightFiles.length > 0 ? lightFile : sourceFile;
+          const generatedLightResults = await runSelectedLightMetrics(
+            lightTargetFile,
+            completedSteps,
+            totalSteps,
+            sourceFile.name
+          );
+          completedSteps += lightMetricCount;
+          setProgressStage(`Finished all selected metrics for ${fileLabel}`, completedSteps, totalSteps);
+
+          const row = {
+            fileName: sourceFile.name,
+            fileSizeMb: Number((sourceFile.size / (1024 * 1024)).toFixed(3)),
+            status: "completed",
+            results,
+            qcWarnings: data.qcWarnings || [],
+            supportFileSummary: data.supportFileSummary || null,
+            detectedInputType: data.detected_input_type || null,
+            lightResults: generatedLightResults,
+          };
+          batchResults.push(row);
+          setMultiFileResults([...batchResults]);
+
+          void saveRunRecord({
+            sourceFile,
+            status: "completed",
+            results,
+            qcWarnings: data.qcWarnings || [],
+            supportFileSummary: data.supportFileSummary || null,
+            detectedInputType: data.detected_input_type || null,
+            lightResults: generatedLightResults,
+          });
+        } catch (err) {
+          completedSteps += 1 + lightMetricCount;
+          const message = err.message || "Failed to generate results.";
+          const row = {
+            fileName: sourceFile.name,
+            fileSizeMb: Number((sourceFile.size / (1024 * 1024)).toFixed(3)),
+            status: "failed",
+            error: message,
+            results: {},
+            qcWarnings: [],
+            supportFileSummary: null,
+            lightResults: {},
+          };
+          batchResults.push(row);
+          setMultiFileResults([...batchResults]);
+          setProgressStage(`Failed ${fileLabel}: ${message}`, completedSteps, totalSteps);
+          void saveRunRecord({ sourceFile, status: "failed", errorMessage: message });
+        }
       }
 
-      setProgressStage("Activity/sleep metrics complete", 1, totalSteps);
+      const successful = batchResults.filter((item) => item.status === "completed");
+      const failed = batchResults.filter((item) => item.status === "failed");
 
-      const results = data.results || {};
-      setSummaryResults(results);
-      setQcWarnings(data.qcWarnings || []);
-      setSupportFileSummary(data.supportFileSummary || null);
-      const generatedLightResults = await runSelectedLightMetrics(1, totalSteps);
-      setSelectedResultMetric(Object.keys(results)[0] || "");
-      setProgressStage("Analysis complete", totalSteps, totalSteps);
+      if (!successful.length) {
+        const message = failed.map((item) => `${item.fileName}: ${item.error}`).join(" | ") || "No files could be analyzed.";
+        throw new Error(message);
+      }
+
+      setSummaryResults(successful[0]?.results || {});
+      setQcWarnings(batchResults.flatMap((item) => (item.qcWarnings || []).map((warning) => `${item.fileName}: ${warning}`)));
+      setSupportFileSummary(successful.length === 1 ? successful[0].supportFileSummary : null);
+      setLightResults(successful.length === 1 ? successful[0].lightResults || {} : {});
+      setSelectedResultMetric(Object.keys(successful[0]?.results || {})[0] || "");
+      setProgressStage(
+        failed.length ? `Analysis complete with ${failed.length} file error(s)` : "Analysis complete",
+        totalSteps,
+        totalSteps
+      );
       setResultsGenerated(true);
+      setAnalysisError(failed.length ? `Some files could not be analyzed: ${failed.map((item) => `${item.fileName}: ${item.error}`).join(" | ")}` : "");
       unlockAndGoToStep("10");
-      void saveRunRecord({
-        status: "completed",
-        results,
-        qcWarnings: data.qcWarnings || [],
-        supportFileSummary: data.supportFileSummary || null,
-        detectedInputType: data.detected_input_type || null,
-        lightResults: generatedLightResults,
-      });
     } catch (err) {
       const message = err.message || "Failed to generate results.";
       setAnalysisError(message);
@@ -563,13 +671,13 @@ export default function Dashboard() {
         phase: message,
       }));
       setResultsGenerated(false);
-      void saveRunRecord({ status: "failed", errorMessage: message });
     } finally {
       setAnalysisLoading(false);
     }
   };
 
   const saveRunRecord = async ({
+    sourceFile = actigraphyFile,
     status = "completed",
     results = {},
     qcWarnings: savedWarnings = [],
@@ -578,15 +686,15 @@ export default function Dashboard() {
     lightResults: savedLightResults = {},
     errorMessage = "",
   }) => {
-    if (!ENABLE_AUTH_RUNS || !supabaseConfigured || !supabase || !currentUser || !actigraphyFile) return;
+    if (!ENABLE_AUTH_RUNS || !supabaseConfigured || !supabase || !currentUser || !sourceFile) return;
 
     try {
       const row = {
         user_id: currentUser.id,
         user_email: currentUser.email || null,
-        original_filename: actigraphyFile.name,
-        file_type: getExtension(actigraphyFile.name),
-        file_size_mb: Number((actigraphyFile.size / (1024 * 1024)).toFixed(3)),
+        original_filename: sourceFile.name,
+        file_type: getExtension(sourceFile.name),
+        file_size_mb: Number((sourceFile.size / (1024 * 1024)).toFixed(3)),
         status,
         analysis_mode: analysisMode,
         selected_algorithm: selectedAlgorithm,
@@ -615,6 +723,7 @@ export default function Dashboard() {
     setSummaryResults(savedResults);
     setQcWarnings(run.qc_warnings || []);
     setSupportFileSummary(run.support_file_summary || null);
+    setMultiFileResults([]);
     setSelectedResultMetric(Object.keys(savedResults)[0] || "");
     setResultsGenerated(Object.keys(savedResults).length > 0);
     setAnalysisError(run.error_message || "");
@@ -640,8 +749,10 @@ export default function Dashboard() {
         };
       case "3":
         return {
-          valid: previewLoaded,
-          message: previewLoaded ? "" : "Load the activity preview before continuing.",
+          valid: true,
+          message: previewLoaded
+            ? ""
+            : "Activity preview is optional. Load it if you want to inspect one file, or click Next to continue.",
         };
       case "4":
         return {
@@ -667,19 +778,30 @@ export default function Dashboard() {
             : selectedMetrics.length > 0;
 
         const hasAlgorithm = Boolean(selectedAlgorithm);
+        const hasAnalysisFiles = selectedAnalysisFileNames.length > 0;
+
+        const selectedIntervalPreset = analysisWindowSettings.intervalPreset || "manual";
+        const hasRequiredSpecificDays =
+          selectedIntervalPreset !== "specific_days" ||
+          (analysisWindowSettings.specificDays || []).length > 0;
 
         const intervalModeValid =
-          analysisWindowSettings.mode !== "selected" ||
+          !["selected", "both"].includes(analysisWindowSettings.mode) ||
+          (
+            selectedIntervalPreset !== "manual" &&
+            hasRequiredSpecificDays
+          ) ||
           (analysisWindowSettings.manualIntervals || []).length > 0;
 
         return {
-          valid: hasMetrics && hasAlgorithm && intervalModeValid,
-          message:
-            !hasMetrics || !hasAlgorithm
-              ? "Select an algorithm and at least one metric or family."
-              : !intervalModeValid
-              ? "Add at least one analysis interval, or switch back to Analyze whole file."
-              : "",
+          valid: hasMetrics && hasAlgorithm && intervalModeValid && hasAnalysisFiles,
+          message: !hasAnalysisFiles
+            ? "Select at least one uploaded file to analyze."
+            : !hasMetrics || !hasAlgorithm
+            ? "Select an algorithm and at least one metric or family."
+            : !intervalModeValid
+            ? "Add at least one manual analysis interval, choose weekdays/weekends/specific days, or switch back to Analyze whole file."
+            : "",
         };
       }
       case "10":
@@ -920,6 +1042,10 @@ export default function Dashboard() {
     content = (
       <ResultsPanel
         title={appConfig.panels.results.title}
+        actigraphyFiles={actigraphyFiles}
+        selectedAnalysisFileNames={selectedAnalysisFileNames}
+        setSelectedAnalysisFileNames={setSelectedAnalysisFileNames}
+        multiFileResults={multiFileResults}
         resultsGenerated={resultsGenerated}
         onGenerate={handleGenerateResults}
         selectedResultMetric={selectedResultMetric}

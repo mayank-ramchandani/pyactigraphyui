@@ -71,8 +71,8 @@
     {
       "id": "6",
       "key": "startStop",
-      "title": "Start / Stop Files",
-      "description": "Attach files defining the true effective recording interval."
+      "title": "Start / Stop",
+      "description": "Attach files or define intervals for the true effective recording interval."
     },
     {
       "id": "7",
@@ -132,7 +132,7 @@
     },
     "startStop": {
       "enabled": true,
-      "title": "6. Start / Stop Files"
+      "title": "6. Start / Stop"
     },
     "metrics": {
       "enabled": true,

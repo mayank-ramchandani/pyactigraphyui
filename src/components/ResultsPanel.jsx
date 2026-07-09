@@ -285,6 +285,10 @@ function renderLightResult(result) {
 
 export default function ResultsPanel({
   title,
+  actigraphyFiles = [],
+  selectedAnalysisFileNames = [],
+  setSelectedAnalysisFileNames = () => {},
+  multiFileResults = [],
   resultsGenerated,
   onGenerate,
   selectedMetrics = [],
@@ -305,6 +309,14 @@ export default function ResultsPanel({
   lightAnalysisError = "",
 }) {
   const lightResultKeys = Object.keys(lightResults || {});
+  const selectedAnalysisNameSet = new Set(selectedAnalysisFileNames || []);
+  const completedBatchResults = Array.isArray(multiFileResults) ? multiFileResults : [];
+  const hasBatchResults = completedBatchResults.length > 1;
+  const successfulBatchResults = completedBatchResults.filter((item) => item.status === "completed");
+  const batchMetricKeys = Array.from(new Set(
+    successfulBatchResults.flatMap((item) => Object.keys(item.results || {}))
+  )).filter((key) => !["analysis_windows", "sleep_window_details"].includes(key));
+  const displayBatchMetricKeys = batchMetricKeys.slice(0, 10);
   const analysisWindows = Array.isArray(summaryResults?.analysis_windows) ? summaryResults.analysis_windows : [];
   const sleepWindowDetails = Array.isArray(summaryResults?.sleep_window_details) ? summaryResults.sleep_window_details : [];
   const activeAlgorithm = selectedAlgorithm
@@ -312,6 +324,7 @@ export default function ResultsPanel({
     : null;
   const selectedMetricCount = (analysisConfig?.metrics || []).length || (selectedMetrics || []).length;
   const selectedLightMetricCount = (selectedLightMetrics || []).length;
+  const selectedFileCount = selectedAnalysisFileNames.length;
 
   return (
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
@@ -323,14 +336,14 @@ export default function ResultsPanel({
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
         <button
           onClick={onGenerate}
-          disabled={analysisLoading}
+          disabled={analysisLoading || selectedFileCount === 0}
           style={{
             padding: "10px 16px",
             borderRadius: 12,
-            background: analysisLoading ? "#94a3b8" : "#0f172a",
+            background: analysisLoading || selectedFileCount === 0 ? "#94a3b8" : "#0f172a",
             color: "white",
             border: "none",
-            cursor: analysisLoading ? "not-allowed" : "pointer",
+            cursor: analysisLoading || selectedFileCount === 0 ? "not-allowed" : "pointer",
             fontWeight: 600,
           }}
         >
@@ -358,8 +371,51 @@ export default function ResultsPanel({
           lineHeight: 1.5,
         }}
       >
-        Selecting all activity/sleep metrics plus all light metrics can be slow, especially for large raw .bin or .gt3x files. This run has {selectedMetricCount} activity/sleep metric(s) and {selectedLightMetricCount} light metric(s) selected. Keep this page open while the progress indicator updates.
+        Selecting all activity/sleep metrics plus all light metrics can be slow, especially for large raw .bin or .gt3x files. This run has {selectedFileCount} file(s), {selectedMetricCount} activity/sleep metric(s), and {selectedLightMetricCount} light metric(s) selected. Keep this page open while the progress indicator updates.
       </div>
+
+      {actigraphyFiles.length > 0 && (
+        <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Files selected for analysis</div>
+              <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
+                Preview is optional. The analysis will run for the checked files below and report any file-level errors separately.
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" onClick={() => setSelectedAnalysisFileNames(actigraphyFiles.map((file) => file.name))} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", cursor: "pointer", fontWeight: 700 }}>
+                Select all
+              </button>
+              <button type="button" onClick={() => setSelectedAnalysisFileNames([])} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", cursor: "pointer", fontWeight: 700 }}>
+                Clear
+              </button>
+            </div>
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {actigraphyFiles.map((file, idx) => {
+              const checked = selectedAnalysisNameSet.has(file.name);
+              return (
+                <label key={`${file.name}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, border: "1px solid #e2e8f0", background: "white", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedAnalysisFileNames(Array.from(new Set([...(selectedAnalysisFileNames || []), file.name])));
+                      } else {
+                        setSelectedAnalysisFileNames((selectedAnalysisFileNames || []).filter((name) => name !== file.name));
+                      }
+                    }}
+                  />
+                  <span style={{ flex: 1, fontWeight: 700 }}>{file.name}</span>
+                  <span style={{ color: "#64748b", fontSize: 13 }}>{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {analysisLoading && (
         <div
@@ -387,7 +443,7 @@ export default function ResultsPanel({
             />
           </div>
           <div style={{ marginTop: 8, color: "#64748b", fontSize: 13 }}>
-            Stage {analysisProgress.current ?? 0} of {analysisProgress.total || 1}. The main activity/sleep-metrics request reports as one stage because it runs inside the backend.
+            Stage {analysisProgress.current ?? 0} of {analysisProgress.total || 1}. Progress advances by file and by light metric; backend activity/sleep metrics are reported at file level.
           </div>
         </div>
       )}
@@ -424,7 +480,140 @@ export default function ResultsPanel({
         </div>
       )}
 
-      {resultsGenerated && (
+      {resultsGenerated && hasBatchResults && (
+        <>
+          <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Batch Summary</div>
+            <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}>
+              Completed: <strong>{successfulBatchResults.length}</strong>; failed: <strong>{completedBatchResults.length - successfulBatchResults.length}</strong>.
+              {displayBatchMetricKeys.length > 0 && " The table shows the first selected/result metrics; open each file below for full details."}
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #e2e8f0" }}>File</th>
+                    <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #e2e8f0" }}>Status</th>
+                    {displayBatchMetricKeys.map((key) => (
+                      <th key={key} style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #e2e8f0" }}>
+                        {resultLabel(metricRegistry, key)}
+                        <InfoBubble text={metricInfoText(metricRegistry, key)} />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {completedBatchResults.map((item, idx) => (
+                    <tr key={`${item.fileName}-${idx}`}>
+                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", fontWeight: 700 }}>{item.fileName}</td>
+                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", color: item.status === "completed" ? "#166534" : "#991b1b" }}>
+                        {item.status === "completed" ? "Completed" : item.error || "Failed"}
+                      </td>
+                      {displayBatchMetricKeys.map((key) => (
+                        <td key={`${item.fileName}-${key}`} style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
+                          {item.status === "completed" ? formatResultValue(item.results?.[key], getMetricResultSchema(metricRegistry, key)) : "—"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: 12 }}>
+            {completedBatchResults.map((item, idx) => {
+              const fileAnalysisWindows = Array.isArray(item.results?.analysis_windows) ? item.results.analysis_windows : [];
+              const fileSleepWindowDetails = Array.isArray(item.results?.sleep_window_details) ? item.results.sleep_window_details : [];
+              const fileLightResultKeys = Object.keys(item.lightResults || {});
+              return (
+                <details key={`${item.fileName}-detail-${idx}`} style={{ border: "1px solid #cbd5e1", borderRadius: 16, padding: 14, background: "white" }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 800 }}>
+                    {item.fileName} · {item.status === "completed" ? "completed" : "failed"}
+                  </summary>
+                  {item.status !== "completed" ? (
+                    <div style={{ marginTop: 12, color: "#991b1b" }}>{item.error || "This file could not be analyzed."}</div>
+                  ) : (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{ border: "1px solid #e2e8f0", borderRadius: 14, padding: 12, background: "#f8fafc", marginBottom: 12 }}>
+                        <div style={{ fontWeight: 700, marginBottom: 8 }}>Summary Table</div>
+                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                          <tbody>
+                            {Object.entries(item.results || {}).filter(([key]) => key !== "analysis_windows" && key !== "sleep_window_details").map(([key, value]) => (
+                              <tr key={`${item.fileName}-${key}`}>
+                                <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>
+                                  {resultLabel(metricRegistry, key)}
+                                  <InfoBubble text={metricInfoText(metricRegistry, key)} />
+                                </td>
+                                <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
+                                  {formatResultValue(value, getMetricResultSchema(metricRegistry, key))}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <SleepWindowDetailsCard details={fileSleepWindowDetails} />
+                      {fileAnalysisWindows.length > 0 && (
+                        <div style={{ border: "1px solid #c7d2fe", borderRadius: 14, padding: 12, background: "#eef2ff", marginBottom: 12 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 8 }}>Analysis Window Details</div>
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+                              <thead>
+                                <tr>
+                                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Interval</th>
+                                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Start</th>
+                                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Stop</th>
+                                  <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Duration</th>
+                                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #c7d2fe" }}>Results</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {fileAnalysisWindows.map((window, windowIdx) => (
+                                  <tr key={`${item.fileName}-${window.start}-${window.stop}-${windowIdx}`}>
+                                    <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.label || `Interval ${windowIdx + 1}`}</td>
+                                    <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.start}</td>
+                                    <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.stop}</td>
+                                    <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", textAlign: "right" }}>{window.duration_hours ?? "—"} h</td>
+                                    <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", fontSize: 13 }}>
+                                      {window.error ? (
+                                        <span style={{ color: "#991b1b" }}>{window.error}</span>
+                                      ) : (
+                                        Object.entries(window.results || {}).map(([key, value]) => `${resultLabel(metricRegistry, key)}: ${formatResultValue(value, getMetricResultSchema(metricRegistry, key))}`).join("; ") || "No values"
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                      {fileLightResultKeys.length > 0 && (
+                        <div style={{ border: "1px solid #dbeafe", borderRadius: 14, padding: 12, background: "#eff6ff", marginBottom: 12 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 8 }}>Light Metrics Results</div>
+                          {fileLightResultKeys.map((metricId) => {
+                            const payload = item.lightResults[metricId];
+                            const metric = LIGHT_METRIC_DEFINITIONS[metricId];
+                            return (
+                              <details key={`${item.fileName}-light-${metricId}`} style={{ border: "1px solid #bfdbfe", borderRadius: 12, padding: 10, background: "white", marginBottom: 8 }}>
+                                <summary style={{ cursor: "pointer", fontWeight: 800 }}>{metric?.label || metricId} · {payload?.channel || "channel"}</summary>
+                                {renderLightResult(payload?.result)}
+                              </details>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </details>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {resultsGenerated && !hasBatchResults && (
         <>
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Summary Table</div>
