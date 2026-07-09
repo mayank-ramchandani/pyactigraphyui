@@ -47,6 +47,111 @@ def _normalize_light_time_arg(value):
         return text + ":00"
     return text
 
+
+def _clock_seconds(value):
+    if value is None or value == "":
+        return None
+    try:
+        t = pd.to_datetime(str(value)).time()
+        return int(t.hour) * 3600 + int(t.minute) * 60 + int(getattr(t, "second", 0))
+    except Exception:
+        return None
+
+
+def _clock_window_crosses_midnight(start_time, stop_time):
+    start_seconds = _clock_seconds(start_time)
+    stop_seconds = _clock_seconds(stop_time)
+    return start_seconds is not None and stop_seconds is not None and stop_seconds < start_seconds
+
+
+def _filter_series_by_clock_window(series, start_time=None, stop_time=None):
+    if series is None:
+        return None
+    if start_time is None and stop_time is None:
+        return series
+    if not isinstance(series.index, pd.DatetimeIndex):
+        return series
+    start_seconds = _clock_seconds(start_time)
+    stop_seconds = _clock_seconds(stop_time)
+    if start_seconds is None and stop_seconds is None:
+        return series
+
+    seconds = series.index.hour * 3600 + series.index.minute * 60 + series.index.second
+    if start_seconds is None:
+        mask = seconds <= stop_seconds
+    elif stop_seconds is None:
+        mask = seconds >= start_seconds
+    elif stop_seconds >= start_seconds:
+        mask = (seconds >= start_seconds) & (seconds <= stop_seconds)
+    else:
+        # Overnight clock window, e.g. 23:00 -> 02:00.
+        mask = (seconds >= start_seconds) | (seconds <= stop_seconds)
+    return series.loc[mask]
+
+
+def _format_output_minutes(minutes, oformat):
+    fmt = str(oformat or "minute").lower()
+    if fmt.startswith("hour") or fmt in {"h", "hr", "hrs"}:
+        return minutes / 60.0
+    if fmt.startswith("day") or fmt in {"d"}:
+        return minutes / (60.0 * 24.0)
+    return minutes
+
+
+def _aggregate_series(series, agg):
+    if series is None or len(series) == 0:
+        return None
+    method = str(agg or "mean").lower()
+    if method == "median":
+        return series.median()
+    if method == "sum":
+        return series.sum()
+    if method in {"std", "sd"}:
+        return series.std()
+    if method == "min":
+        return series.min()
+    if method == "max":
+        return series.max()
+    return series.mean()
+
+
+def _run_light_clock_window_metric(raw, metric_id, channel=None, threshold=None, start_time=None, stop_time=None, agg="mean", oformat="minute"):
+    channels = _get_light_channels(raw)
+    if not channels:
+        raise ValueError("No light channels are available on the loaded file.")
+    selected_channels = [channel] if channel else channels
+    values = {}
+
+    for ch in selected_channels:
+        series = _get_light_channel_series(raw, ch)
+        if series is None or len(series) == 0:
+            values[ch] = None
+            continue
+        window_series = _filter_series_by_clock_window(series, start_time=start_time, stop_time=stop_time)
+        window_series = _coerce_series_to_numeric(window_series)
+        if window_series is None or len(window_series) == 0:
+            values[ch] = None
+            continue
+
+        if metric_id == "exposure_level":
+            metric_series = window_series
+            if threshold is not None:
+                metric_series = metric_series[metric_series >= threshold]
+            values[ch] = _aggregate_series(metric_series, agg)
+        elif metric_id in {"tat", "tatp"}:
+            if threshold is None:
+                raise ValueError(f"{metric_id.upper()} requires a lux threshold.")
+            above = window_series >= threshold
+            if metric_id == "tat":
+                minutes = float(above.sum()) * _epoch_minutes(window_series.index)
+                values[ch] = _format_output_minutes(minutes, oformat)
+            else:
+                values[ch] = float(above.mean()) * 100.0 if len(above) else None
+
+    if channel:
+        return values.get(channel)
+    return pd.Series(values, name=metric_id)
+
 def _lux_to_log10_threshold(threshold_lux):
     if threshold_lux is None or threshold_lux == "":
         return None
@@ -139,8 +244,23 @@ def run_basic_pylight_analysis(raw, metric_id, channel=None, threshold_lux=None,
     threshold = _lux_to_log10_threshold(threshold_lux)
     start_time = _normalize_light_time_arg(start_time)
     stop_time = _normalize_light_time_arg(stop_time)
+    crosses_midnight = _clock_window_crosses_midnight(start_time, stop_time)
 
-    if metric_id == "exposure_level":
+    if crosses_midnight and metric_id in {"exposure_level", "tat", "tatp"}:
+        # pyActigraphy light functions are not guaranteed to interpret start_time > stop_time
+        # as an overnight window. Use an explicit clock-time mask so 23:00 -> 02:00
+        # means time >= 23:00 OR time <= 02:00.
+        result = _run_light_clock_window_metric(
+            raw,
+            metric_id=metric_id,
+            channel=channel,
+            threshold=threshold,
+            start_time=start_time,
+            stop_time=stop_time,
+            agg=agg or "mean",
+            oformat=oformat or "minute",
+        )
+    elif metric_id == "exposure_level":
         result = light_obj.light_exposure_level(threshold=threshold, start_time=start_time or None, stop_time=stop_time or None, agg=agg or "mean")
         result = _select_channel_from_result(result, channel)
     elif metric_id == "summary_stats":
@@ -195,7 +315,17 @@ def run_basic_pylight_analysis(raw, metric_id, channel=None, threshold_lux=None,
         payload = _serialize_series(result)
     else:
         payload = {"kind": "scalar", "value": _serialize_scalar(result)}
-    return {"metric_id": metric_id, "channel": channel, "available_channels": channels, "threshold_lux": _serialize_scalar(threshold_lux), "threshold_log10": _serialize_scalar(threshold), "result": payload}
+    return {
+        "metric_id": metric_id,
+        "channel": channel,
+        "available_channels": channels,
+        "threshold_lux": _serialize_scalar(threshold_lux),
+        "threshold_log10": _serialize_scalar(threshold),
+        "start_time": start_time,
+        "stop_time": stop_time,
+        "time_window_crossed_midnight": bool(crosses_midnight),
+        "result": payload,
+    }
 
 
 def get_basic_light_channels(raw):
@@ -1226,6 +1356,39 @@ def _generate_repeated_analysis_windows(raw, settings):
     return windows
 
 
+def _normalize_file_id(value):
+    if value is None:
+        return ""
+    text = str(value).strip().lower()
+    if not text:
+        return ""
+    try:
+        from pathlib import Path as _Path
+        stem = _Path(text).stem
+        name = _Path(text).name
+        return "|".join(sorted({text, name, stem}))
+    except Exception:
+        return text
+
+
+def _identifier_matches_file(identifier, source_filename):
+    if not identifier or not source_filename:
+        return True
+    ident = str(identifier).strip()
+    if ident.lower() in {"all", "__all__", "global", "*"}:
+        return True
+    source_keys = set(_normalize_file_id(source_filename).split("|"))
+    ident_keys = set(_normalize_file_id(ident).split("|"))
+    return bool(source_keys.intersection(ident_keys))
+
+
+def _interval_applies_to_file(interval, source_filename=None):
+    if not source_filename:
+        return True
+    file_id = interval.get("fileId") or interval.get("file_id") or interval.get("fileName") or interval.get("filename") or interval.get("source_file")
+    return _identifier_matches_file(file_id, source_filename)
+
+
 def _normalize_analysis_windows(analysis_window_settings=None, raw=None):
     settings = analysis_window_settings or {}
     if settings.get("mode") not in {"selected", "both"}:
@@ -1235,20 +1398,28 @@ def _normalize_analysis_windows(analysis_window_settings=None, raw=None):
     if repeated_windows:
         return repeated_windows
 
+    source_filename = settings.get("sourceFileName") or settings.get("fileId")
     windows = []
     for idx, interval in enumerate(settings.get("manualIntervals", []) or []):
+        if not _interval_applies_to_file(interval, source_filename):
+            continue
         try:
             start = pd.to_datetime(interval.get("start"))
             stop = pd.to_datetime(interval.get("stop"))
-            if pd.isna(start) or pd.isna(stop) or stop <= start:
+            if pd.isna(start) or pd.isna(stop):
+                continue
+            if stop <= start:
+                stop = stop + pd.Timedelta(days=1)
+            if stop <= start:
                 continue
             windows.append({
-                "index": idx + 1,
-                "label": interval.get("label") or "Analysis interval {}".format(idx + 1),
+                "index": len(windows) + 1,
+                "label": interval.get("label") or "Analysis interval {}".format(len(windows) + 1),
                 "state": interval.get("state") or "ANALYSIS",
                 "start": start,
                 "stop": stop,
                 "source": interval.get("source") or "manual_ui",
+                "fileId": interval.get("fileId") or interval.get("fileName") or source_filename,
             })
         except Exception:
             continue
@@ -1354,6 +1525,7 @@ def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=N
             "start": window["start"].isoformat(),
             "stop": window["stop"].isoformat(),
             "duration_hours": round((window["stop"] - window["start"]).total_seconds() / 3600.0, 4),
+            "fileId": window.get("fileId"),
         }
         try:
             scoped_raw = _slice_raw_to_window(raw, window["start"], window["stop"])

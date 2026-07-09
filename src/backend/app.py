@@ -468,12 +468,83 @@ def _find_column(df, candidates):
     return None
 
 
+FILE_ID_COLUMNS = [
+    "file_id", "fileid", "file", "filename", "file_name", "source_file",
+    "recording", "recording_id", "subject_file", "actigraphy_file",
+]
 
 
-def _extract_sleep_windows_from_table(df):
+def _file_key_parts(value):
+    if value is None:
+        return set()
+    text = str(value).strip().lower()
+    if not text:
+        return set()
+    parts = {text}
+    try:
+        path = Path(text)
+        parts.add(path.name)
+        parts.add(path.stem)
+    except Exception:
+        pass
+    return {part for part in parts if part}
+
+
+def _matches_source_file(value, source_filename=None):
+    if value is None or str(value).strip() == "":
+        return True
+    text = str(value).strip().lower()
+    if text in {"all", "__all__", "global", "*"}:
+        return True
+    if not source_filename:
+        return True
+    return bool(_file_key_parts(value).intersection(_file_key_parts(source_filename)))
+
+
+def _interval_applies_to_source(interval, source_filename=None):
+    if not source_filename:
+        return True
+    file_id = (
+        interval.get("fileId")
+        or interval.get("file_id")
+        or interval.get("fileName")
+        or interval.get("filename")
+        or interval.get("source_file")
+    )
+    return _matches_source_file(file_id, source_filename)
+
+
+def _filter_table_for_source_file(df, source_filename=None):
+    if df is None or not source_filename:
+        return df, False
+    file_col = _find_column(df, FILE_ID_COLUMNS)
+    if not file_col:
+        return df, False
+    mask = df[file_col].apply(lambda value: _matches_source_file(value, source_filename))
+    return df.loc[mask].copy(), True
+
+
+def _normalize_start_stop_pair(start, stop):
+    import pandas as pd
+
+    start_ts = pd.to_datetime(start)
+    stop_ts = pd.to_datetime(stop)
+    if pd.isna(start_ts) or pd.isna(stop_ts):
+        return None, None
+    if stop_ts <= start_ts:
+        # Supports midnight-crossing rows where users enter 23:00 -> 02:00
+        # with the same calendar date, or diary exports with time-only values.
+        stop_ts = stop_ts + pd.Timedelta(days=1)
+    return start_ts, stop_ts
+
+
+def _extract_sleep_windows_from_table(df, source_filename=None):
     import pandas as pd
 
     windows = []
+    if df is None or len(df) == 0:
+        return windows
+    df, _had_file_filter = _filter_table_for_source_file(df, source_filename)
     if df is None or len(df) == 0:
         return windows
 
@@ -504,9 +575,8 @@ def _extract_sleep_windows_from_table(df):
             if not any(term in state for term in night_like_terms):
                 continue
         try:
-            start = pd.to_datetime(row[start_col])
-            stop = pd.to_datetime(row[stop_col])
-            if pd.isna(start) or pd.isna(stop) or stop <= start:
+            start, stop = _normalize_start_stop_pair(row[start_col], row[stop_col])
+            if start is None or stop is None or stop <= start:
                 continue
             windows.append({
                 "start": start.isoformat(),
@@ -519,11 +589,11 @@ def _extract_sleep_windows_from_table(df):
     return windows
 
 
-def _read_sleep_diary_table(file_path: str):
+def _read_sleep_diary_table(file_path: str, source_filename=None):
     # pyActigraphy sleep diaries often include a small preamble before the table;
     # try normal parsing first, then retry with skipped header rows.
     df = _read_support_table(file_path)
-    if df is not None and _extract_sleep_windows_from_table(df):
+    if df is not None and _extract_sleep_windows_from_table(df, source_filename=source_filename):
         return df
 
     try:
@@ -531,12 +601,12 @@ def _read_sleep_diary_table(file_path: str):
         for skiprows in range(1, 6):
             try:
                 candidate = pd.read_csv(file_path, skiprows=skiprows)
-                if _extract_sleep_windows_from_table(candidate):
+                if _extract_sleep_windows_from_table(candidate, source_filename=source_filename):
                     return candidate
             except Exception:
                 try:
                     candidate = pd.read_csv(file_path, sep=None, engine="python", skiprows=skiprows)
-                    if _extract_sleep_windows_from_table(candidate):
+                    if _extract_sleep_windows_from_table(candidate, source_filename=source_filename):
                         return candidate
                 except Exception:
                     pass
@@ -545,7 +615,7 @@ def _read_sleep_diary_table(file_path: str):
 
     return df
 
-def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_stop_paths=None, support_settings=None):
+def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_stop_paths=None, support_settings=None, source_filename=None):
     import pandas as pd
 
     support_settings = support_settings or {}
@@ -564,6 +634,7 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
         "sleep_diary_rows_loaded": 0,
         "sleep_windows_loaded": 0,
         "start_stop_applied": False,
+        "source_file": source_filename,
         "notes": [],
     }
 
@@ -571,8 +642,10 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
         if start is None or stop is None:
             return
         try:
-            start_ts = pd.to_datetime(start)
-            stop_ts = pd.to_datetime(stop)
+            start_ts, stop_ts = _normalize_start_stop_pair(start, stop)
+            if start_ts is None or stop_ts is None or stop_ts <= start_ts:
+                summary["notes"].append(f"{source}: skipped invalid or empty interval.")
+                return
             if hasattr(raw, "add_mask_period"):
                 raw.add_mask_period(start=start_ts, stop=stop_ts)
                 summary["mask_intervals_applied"] += 1
@@ -586,9 +659,8 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
 
     def apply_start_stop_window(start, stop, source="start/stop"):
         try:
-            start = pd.to_datetime(start)
-            stop = pd.to_datetime(stop)
-            if pd.isna(start) or pd.isna(stop) or stop <= start:
+            start, stop = _normalize_start_stop_pair(start, stop)
+            if start is None or stop is None or stop <= start:
                 summary["notes"].append(f"{source}: skipped invalid start/stop interval.")
                 return
             if hasattr(raw, "data") and raw.data is not None:
@@ -604,30 +676,43 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
     #    leading/trailing periods when the device was not yet worn or no longer worn.
     if start_stop_settings.get("apply", True):
         for interval in start_stop_settings.get("manualIntervals", []) or []:
-            apply_start_stop_window(interval.get("start"), interval.get("stop"), "manual start/stop")
+            if not _interval_applies_to_source(interval, source_filename):
+                continue
+            apply_start_stop_window(interval.get("start"), interval.get("stop"), f"manual start/stop{f' for {source_filename}' if source_filename else ''}")
 
     for path in (start_stop_paths or []) if start_stop_settings.get("apply", True) else []:
         df = _read_support_table(path)
         start_col = _find_column(df, ["start", "start_time", "startTime", "onset", "begin", "Start_time"])
         stop_col = _find_column(df, ["stop", "end", "end_time", "stopTime", "offset", "Stop_time"])
         if df is not None and len(df) > 0 and start_col and stop_col:
-            start = pd.to_datetime(df.iloc[0][start_col])
-            stop = pd.to_datetime(df.iloc[0][stop_col])
-            apply_start_stop_window(start, stop, "start/stop file")
+            filtered_df, had_file_filter = _filter_table_for_source_file(df, source_filename)
+            if filtered_df is None or len(filtered_df) == 0:
+                if had_file_filter:
+                    summary["notes"].append(f"Start/stop file had file IDs, but no rows matched {source_filename}.")
+                continue
+            for _, row in filtered_df.iterrows():
+                apply_start_stop_window(row[start_col], row[stop_col], "start/stop file")
         else:
             summary["notes"].append("Start/stop file received, but start/stop columns were not recognized.")
 
     # 2) Apply masks after truncation.
     if masking_settings.get("apply", True):
         for interval in masking_settings.get("manualIntervals", []) or []:
-            apply_interval(interval.get("start"), interval.get("stop"), "manual masking")
+            if not _interval_applies_to_source(interval, source_filename):
+                continue
+            apply_interval(interval.get("start"), interval.get("stop"), f"manual masking{f' for {source_filename}' if source_filename else ''}")
 
     for path in (masking_paths or []) if masking_settings.get("apply", True) else []:
         df = _read_support_table(path)
         start_col = _find_column(df, ["start", "start_time", "startTime", "onset", "begin", "Start_time"])
         stop_col = _find_column(df, ["stop", "end", "end_time", "stopTime", "offset", "Stop_time"])
         if df is not None and start_col and stop_col:
-            for _, row in df.iterrows():
+            filtered_df, had_file_filter = _filter_table_for_source_file(df, source_filename)
+            if filtered_df is None or len(filtered_df) == 0:
+                if had_file_filter:
+                    summary["notes"].append(f"Masking file had file IDs, but no rows matched {source_filename}.")
+                continue
+            for _, row in filtered_df.iterrows():
                 apply_interval(row[start_col], row[stop_col], "masking")
         else:
             summary["notes"].append("Masking file received, but start/stop columns were not recognized.")
@@ -636,10 +721,11 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
     sleep_windows = []
     if diary_settings.get("apply", True):
         for interval in diary_settings.get("manualIntervals", []) or []:
+            if not _interval_applies_to_source(interval, source_filename):
+                continue
             try:
-                start = pd.to_datetime(interval.get("start"))
-                stop = pd.to_datetime(interval.get("stop"))
-                if pd.isna(start) or pd.isna(stop) or stop <= start:
+                start, stop = _normalize_start_stop_pair(interval.get("start"), interval.get("stop"))
+                if start is None or stop is None or stop <= start:
                     continue
                 state = str(interval.get("state") or "NIGHT")
                 if state.lower() not in ("nap", "nowear", "no wear", "nonwear", "active"):
@@ -654,10 +740,10 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
                 summary["notes"].append(f"manual sleep diary: could not parse interval ({exc}).")
 
     for path in (diary_paths or []) if diary_settings.get("apply", True) else []:
-        df = _read_sleep_diary_table(path)
+        df = _read_sleep_diary_table(path, source_filename=source_filename)
         if df is not None:
             summary["sleep_diary_rows_loaded"] += int(len(df))
-            windows = _extract_sleep_windows_from_table(df)
+            windows = _extract_sleep_windows_from_table(df, source_filename=source_filename)
             sleep_windows.extend(windows)
             summary["sleep_windows_loaded"] += int(len(windows))
             if windows:
@@ -700,6 +786,7 @@ async def analyze_basic(
     maskingFiles: Optional[List[UploadFile]] = File(None),
     sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
     startStopFiles: Optional[List[UploadFile]] = File(None),
+    sourceFileName: Optional[str] = Form(None),
 ):
     try:
         analysis_config = json.loads(analysisConfig or "{}")
@@ -708,7 +795,9 @@ async def analyze_basic(
         analysis_scope = analysis_config.get("analysisScope", "metric")
         algorithm_request = analysis_config.get("algorithm")
         sleep_window_settings = analysis_config.get("sleepWindowSettings", {})
-        analysis_window_settings = analysis_config.get("analysisWindowSettings", {})
+        analysis_window_settings = analysis_config.get("analysisWindowSettings", {}) or {}
+        source_filename = sourceFileName or file.filename
+        analysis_window_settings = {**analysis_window_settings, "sourceFileName": source_filename}
         _json_or_empty(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
@@ -723,6 +812,7 @@ async def analyze_basic(
             diary_paths=diary_paths,
             start_stop_paths=start_stop_paths,
             support_settings=analysis_config.get("supportFileSettings", {}),
+            source_filename=source_filename,
         )
 
         results = run_basic_pyactigraphy_analysis(

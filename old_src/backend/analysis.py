@@ -283,6 +283,90 @@ def _safe_call(callable_obj, *args, **kwargs):
         return None
 
 
+def _value_to_numeric_scalar(value):
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if isinstance(value, (list, tuple, set)):
+        vals = []
+        for item in value:
+            try:
+                vals.append(float(item))
+            except Exception:
+                continue
+        if not vals:
+            return None
+        # Multi-axis accelerometer rows are reduced to vector magnitude so pandas
+        # comparisons like series > 0 do not fail with shape-mismatch errors.
+        return math.sqrt(sum(item * item for item in vals))
+    try:
+        # numpy arrays and pandas extension arrays expose tolist().
+        if hasattr(value, "tolist") and not isinstance(value, (str, bytes)):
+            return _value_to_numeric_scalar(value.tolist())
+    except Exception:
+        pass
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _coerce_series_to_numeric(series):
+    if series is None:
+        return None
+    if isinstance(series, pd.DataFrame):
+        numeric_cols = series.select_dtypes(include="number").columns.tolist()
+        if numeric_cols:
+            preferred = ["VM", "vm", "activity", "Activity", "data", "light"]
+            chosen = next((col for col in preferred if col in numeric_cols), numeric_cols[0])
+            series = series[chosen]
+        elif series.shape[1] > 0:
+            series = series.iloc[:, 0]
+        else:
+            return None
+    if not isinstance(series, pd.Series):
+        try:
+            series = pd.Series(series)
+        except Exception:
+            return None
+    try:
+        numeric = pd.to_numeric(series, errors="coerce")
+    except Exception:
+        numeric = series.map(_value_to_numeric_scalar)
+        numeric = pd.to_numeric(numeric, errors="coerce")
+    if numeric.dropna().empty and len(series.dropna()) > 0:
+        numeric = series.map(_value_to_numeric_scalar)
+        numeric = pd.to_numeric(numeric, errors="coerce")
+    numeric = numeric.dropna()
+    return numeric.sort_index() if len(numeric) else None
+
+
+def _get_activity_series(raw, preferred_channel=None):
+    data = getattr(raw, "data", None)
+    if data is None:
+        return None
+    if isinstance(data, pd.DataFrame):
+        cols = list(data.columns)
+        preferred = [preferred_channel, "VM", "vm", "activity", "Activity", "data", "counts", "acc"]
+        for col in preferred:
+            if col and col in cols:
+                return _coerce_series_to_numeric(data[col])
+        numeric_cols = data.select_dtypes(include="number").columns.tolist()
+        if len(numeric_cols) >= 3:
+            # If x/y/z columns are present, use vector magnitude rather than a single axis.
+            frame = data[numeric_cols[:3]].apply(pd.to_numeric, errors="coerce")
+            magnitude = (frame.pow(2).sum(axis=1).pow(0.5)).rename("VM")
+            return _coerce_series_to_numeric(magnitude)
+        if numeric_cols:
+            return _coerce_series_to_numeric(data[numeric_cols[0]])
+        if cols:
+            return _coerce_series_to_numeric(data[cols[0]])
+        return None
+    return _coerce_series_to_numeric(data)
+
+
 def _resolve_series_to_numeric(value):
     if value is None:
         return None
@@ -401,21 +485,8 @@ def _epoch_minutes(index):
 def _coerce_score_series(score):
     if score is None:
         return None
-    if isinstance(score, pd.DataFrame):
-        if score.shape[1] == 1:
-            score = score.iloc[:, 0]
-        else:
-            numeric_cols = score.select_dtypes(include="number").columns
-            if len(numeric_cols) == 0:
-                return None
-            score = score[numeric_cols[0]]
-    if not isinstance(score, pd.Series):
-        try:
-            score = pd.Series(score)
-        except Exception:
-            return None
-    numeric = pd.to_numeric(score, errors="coerce").dropna()
-    return numeric if len(numeric) else None
+    numeric = _coerce_series_to_numeric(score)
+    return numeric if numeric is not None and len(numeric) else None
 
 
 def _score_rest_minutes(score):
@@ -662,14 +733,8 @@ def _detect_low_activity_rest_windows(raw, min_hours=3.0, max_hours=14.0, target
     pyActigraphy Crespo/Roenneberg AOT result. The returned windows include
     diagnostic metadata so the UI can show the search range and selected block.
     """
-    series = getattr(raw, "data", None)
-    if series is None:
-        return []
-    try:
-        series = pd.to_numeric(series, errors="coerce").dropna().sort_index()
-    except Exception:
-        return []
-    if len(series) == 0 or not isinstance(series.index, pd.DatetimeIndex):
+    series = _get_activity_series(raw)
+    if series is None or len(series) == 0 or not isinstance(series.index, pd.DatetimeIndex):
         return []
 
     try:
@@ -809,7 +874,7 @@ def _detect_rest_windows_with_pyactigraphy(raw, sleep_window_settings=None):
             notes.append(f"Unknown rest-window detection method: {method_name}.")
             continue
 
-        if not aot or not isinstance(aot, (list, tuple)) or len(aot) < 2:
+        if aot is None or not isinstance(aot, (list, tuple)) or len(aot) < 2:
             notes.append(f"{label} did not return usable activity onset/offset arrays.")
             continue
 
@@ -1087,10 +1152,88 @@ def _run_basic_pyactigraphy_analysis_single(raw, metric_requests=None, family_re
     return results
 
 
-def _normalize_analysis_windows(analysis_window_settings=None):
-    settings = analysis_window_settings or {}
-    if settings.get("mode") != "selected":
+def _parse_daily_time(value, default_time):
+    if not value:
+        return default_time
+    try:
+        return pd.to_datetime(str(value)).time()
+    except Exception:
+        return default_time
+
+
+def _combine_date_time(day, clock_time):
+    return pd.Timestamp(day.date()).replace(
+        hour=clock_time.hour,
+        minute=clock_time.minute,
+        second=getattr(clock_time, "second", 0),
+        microsecond=0,
+    )
+
+
+def _generate_repeated_analysis_windows(raw, settings):
+    series = _get_activity_series(raw)
+    if series is None or len(series) == 0 or not isinstance(series.index, pd.DatetimeIndex):
         return []
+
+    preset = settings.get("intervalPreset") or "manual"
+    if preset == "manual":
+        return []
+
+    if preset == "weekdays":
+        allowed_days = {0, 1, 2, 3, 4}
+    elif preset == "weekends":
+        allowed_days = {5, 6}
+    elif preset == "specific_days":
+        allowed_days = {int(day) for day in (settings.get("specificDays") or []) if str(day).strip() != ""}
+        if not allowed_days:
+            return []
+    else:
+        return []
+
+    start_time = _parse_daily_time(settings.get("dailyStartTime"), pd.Timestamp("2000-01-01 00:00").time())
+    stop_time = _parse_daily_time(settings.get("dailyStopTime"), pd.Timestamp("2000-01-01 00:00").time())
+    full_day = not settings.get("dailyStartTime") and not settings.get("dailyStopTime")
+
+    first_day = series.index.min().normalize()
+    last_day = series.index.max().normalize()
+    days = pd.date_range(first_day, last_day, freq="1D")
+    windows = []
+    for day in days:
+        if int(day.dayofweek) not in allowed_days:
+            continue
+        if full_day:
+            start = day
+            stop = day + pd.Timedelta(days=1)
+        else:
+            start = _combine_date_time(day, start_time)
+            stop = _combine_date_time(day, stop_time)
+            if stop <= start:
+                stop = stop + pd.Timedelta(days=1)
+        clipped_start = max(start, series.index.min())
+        clipped_stop = min(stop, series.index.max())
+        if clipped_stop <= clipped_start:
+            continue
+        if len(series.loc[clipped_start:clipped_stop].dropna()) == 0:
+            continue
+        windows.append({
+            "index": len(windows) + 1,
+            "label": f"{preset.replace('_', ' ').title()} {day.date().isoformat()}",
+            "state": "ANALYSIS",
+            "start": clipped_start,
+            "stop": clipped_stop,
+            "source": "repeated_rule",
+        })
+    return windows
+
+
+def _normalize_analysis_windows(analysis_window_settings=None, raw=None):
+    settings = analysis_window_settings or {}
+    if settings.get("mode") not in {"selected", "both"}:
+        return []
+
+    repeated_windows = _generate_repeated_analysis_windows(raw, settings) if raw is not None else []
+    if repeated_windows:
+        return repeated_windows
 
     windows = []
     for idx, interval in enumerate(settings.get("manualIntervals", []) or []):
@@ -1166,9 +1309,33 @@ def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=N
     metric_requests = metric_requests or []
     family_requests = family_requests or []
     selected_metric_ids = [item.get("id") for item in metric_requests if item.get("id")]
-    windows = _normalize_analysis_windows(analysis_window_settings)
+    analysis_window_mode = (analysis_window_settings or {}).get("mode", "full")
+    windows = _normalize_analysis_windows(analysis_window_settings, raw=raw)
 
-    if not windows:
+    if analysis_window_mode == "both":
+        full_results = _run_basic_pyactigraphy_analysis_single(
+            raw,
+            metric_requests=metric_requests,
+            family_requests=family_requests,
+            analysis_scope=analysis_scope,
+            algorithm_request=algorithm_request,
+            sleep_window_settings=sleep_window_settings,
+        )
+        if not windows:
+            full_results["analysis_window_mode"] = "whole_file_plus_intervals"
+            full_results["analysis_window_count"] = 0
+            full_results["analysis_window_summary"] = "Whole-file metrics were calculated, but no selected intervals matched this recording."
+            full_results["analysis_windows"] = []
+            return full_results
+    elif not windows:
+        if analysis_window_mode == "selected":
+            empty_result = {metric_id: None for metric_id in selected_metric_ids}
+            empty_result["analysis_window_mode"] = "selected_intervals"
+            empty_result["analysis_window_count"] = 0
+            empty_result["analysis_window_summary"] = "No selected intervals matched this recording. Adjust the selected days/times or switch to whole-file analysis."
+            empty_result["analysis_windows"] = []
+            return empty_result
+
         return _run_basic_pyactigraphy_analysis_single(
             raw,
             metric_requests=metric_requests,
@@ -1208,6 +1375,16 @@ def run_basic_pyactigraphy_analysis(raw, metric_requests=None, family_requests=N
     aggregate["analysis_window_count"] = len(window_results)
     aggregate["analysis_window_summary"] = "Top-level numeric metrics are means across selected intervals; open Analysis window details for per-interval values."
     aggregate["analysis_windows"] = window_results
+
+    if analysis_window_mode == "both":
+        combined = dict(full_results)
+        combined["analysis_window_mode"] = "whole_file_plus_selected_intervals"
+        combined["analysis_window_count"] = len(window_results)
+        combined["analysis_window_summary"] = "Top-level numeric metrics are from the whole cleaned recording. selected_interval_average stores the mean across the selected intervals; open Analysis window details for per-interval values."
+        combined["selected_interval_average"] = {key: value for key, value in aggregate.items() if key not in {"analysis_windows"}}
+        combined["analysis_windows"] = window_results
+        return combined
+
     return aggregate
 
 
@@ -1265,7 +1442,7 @@ def _sample_full_recording(series, max_points=2000, value_key="activity"):
 
 
 def build_native_preview(raw, activity_channel="data", resample_freq=None):
-    series = getattr(raw, "data", None)
+    series = _get_activity_series(raw, preferred_channel=activity_channel)
     if series is None:
         raise ValueError("Unable to read the activity signal for preview.")
 

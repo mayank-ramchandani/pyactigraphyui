@@ -115,7 +115,7 @@ export default function FileSelectionPanel({
     { key: "light", title: "Light Data", button: "Optional Upload" },
     { key: "temperature", title: "Temperature Data", button: "Optional Upload" },
     { key: "masking", title: "Cleaning / Masking", button: "Optional Upload" },
-    { key: "startStop", title: "Start / Stop File", button: "Optional Upload" },
+    { key: "startStop", title: "Start / Stop", button: "Optional Upload" },
   ];
 
   const handleFiles = async (key, fileList) => {
@@ -212,7 +212,7 @@ export default function FileSelectionPanel({
 
 
   <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.6 }}>
-    Masking excludes invalid or non-wear periods. Sleep diary files describe reported sleep timing. Start/stop files define the intended analysis interval.
+    Masking excludes invalid or non-wear periods. Sleep diary files describe reported sleep timing. Start/stop inputs define the intended analysis interval; files are optional because manual intervals can also be used.
   </div>
 </div>
       </div>

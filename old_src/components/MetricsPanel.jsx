@@ -146,8 +146,19 @@ export default function MetricsPanel({
   const resolvedInputType = inputType || "csv";
   const detectedInputLabel = INPUT_TYPE_LABELS[resolvedInputType] || resolvedInputType;
   const analysisWindowMode = analysisWindowSettings?.mode || "full";
+  const analysisWindowPreset = analysisWindowSettings?.intervalPreset || "manual";
+  const specificDays = analysisWindowSettings?.specificDays || [];
   const analysisIntervals = analysisWindowSettings?.manualIntervals || [];
   const activityPlotPoints = previewData?.full_recording_preview || [];
+  const dayOptions = [
+    { id: 0, label: "Mon" },
+    { id: 1, label: "Tue" },
+    { id: 2, label: "Wed" },
+    { id: 3, label: "Thu" },
+    { id: 4, label: "Fri" },
+    { id: 5, label: "Sat" },
+    { id: 6, label: "Sun" },
+  ];
 
   const allMetrics = useMemo(() => metricRegistry.metrics || [], [metricRegistry]);
   const allAlgorithms = useMemo(() => algorithmRegistry.algorithms || [], [algorithmRegistry]);
@@ -281,6 +292,10 @@ export default function MetricsPanel({
   const updateAnalysisWindowSettings = (patch) => {
     setAnalysisWindowSettings((prev) => ({
       mode: "full",
+      intervalPreset: "manual",
+      specificDays: [],
+      dailyStartTime: "",
+      dailyStopTime: "",
       manualIntervals: [],
       ...(prev || {}),
       ...patch,
@@ -712,13 +727,14 @@ export default function MetricsPanel({
       >
         <div style={{ fontWeight: 800, marginBottom: 8 }}>Physical activity and sleep analysis window</div>
         <div style={{ marginBottom: 10 }}>
-          By default, selected activity and sleep metrics use the whole cleaned recording. Choose selected intervals when you want the same metrics calculated only for specific date/time windows.
+          By default, selected activity and sleep metrics use the whole cleaned recording. You can instead calculate metrics only for repeated intervals that apply to every file, or run both whole-file and interval analyses.
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: analysisWindowMode === "selected" ? 12 : 0 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: ["selected", "both"].includes(analysisWindowMode) ? 12 : 0 }}>
           {[
-            { id: "full", label: "Analyze whole file" },
-            { id: "selected", label: "Analyze selected intervals" },
+            { id: "full", label: "Whole file only" },
+            { id: "selected", label: "Intervals only" },
+            { id: "both", label: "Whole file + intervals" },
           ].map((option) => {
             const selected = analysisWindowMode === option.id;
             return (
@@ -742,24 +758,126 @@ export default function MetricsPanel({
           })}
         </div>
 
-        {analysisWindowMode === "selected" && (
-          <InteractiveIntervalSelector
-            title="Activity plot interval selector"
-            description="Use the activity trace to choose exact date/time intervals for physical activity and sleep-window analysis."
-            plotPoints={activityPlotPoints}
-            valueKey="activity"
-            valueLabel="Activity"
-            lineName="Activity"
-            intervals={analysisIntervals}
-            onIntervalsChange={(manualIntervals) => updateAnalysisWindowSettings({ manualIntervals })}
-            allowMultiple={true}
-            defaultState="ANALYSIS"
-            intervalTypeOptions={[{ value: "ANALYSIS", label: "Analysis interval" }]}
-            intervalLabel="Selected analysis intervals"
-            emptyLabel="No analysis intervals selected yet. The app will ask for at least one interval before using selected-interval mode."
-            noPlotMessage="Load the activity preview first to enable plot-based analysis interval selection."
-            addButtonLabel="Add analysis interval"
-          />
+        {["selected", "both"].includes(analysisWindowMode) && (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {[
+                { id: "manual", label: "Manual date/time windows" },
+                { id: "weekdays", label: "Weekdays" },
+                { id: "weekends", label: "Weekends" },
+                { id: "specific_days", label: "Specific days" },
+              ].map((option) => {
+                const selected = analysisWindowPreset === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => updateAnalysisWindowSettings({ intervalPreset: option.id })}
+                    style={{
+                      padding: "8px 11px",
+                      borderRadius: 10,
+                      border: selected ? "1px solid #312e81" : "1px solid #c7d2fe",
+                      background: selected ? "#312e81" : "white",
+                      color: selected ? "white" : "#312e81",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      fontSize: 13,
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {analysisWindowPreset !== "manual" && (
+              <div style={{ border: "1px solid #c7d2fe", borderRadius: 12, padding: 12, background: "white" }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>Repeated interval rules applied to every file</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "end" }}>
+                  <label>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Optional daily start time</div>
+                    <input
+                      type="time"
+                      value={analysisWindowSettings?.dailyStartTime || ""}
+                      onChange={(e) => updateAnalysisWindowSettings({ dailyStartTime: e.target.value })}
+                      style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
+                    />
+                  </label>
+                  <label>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Optional daily stop time</div>
+                    <input
+                      type="time"
+                      value={analysisWindowSettings?.dailyStopTime || ""}
+                      onChange={(e) => updateAnalysisWindowSettings({ dailyStopTime: e.target.value })}
+                      style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
+                    />
+                  </label>
+                </div>
+                <div style={{ color: "#64748b", fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
+                  Leave times blank to analyze each selected day from midnight to midnight. If stop time is earlier than start time, the interval is treated as overnight.
+                </div>
+
+                {analysisWindowPreset === "specific_days" && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Choose days of week</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {dayOptions.map((day) => {
+                        const selected = specificDays.includes(day.id);
+                        return (
+                          <button
+                            key={day.id}
+                            type="button"
+                            onClick={() => {
+                              const next = selected
+                                ? specificDays.filter((item) => item !== day.id)
+                                : [...specificDays, day.id].sort();
+                              updateAnalysisWindowSettings({ specificDays: next });
+                            }}
+                            style={{
+                              padding: "8px 10px",
+                              borderRadius: 10,
+                              border: selected ? "1px solid #312e81" : "1px solid #cbd5e1",
+                              background: selected ? "#312e81" : "white",
+                              color: selected ? "white" : "#0f172a",
+                              cursor: "pointer",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {day.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {specificDays.length === 0 && (
+                      <div style={{ color: "#b45309", fontSize: 13, marginTop: 8 }}>
+                        Choose at least one day, or switch to weekdays/weekends/manual intervals.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {analysisWindowPreset === "manual" && (
+              <InteractiveIntervalSelector
+                title="Activity plot interval selector"
+                description="Use the activity trace to choose exact date/time intervals for physical activity and sleep-window analysis. These same absolute intervals are sent to every selected file."
+                plotPoints={activityPlotPoints}
+                valueKey="activity"
+                valueLabel="Activity"
+                lineName="Activity"
+                intervals={analysisIntervals}
+                onIntervalsChange={(manualIntervals) => updateAnalysisWindowSettings({ manualIntervals })}
+                allowMultiple={true}
+                defaultState="ANALYSIS"
+                intervalTypeOptions={[{ value: "ANALYSIS", label: "Analysis interval" }]}
+                intervalLabel="Selected analysis intervals"
+                emptyLabel="No analysis intervals selected yet. The app will ask for at least one manual interval before using manual selected-interval mode."
+                noPlotMessage="Preview is optional, but plot-based manual selection needs an activity preview. You can still use weekdays, weekends, or specific-day rules without preview."
+                addButtonLabel="Add analysis interval"
+              />
+            )}
+          </div>
         )}
       </div>
 

@@ -130,20 +130,40 @@ function InfoBubble({ text }) {
   );
 }
 
+function formatSigFigNumber(value, sig = 3) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "";
+  if (number === 0) return "0";
+  const abs = Math.abs(number);
+  if (abs >= 0.001 && abs < 10000) {
+    const decimals = Math.max(0, sig - Math.floor(Math.log10(abs)) - 1);
+    return Number(number.toFixed(decimals)).toString();
+  }
+  return number.toPrecision(sig).replace(/(\.\d*?[1-9])0+(e|$)/, "$1$2").replace(/\.0+(e|$)/, "$1");
+}
+
+function compactJson(value) {
+  try {
+    return JSON.stringify(value, (key, item) => (typeof item === "number" ? formatSigFigNumber(item) : item));
+  } catch (error) {
+    return String(value);
+  }
+}
+
 function formatResultValue(value, schema) {
   if (value == null) return "Not available";
-  if (Array.isArray(value)) return value.join(", ");
+  if (Array.isArray(value)) return value.map((item) => (typeof item === "number" ? formatSigFigNumber(item) : String(item))).join(", ");
   if (typeof value === "number") {
-    const rounded = Number.isInteger(value) ? String(value) : value.toFixed(4);
+    const rounded = formatSigFigNumber(value);
     return schema?.unit ? `${rounded} ${schema.unit}` : rounded;
   }
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return compactJson(value);
   return String(value);
 }
 
 function formatLightValue(value) {
   if (value == null || Number.isNaN(value)) return "";
-  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  if (typeof value === "number") return formatSigFigNumber(value);
   return String(value);
 }
 
@@ -157,7 +177,7 @@ function lightResultScalarText(result) {
 
 function formatSleepDetailValue(value) {
   if (value == null || value === "") return "—";
-  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(3);
+  if (typeof value === "number") return formatSigFigNumber(value);
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
 }
@@ -316,7 +336,7 @@ export default function ResultsPanel({
   const batchMetricKeys = Array.from(new Set(
     successfulBatchResults.flatMap((item) => Object.keys(item.results || {}))
   )).filter((key) => !["analysis_windows", "sleep_window_details"].includes(key));
-  const displayBatchMetricKeys = batchMetricKeys.slice(0, 10);
+  const displayBatchMetricKeys = batchMetricKeys.slice(0, 5);
   const analysisWindows = Array.isArray(summaryResults?.analysis_windows) ? summaryResults.analysis_windows : [];
   const sleepWindowDetails = Array.isArray(summaryResults?.sleep_window_details) ? summaryResults.sleep_window_details : [];
   const activeAlgorithm = selectedAlgorithm
@@ -489,7 +509,7 @@ export default function ResultsPanel({
               {displayBatchMetricKeys.length > 0 && " The table shows the first selected/result metrics; open each file below for full details."}
             </div>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640, tableLayout: "fixed" }}>
                 <thead>
                   <tr>
                     <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #e2e8f0" }}>File</th>
@@ -505,12 +525,12 @@ export default function ResultsPanel({
                 <tbody>
                   {completedBatchResults.map((item, idx) => (
                     <tr key={`${item.fileName}-${idx}`}>
-                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", fontWeight: 700 }}>{item.fileName}</td>
-                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", color: item.status === "completed" ? "#166534" : "#991b1b" }}>
+                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", fontWeight: 700, overflowWrap: "anywhere", fontSize: 13 }}>{item.fileName}</td>
+                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", color: item.status === "completed" ? "#166534" : "#991b1b", overflowWrap: "anywhere", fontSize: 13 }}>
                         {item.status === "completed" ? "Completed" : item.error || "Failed"}
                       </td>
                       {displayBatchMetricKeys.map((key) => (
-                        <td key={`${item.fileName}-${key}`} style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right" }}>
+                        <td key={`${item.fileName}-${key}`} style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right", fontSize: 13, overflowWrap: "anywhere" }}>
                           {item.status === "completed" ? formatResultValue(item.results?.[key], getMetricResultSchema(metricRegistry, key)) : "—"}
                         </td>
                       ))}
@@ -535,9 +555,9 @@ export default function ResultsPanel({
                     <div style={{ marginTop: 12, color: "#991b1b" }}>{item.error || "This file could not be analyzed."}</div>
                   ) : (
                     <div style={{ marginTop: 14 }}>
-                      <div style={{ border: "1px solid #e2e8f0", borderRadius: 14, padding: 12, background: "#f8fafc", marginBottom: 12 }}>
+                      <div style={{ border: "1px solid #e2e8f0", borderRadius: 14, padding: 12, background: "#f8fafc", marginBottom: 12, maxHeight: 460, overflowY: "auto" }}>
                         <div style={{ fontWeight: 700, marginBottom: 8 }}>Summary Table</div>
-                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
                           <tbody>
                             {Object.entries(item.results || {}).filter(([key]) => key !== "analysis_windows" && key !== "sleep_window_details").map(([key, value]) => (
                               <tr key={`${item.fileName}-${key}`}>
@@ -574,7 +594,7 @@ export default function ResultsPanel({
                                     <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.label || `Interval ${windowIdx + 1}`}</td>
                                     <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.start}</td>
                                     <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.stop}</td>
-                                    <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", textAlign: "right" }}>{window.duration_hours ?? "—"} h</td>
+                                    <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", textAlign: "right" }}>{window.duration_hours != null ? `${formatSigFigNumber(window.duration_hours)} h` : "—"}</td>
                                     <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", fontSize: 13 }}>
                                       {window.error ? (
                                         <span style={{ color: "#991b1b" }}>{window.error}</span>
@@ -662,7 +682,7 @@ export default function ResultsPanel({
                         <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.label || `Interval ${idx + 1}`}</td>
                         <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.start}</td>
                         <td style={{ padding: 8, borderTop: "1px solid #c7d2fe" }}>{window.stop}</td>
-                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", textAlign: "right" }}>{window.duration_hours ?? "—"} h</td>
+                        <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", textAlign: "right" }}>{window.duration_hours != null ? `${formatSigFigNumber(window.duration_hours)} h` : "—"}</td>
                         <td style={{ padding: 8, borderTop: "1px solid #c7d2fe", fontSize: 13 }}>
                           {window.error ? (
                             <span style={{ color: "#991b1b" }}>{window.error}</span>

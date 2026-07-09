@@ -462,7 +462,7 @@ export default function LightMetricsPanel({
         </div>
         {windowError && <div style={{ color: "#b91c1c", marginTop: 10, fontSize: 14 }}>{windowError}</div>}
         <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5, marginTop: 10 }}>
-          The calendar fields are bounded by the detected recording start/end. Leave them blank when you want the metric to use the full recording/default daily window.
+          The calendar fields are bounded by the detected recording start/end. Leave them blank when you want the metric to use the full recording/default daily window. Overnight clock windows are supported; for example, 23:00 to 02:00 is treated as crossing midnight.
         </div>
 
         <InteractiveIntervalSelector
