@@ -12,6 +12,7 @@ import WorkflowSidebar from "../components/WorkflowSidebar";
 import FileSelectionPanel from "../components/FileSelectionPanel";
 import CsvMappingPanel from "../components/CsvMappingPanel";
 import PreviewPanel from "../components/PreviewPanel";
+import ActivityMappingPanel from "../components/ActivityMappingPanel";
 import MetricsPanel from "../components/MetricsPanel";
 import ResultsPanel from "../components/ResultsPanel";
 import ExportPanel from "../components/ExportPanel";
@@ -208,6 +209,7 @@ export default function Dashboard() {
   const [lightAnalysisError, setLightAnalysisError] = useState("");
 
   const [activityChannel, setActivityChannel] = useState("VM");
+  const [activityMapping, setActivityMapping] = useState("original");
   const [activityTransform, setActivityTransform] = useState("none");
   const [lightTransform, setLightTransform] = useState("none");
 
@@ -437,6 +439,18 @@ export default function Dashboard() {
     });
   };
 
+  const handleActivityMappingChange = (nextMapping) => {
+    setActivityMapping(nextMapping);
+    setPreviewLoaded(false);
+    setPreviewData(null);
+    setActivityPreviewByFile({});
+    setResultsGenerated(false);
+    setSummaryResults({});
+    setMultiFileResults([]);
+    setAnalysisError("");
+    setPreviewError("");
+  };
+
   const handleActigraphyFilesChange = (files) => {
     setUploadedFiles((prev) => ({ ...prev, actigraphy: files }));
     setSelectedPreviewFile(files?.[0]?.name || "");
@@ -475,6 +489,7 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append("file", targetFile);
       formData.append("activityChannel", activityChannel);
+      formData.append("activityMapping", activityMapping);
       formData.append("resampleFreq", "1min");
       formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
       formData.append("csvSeparator", csvSeparator);
@@ -646,6 +661,7 @@ export default function Dashboard() {
           formData.append("file", sourceFile);
           formData.append("sourceFileName", sourceFile.name);
           formData.append("activityChannel", activityChannel);
+          formData.append("activityMapping", activityMapping);
           formData.append("activityTransform", activityTransform);
           formData.append("lightTransform", lightTransform);
           formData.append("analysisMode", analysisMode);
@@ -698,6 +714,7 @@ export default function Dashboard() {
             qcWarnings: data.qcWarnings || [],
             supportFileSummary: data.supportFileSummary || null,
             detectedInputType: data.detected_input_type || null,
+            activityMapping: data.activity_mapping || { requested: activityMapping, resolved: activityMapping },
             diagnostics: data.diagnostics || null,
             lightResults: generatedLightResults,
             lightDiagnostics: generatedLightDiagnostics,
@@ -707,7 +724,7 @@ export default function Dashboard() {
 
           void saveRunRecord({
             sourceFile,
-            status: "completed",
+            status: combinedStatus,
             results,
             qcWarnings: data.qcWarnings || [],
             supportFileSummary: data.supportFileSummary || null,
@@ -726,6 +743,7 @@ export default function Dashboard() {
             qcWarnings: [],
             supportFileSummary: null,
             detectedInputType: null,
+            activityMapping: { requested: activityMapping, resolved: activityMapping },
             diagnostics: clientFailureDiagnostics(err, sourceFile, buildApiUrl("api/analyze/basic")),
             lightResults: {},
             lightDiagnostics: {},
@@ -737,7 +755,7 @@ export default function Dashboard() {
         }
       }
 
-      const successful = batchResults.filter((item) => item.status === "completed");
+      const successful = batchResults.filter((item) => ["completed", "completed_with_warnings"].includes(item.status));
       const failed = batchResults.filter((item) => item.status === "failed");
 
       if (!successful.length) {
@@ -794,6 +812,7 @@ export default function Dashboard() {
         analysis_mode: analysisMode,
         selected_algorithm: selectedAlgorithm,
         activity_channel: activityChannel,
+        activity_mapping: activityMapping,
         detected_input_type: savedDetectedInputType || detectedInputType,
         results: results || {},
         qc_warnings: savedWarnings || [],
@@ -815,6 +834,7 @@ export default function Dashboard() {
 
   const handleLoadSavedRun = (run) => {
     const savedResults = run.results || {};
+    setActivityMapping(run.activity_mapping || "original");
     setSummaryResults(savedResults);
     setQcWarnings(run.qc_warnings || []);
     setSupportFileSummary(run.support_file_summary || null);
@@ -982,6 +1002,8 @@ export default function Dashboard() {
         lightFiles={lightFiles}
         selectedLightPreviewFile={selectedLightPreviewFile}
         setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+        activityMapping={activityMapping}
+        setActivityMapping={handleActivityMappingChange}
         onPreview={onActivityPreview}
       />
     );
@@ -1012,6 +1034,8 @@ export default function Dashboard() {
         lightFiles={lightFiles}
         selectedLightPreviewFile={selectedLightPreviewFile}
         setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+        activityMapping={activityMapping}
+        setActivityMapping={handleActivityMappingChange}
         onPreview={onActivityPreview}
       />
     );
@@ -1104,6 +1128,10 @@ export default function Dashboard() {
   } else if (currentStep === "9") {
     content = (
       <div style={{ display: "grid", gap: 16 }}>
+        <ActivityMappingPanel
+          value={activityMapping}
+          onChange={handleActivityMappingChange}
+        />
         <MetricsPanel
           title={appConfig.panels.metrics.title}
           metricRegistry={metricRegistry}
@@ -1165,6 +1193,7 @@ export default function Dashboard() {
         analysisLoading={analysisLoading}
         analysisProgress={analysisProgress}
         analysisMode={analysisMode}
+        activityMapping={activityMapping}
         supportFileSummary={supportFileSummary}
         lightResults={lightResults}
         selectedLightMetrics={selectedLightMetrics}

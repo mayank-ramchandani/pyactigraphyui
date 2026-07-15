@@ -7,6 +7,7 @@ import {
   getMetricResultSchema,
 } from "../services/configUtils";
 import { LIGHT_METRIC_DEFINITIONS } from "./LightMetricsPanel";
+import DiagnosticPanel, { downloadDiagnostics } from "./DiagnosticPanel";
 
 
 const RESULT_INFO_OVERRIDES = {
@@ -288,6 +289,16 @@ function renderLightResult(result) {
   return null;
 }
 
+function isCompletedStatus(status) {
+  return ["completed", "completed_with_warnings"].includes(String(status || "").toLowerCase());
+}
+
+function statusLabel(status) {
+  if (status === "completed_with_warnings") return "Completed with warnings";
+  if (status === "completed") return "Completed";
+  return "Failed";
+}
+
 export default function ResultsPanel({
   title,
   actigraphyFiles = [],
@@ -316,8 +327,8 @@ export default function ResultsPanel({
   const lightResultKeys = Object.keys(lightResults || {});
   const selectedAnalysisNameSet = new Set(selectedAnalysisFileNames || []);
   const completedBatchResults = Array.isArray(multiFileResults) ? multiFileResults : [];
-  const hasBatchResults = completedBatchResults.length > 1;
-  const successfulBatchResults = completedBatchResults.filter((item) => item.status === "completed");
+  const hasBatchResults = completedBatchResults.length > 0;
+  const successfulBatchResults = completedBatchResults.filter((item) => isCompletedStatus(item.status));
   const batchMetricKeys = Array.from(new Set(
     successfulBatchResults.flatMap((item) => Object.keys(item.results || {}))
   )).filter((key) => !["analysis_windows", "sleep_window_details"].includes(key));
@@ -485,10 +496,31 @@ export default function ResultsPanel({
         </div>
       )}
 
-      {resultsGenerated && hasBatchResults && (
+      {hasBatchResults && (
         <>
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>Batch Summary</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+              <div style={{ fontWeight: 700 }}>Batch Summary</div>
+              <button
+                type="button"
+                onClick={() => downloadDiagnostics(
+                  {
+                    generated_at: new Date().toISOString(),
+                    files: completedBatchResults.map((item) => ({
+                      fileName: item.fileName,
+                      status: item.status,
+                      error: item.error || null,
+                      diagnostics: item.diagnostics || null,
+                      lightDiagnostics: item.lightDiagnostics || {},
+                    })),
+                  },
+                  "actigraphy-batch-diagnostics.json"
+                )}
+                style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #94a3b8", background: "white", cursor: "pointer", fontWeight: 700 }}
+              >
+                Download all diagnostics
+              </button>
+            </div>
             <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}>
               Completed: <strong>{successfulBatchResults.length}</strong>; failed: <strong>{completedBatchResults.length - successfulBatchResults.length}</strong>.
               {displayBatchMetricKeys.length > 0 && " The table shows the first selected/result metrics; open each file below for full details."}
@@ -511,12 +543,12 @@ export default function ResultsPanel({
                   {completedBatchResults.map((item, idx) => (
                     <tr key={`${item.fileName}-${idx}`}>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", fontWeight: 700, overflowWrap: "anywhere", fontSize: 13 }}>{item.fileName}</td>
-                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", color: item.status === "completed" ? "#166534" : "#991b1b", overflowWrap: "anywhere", fontSize: 13 }}>
-                        {item.status === "completed" ? "Completed" : item.error || "Failed"}
+                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", color: isCompletedStatus(item.status) ? (item.status === "completed_with_warnings" ? "#9a3412" : "#166534") : "#991b1b", overflowWrap: "anywhere", fontSize: 13 }}>
+                        {isCompletedStatus(item.status) ? statusLabel(item.status) : item.error || "Failed"}
                       </td>
                       {displayBatchMetricKeys.map((key) => (
                         <td key={`${item.fileName}-${key}`} style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right", fontSize: 13, overflowWrap: "anywhere" }}>
-                          {item.status === "completed" ? formatResultValue(item.results?.[key], getMetricResultSchema(metricRegistry, key)) : "—"}
+                          {isCompletedStatus(item.status) ? formatResultValue(item.results?.[key], getMetricResultSchema(metricRegistry, key)) : "—"}
                         </td>
                       ))}
                     </tr>
@@ -534,10 +566,17 @@ export default function ResultsPanel({
               return (
                 <details key={`${item.fileName}-detail-${idx}`} style={{ border: "1px solid #cbd5e1", borderRadius: 16, padding: 14, background: "white" }}>
                   <summary style={{ cursor: "pointer", fontWeight: 800 }}>
-                    {item.fileName} · {item.status === "completed" ? "completed" : "failed"}
+                    {item.fileName} · {statusLabel(item.status).toLowerCase()}
                   </summary>
-                  {item.status !== "completed" ? (
-                    <div style={{ marginTop: 12, color: "#991b1b" }}>{item.error || "This file could not be analyzed."}</div>
+                  {!isCompletedStatus(item.status) ? (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ color: "#991b1b" }}>{item.error || "This file could not be analyzed."}</div>
+                      <DiagnosticPanel
+                        diagnostics={item.diagnostics}
+                        title="Activity/sleep diagnostic report"
+                        fileName={`${item.fileName || "file"}-diagnostics.json`}
+                      />
+                    </div>
                   ) : (
                     <div style={{ marginTop: 14 }}>
                       <div style={{ border: "1px solid #e2e8f0", borderRadius: 14, padding: 12, background: "#f8fafc", marginBottom: 12, maxHeight: 460, overflowY: "auto" }}>
@@ -609,6 +648,19 @@ export default function ResultsPanel({
                           })}
                         </div>
                       )}
+                      <DiagnosticPanel
+                        diagnostics={item.diagnostics}
+                        title="Activity/sleep diagnostic report"
+                        fileName={`${item.fileName || "file"}-diagnostics.json`}
+                      />
+                      {Object.entries(item.lightDiagnostics || {}).map(([metricId, diagnostic]) => (
+                        <DiagnosticPanel
+                          key={`${item.fileName}-light-diagnostic-${metricId}`}
+                          diagnostics={diagnostic}
+                          title={`Light metric diagnostic: ${LIGHT_METRIC_DEFINITIONS[metricId]?.label || metricId}`}
+                          fileName={`${item.fileName || "file"}-${metricId}-light-diagnostics.json`}
+                        />
+                      ))}
                     </div>
                   )}
                 </details>

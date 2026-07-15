@@ -20,6 +20,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 
+from .diagnostics import record_diagnostic_event, update_current_stage
+
 try:
     from pyActigraphy.io import BaseRaw
 except Exception:  # pragma: no cover - depends on deployment environment
@@ -232,6 +234,14 @@ def run_accelerometer_process_lightweight(
         raise AccelerometerProcessingError(f"Input file does not exist: {source}")
 
     size_mb = _file_size_mb(source)
+    update_current_stage(
+        conversion_path="accProcess",
+        input_size_mb=round(size_mb, 3),
+        max_server_side_mb=max_server_side_mb,
+        epoch_period_seconds=epoch_period,
+        java_heap_mb=java_heap_mb,
+        timeout_seconds=ACCPROCESS_TIMEOUT_SECONDS,
+    )
     if size_mb > max_server_side_mb:
         raise AccelerometerProcessingError(
             f"This raw accelerometer file is {size_mb:.2f} MB, which is above the current "
@@ -252,6 +262,15 @@ def run_accelerometer_process_lightweight(
             java_heap_mb=java_heap_mb,
         )
 
+        update_current_stage(accprocess_command=[str(part) for part in cmd])
+        record_diagnostic_event(
+            "accprocess_started",
+            input_size_mb=round(size_mb, 3),
+            epoch_period_seconds=epoch_period,
+            java_heap_mb=java_heap_mb,
+            timeout_seconds=ACCPROCESS_TIMEOUT_SECONDS,
+        )
+
         try:
             completed = subprocess.run(
                 cmd,
@@ -266,9 +285,21 @@ def run_accelerometer_process_lightweight(
                 "locally and upload the generated *timeSeries.csv.gz file instead."
             ) from exc
 
+        stdout_tail = completed.stdout[-20000:]
+        stderr_tail = completed.stderr[-20000:]
+        update_current_stage(
+            accprocess_return_code=completed.returncode,
+            accprocess_stdout_tail=stdout_tail,
+            accprocess_stderr_tail=stderr_tail,
+        )
+        record_diagnostic_event(
+            "accprocess_finished",
+            return_code=completed.returncode,
+            stdout_tail=stdout_tail[-2000:],
+            stderr_tail=stderr_tail[-2000:],
+        )
+
         if completed.returncode != 0:
-            stdout_tail = completed.stdout[-2000:]
-            stderr_tail = completed.stderr[-2000:]
             if "Could not find or load main class" in stderr_tail and "-Xmx" not in " ".join(cmd):
                 hint = " The Java heap argument may be malformed. Use JVM format such as -Xmx256M."
             else:
@@ -279,8 +310,14 @@ def run_accelerometer_process_lightweight(
             )
 
         time_series_path, summary_path = _find_accelerometer_outputs(output_dir)
+        update_current_stage(
+            time_series_output=time_series_path.name,
+            time_series_output_mb=round(_file_size_mb(time_series_path), 3),
+            summary_output=summary_path.name if summary_path else None,
+        )
         df = pd.read_csv(time_series_path, compression="infer")
         summary = _read_summary_json(summary_path)
+        update_current_stage(converted_rows=int(len(df)), converted_columns=[str(c) for c in df.columns])
         summary.update(
             {
                 "_time_series_output": time_series_path.name,

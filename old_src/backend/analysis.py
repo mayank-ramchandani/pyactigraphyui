@@ -3,6 +3,14 @@ import math
 import numbers
 import pandas as pd
 
+from .diagnostics import (
+    diagnostic_stage,
+    mark_current_stage,
+    record_suppressed_exception,
+    result_summary,
+    update_current_stage,
+)
+
 
 def _get_light_recording(raw):
     light_obj = getattr(raw, "light", None)
@@ -409,7 +417,9 @@ def _safe_float(value):
 def _safe_call(callable_obj, *args, **kwargs):
     try:
         return callable_obj(*args, **kwargs)
-    except Exception:
+    except Exception as exc:
+        operation = getattr(callable_obj, "__qualname__", None) or getattr(callable_obj, "__name__", None) or str(callable_obj)
+        record_suppressed_exception(operation, exc, note="Exception was previously converted to None by _safe_call.")
         return None
 
 
@@ -710,7 +720,8 @@ def _call_aot_method(raw, method_name, params=None):
                     kwargs[key] = params[key]
             return method(**kwargs)
         return method()
-    except Exception:
+    except Exception as exc:
+        record_suppressed_exception(method_name, exc, note="Sleep-window AoT call failed and was previously converted to None.")
         return None
 
 
@@ -1043,29 +1054,110 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
     algorithm = algorithm_request.get("id", "cole_kripke")
     algorithm_params = {algorithm: algorithm_request.get("params", {})}
 
-    scorer = _score_algorithm(raw, algorithm, algorithm_params=algorithm_params)
-    sleep_windows, window_metadata = _resolve_sleep_windows(raw, sleep_window_settings=sleep_window_settings)
+    scorer = None
+    with diagnostic_stage(
+        "sleep.algorithm_score",
+        category="sleep",
+        details={"algorithm": algorithm, "parameters": algorithm_request.get("params", {})},
+    ) as stage:
+        scorer = _score_algorithm(raw, algorithm, algorithm_params=algorithm_params)
+        summary = result_summary(scorer)
+        update_current_stage(result=summary)
+        if scorer is None:
+            mark_current_stage(
+                "failed" if stage.get("suppressed_errors") else "warning",
+                outcome="algorithm_returned_no_score",
+            )
+
+    sleep_windows = []
+    window_required = any(metric in selected_metrics for metric in ["tst", "waso", "sleep_efficiency"])
+    window_metadata = {"source": "none", "method": None, "estimated": False, "count": 0, "notes": []}
+    with diagnostic_stage(
+        "sleep.window_detection",
+        category="sleep_window",
+        details={"settings": sleep_window_settings or {}},
+    ) as stage:
+        sleep_windows, window_metadata = _resolve_sleep_windows(raw, sleep_window_settings=sleep_window_settings)
+        update_current_stage(
+            window_count=len(sleep_windows),
+            source=window_metadata.get("source"),
+            method=window_metadata.get("method"),
+            estimated=bool(window_metadata.get("estimated")),
+            notes=window_metadata.get("notes") or [],
+        )
+        if not sleep_windows and window_required:
+            mark_current_stage(
+                "failed" if stage.get("suppressed_errors") else "warning",
+                outcome="no_usable_sleep_windows",
+            )
+        elif not sleep_windows:
+            update_current_stage(outcome="sleep_window_not_required_for_selected_metrics")
+
     rest_minutes = _score_minutes_in_windows(scorer, sleep_windows)
     sleep_window_summary = _compute_waso_and_efficiency(scorer, sleep_windows)
 
     if "sri" in selected_metrics:
-        algo_key = ALGO_TO_SRI_KEY.get(algorithm)
-        if algo_key is None:
+        try:
+            with diagnostic_stage(
+                "metric.sri",
+                category="metric",
+                details={"metric_id": "sri", "algorithm": algorithm},
+            ) as stage:
+                algo_key = ALGO_TO_SRI_KEY.get(algorithm)
+                sri_method = getattr(raw, "SleepRegularityIndex", None)
+                if algo_key is None or not callable(sri_method):
+                    results["sri"] = None
+                    mark_current_stage(
+                        "warning",
+                        outcome="metric_not_supported_for_algorithm_or_raw_type",
+                        raw_class=type(raw).__name__,
+                    )
+                else:
+                    results["sri"] = _safe_call(sri_method, algo=algo_key)
+                    update_current_stage(result=result_summary(results["sri"]))
+                    if results["sri"] is None:
+                        mark_current_stage(
+                            "failed" if stage.get("suppressed_errors") else "warning",
+                            outcome="metric_returned_no_value",
+                        )
+        except Exception:
             results["sri"] = None
-        else:
-            sri_method = getattr(raw, "SleepRegularityIndex", None)
-            results["sri"] = _safe_call(sri_method, algo=algo_key) if callable(sri_method) else None
 
     if "tst" in selected_metrics:
-        results["tst"] = round(rest_minutes, 2) if rest_minutes is not None else None
+        try:
+            with diagnostic_stage("metric.tst", category="metric", details={"metric_id": "tst", "algorithm": algorithm}):
+                results["tst"] = round(rest_minutes, 2) if rest_minutes is not None else None
+                update_current_stage(result=result_summary(results["tst"]), sleep_window_count=len(sleep_windows))
+                if results["tst"] is None:
+                    mark_current_stage("warning", outcome="sleep_score_not_available")
+        except Exception:
+            results["tst"] = None
 
     if "waso" in selected_metrics:
-        waso = sleep_window_summary.get("waso")
-        results["waso"] = round(waso, 2) if waso is not None else None
+        try:
+            with diagnostic_stage("metric.waso", category="metric", details={"metric_id": "waso", "algorithm": algorithm}):
+                waso = sleep_window_summary.get("waso")
+                results["waso"] = round(waso, 2) if waso is not None else None
+                update_current_stage(result=result_summary(results["waso"]), sleep_window_count=len(sleep_windows))
+                if results["waso"] is None:
+                    mark_current_stage("warning", outcome="requires_usable_sleep_window_and_score")
+        except Exception:
+            results["waso"] = None
 
     if "sleep_efficiency" in selected_metrics:
-        sleep_efficiency = sleep_window_summary.get("sleep_efficiency")
-        results["sleep_efficiency"] = round(sleep_efficiency, 2) if sleep_efficiency is not None else None
+        try:
+            with diagnostic_stage(
+                "metric.sleep_efficiency",
+                category="metric",
+                details={"metric_id": "sleep_efficiency", "algorithm": algorithm},
+            ):
+                sleep_efficiency = sleep_window_summary.get("sleep_efficiency")
+                results["sleep_efficiency"] = round(sleep_efficiency, 2) if sleep_efficiency is not None else None
+                update_current_stage(result=result_summary(results["sleep_efficiency"]), sleep_window_count=len(sleep_windows))
+                if results["sleep_efficiency"] is None:
+                    mark_current_stage("warning", outcome="requires_usable_sleep_window_and_score")
+        except Exception:
+            results["sleep_efficiency"] = None
 
     if any(metric in selected_metrics for metric in ["tst", "waso", "sleep_efficiency"]):
         results["sleep_window_source"] = window_metadata.get("source") or "none"
@@ -1081,7 +1173,6 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
             results["sleep_window_notes"] = " | ".join([str(note) for note in window_metadata.get("notes", [])])
 
     return results
-
 
 def _build_metric_requests_from_families(family_requests):
     metric_requests = []
@@ -1120,20 +1211,53 @@ def _run_basic_pyactigraphy_analysis_single(raw, metric_requests=None, family_re
     for item in metric_requests:
         metric_id = item.get("id")
         params = item.get("params", {}) or {}
-        if metric_id in rest_and_fragmentation_ids:
-            value = compute_metric(raw, metric_id, params=params)
-            results[metric_id] = _resolve_series_to_numeric(value)
+        if metric_id not in rest_and_fragmentation_ids:
+            continue
+        try:
+            with diagnostic_stage(
+                f"metric.{metric_id}",
+                category="metric",
+                details={"metric_id": metric_id, "parameters": params, "raw_class": type(raw).__name__},
+            ) as stage:
+                value = compute_metric(raw, metric_id, params=params)
+                resolved = _resolve_series_to_numeric(value)
+                results[metric_id] = resolved
+                update_current_stage(result=result_summary(resolved))
+                if resolved is None:
+                    mark_current_stage(
+                        "failed" if stage.get("suppressed_errors") else "warning",
+                        outcome="metric_returned_no_value_or_is_not_supported",
+                    )
+        except Exception:
+            # The diagnostic stage retains the full traceback; continue so other
+            # selected metrics can still produce results for this file.
+            results[metric_id] = None
 
     sleep_selected = [metric_id for metric_id in selected_metric_ids if metric_id in sleep_ids]
     if sleep_selected:
-        results.update(compute_sleep_metrics(raw, selected_metrics=sleep_selected, algorithm_request=algorithm_request, sleep_window_settings=sleep_window_settings))
+        try:
+            results.update(
+                compute_sleep_metrics(
+                    raw,
+                    selected_metrics=sleep_selected,
+                    algorithm_request=algorithm_request,
+                    sleep_window_settings=sleep_window_settings,
+                )
+            )
+        except Exception as exc:
+            record_suppressed_exception(
+                "compute_sleep_metrics",
+                exc,
+                note="Unexpected sleep-metric group failure; remaining requested metrics were set to None.",
+            )
+            for metric_id in sleep_selected:
+                results.setdefault(metric_id, None)
 
     for metric_id in selected_metric_ids:
         if metric_id not in results:
             results[metric_id] = None
 
     return results
-
 
 def _parse_daily_time(value, default_time):
     if not value:

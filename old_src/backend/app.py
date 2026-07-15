@@ -7,8 +7,8 @@ import os
 import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
-import shutil
 import uuid
+import logging
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,14 @@ from .accelerometer_loader import (
     DEFAULT_JAVA_HEAP_MB,
 )
 from .gt3x_loader import summarize_gt3x_file, DEFAULT_GT3X_ACTIVITY_MODE
+
+from .diagnostics import (
+    DiagnosticSession,
+    mark_current_stage,
+    raw_recording_summary,
+    update_current_stage,
+    uploaded_file_summary,
+)
 
 
 
@@ -100,6 +108,7 @@ def version():
             "gt3x_pygt3x": True,
             "bin_cwa_accelerometer": True,
             "saved_runs_frontend_supabase": True,
+            "structured_diagnostics": True,
         },
     }
 
@@ -122,10 +131,55 @@ async def submit_feedback(payload: FeedbackPayload):
 
 
 def _write_upload_to_temp(upload: UploadFile):
-    suffix = Path(upload.filename).suffix.lower()
+    suffix = Path(upload.filename or "upload").suffix.lower()
+    bytes_written = 0
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        shutil.copyfileobj(upload.file, tmp)
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            tmp.write(chunk)
+            bytes_written += len(chunk)
+        update_current_stage(
+            uploaded_file_name=upload.filename,
+            uploaded_content_type=upload.content_type,
+            bytes_written=bytes_written,
+            size_mb=round(bytes_written / (1024 * 1024), 3),
+        )
         return tmp.name
+
+
+def _cleanup_temp_paths(paths):
+    removed = 0
+    errors = []
+    for path in paths or []:
+        if not path:
+            continue
+        try:
+            os.remove(path)
+            removed += 1
+        except FileNotFoundError:
+            continue
+        except Exception as exc:
+            errors.append(str(exc))
+    return {"removed": removed, "errors": errors[:10]}
+
+
+def _persist_diagnostics(payload):
+    try:
+        max_mb = float(os.getenv("DIAGNOSTIC_LOG_MAX_MB", "50"))
+        path = _get_data_dir() / "diagnostics.jsonl"
+        if path.exists() and path.stat().st_size > max_mb * 1024 * 1024:
+            rotated = path.with_suffix(".jsonl.1")
+            try:
+                rotated.unlink(missing_ok=True)
+            except TypeError:
+                if rotated.exists():
+                    rotated.unlink()
+            path.replace(rotated)
+        _append_jsonl("diagnostics.jsonl", payload)
+    except Exception:
+        logging.getLogger("actigraphy.diagnostics").exception("Could not persist diagnostic payload")
 
 
 def _json_or_empty(value):
@@ -351,44 +405,107 @@ async def analyze_light(
     lowest: str = Form("true"),
     binarize: str = Form("false"),
 ):
+    session = DiagnosticSession("/api/light/analyze", source_file_name=file.filename).activate()
+    temp_paths = []
+    status_code = 200
+    response_content = {}
+    final_status = "completed"
+    caught_exception = None
+
     try:
-        tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path)
+        with session.stage("request.parse_light_metric", category="request"):
+            agg_funcs = [x.strip() for x in aggFuncs.split(",") if x.strip()] if aggFuncs else None
+            update_current_stage(
+                metric_id=metricId,
+                channel=channel or None,
+                threshold_lux=thresholdLux,
+                start_time=startTime,
+                stop_time=stopTime,
+                bins=bins,
+                aggregation=agg,
+                aggregation_functions=agg_funcs,
+                output_format=outputFormat,
+                lmx_length=lmxLength,
+                lowest=str(lowest).lower() == "true",
+                binarize=str(binarize).lower() == "true",
+            )
 
-        agg_funcs = [x.strip() for x in aggFuncs.split(",") if x.strip()] if aggFuncs else None
+        with session.stage("upload.primary_file", category="upload"):
+            tmp_path = _write_upload_to_temp(file)
+            temp_paths.append(tmp_path)
+            session.input_file = uploaded_file_summary(tmp_path, file.filename, file.content_type)
+            update_current_stage(**session.input_file)
 
-        payload = run_basic_pylight_analysis(
-            raw=raw,
-            metric_id=metricId,
-            channel=channel or None,
-            threshold_lux=thresholdLux,
-            start_time=startTime,
-            stop_time=stopTime,
-            bins=bins,
-            agg=agg,
-            agg_funcs=agg_funcs,
-            oformat=outputFormat,
-            lmx_length=lmxLength,
-            lowest=str(lowest).lower() == "true",
-            binarize=str(binarize).lower() == "true",
-        )
+        with session.stage("input.detect_reader", category="reader"):
+            reader_type = infer_reader_type(tmp_path)
+            update_current_stage(detected_input_type=reader_type)
+            if reader_type == "tabular":
+                raise ValueError("The file was detected as generic tabular data rather than a supported native/light recording.")
 
-        return JSONResponse(
-            content={
-                **payload,
-                "detected_input_type": reader_type,
-                "native_reader_used": True,
-            }
-        )
+        with session.stage("input.load_recording", category="reader", details={"detected_input_type": reader_type}):
+            raw = load_native_file(tmp_path, reader_type)
+            update_current_stage(raw_class=type(raw).__name__, raw_module=type(raw).__module__)
 
-    except ValueError as e:
-        return JSONResponse(status_code=400, content={"detail": str(e)})
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Server error: {}".format(str(e))}
-        )
+        with session.stage("input.inspect_recording", category="data_validation"):
+            session.recording = raw_recording_summary(raw)
+            update_current_stage(**session.recording)
+            if not session.recording.get("light", {}).get("available"):
+                raise ValueError("The native reader loaded the file, but no embedded light channel was found.")
 
+        with session.stage(
+            f"metric.light.{metricId}",
+            category="light_metric",
+            details={"metric_id": metricId, "channel": channel or None},
+        ):
+            payload = run_basic_pylight_analysis(
+                raw=raw,
+                metric_id=metricId,
+                channel=channel or None,
+                threshold_lux=thresholdLux,
+                start_time=startTime,
+                stop_time=stopTime,
+                bins=bins,
+                agg=agg,
+                agg_funcs=agg_funcs,
+                oformat=outputFormat,
+                lmx_length=lmxLength,
+                lowest=str(lowest).lower() == "true",
+                binarize=str(binarize).lower() == "true",
+            )
+            update_current_stage(result_kind=(payload.get("result") or {}).get("kind"), channel_used=payload.get("channel"))
+
+        response_content = {
+            **payload,
+            "detected_input_type": reader_type,
+            "native_reader_used": True,
+        }
+
+    except ValueError as exc:
+        caught_exception = exc
+        final_status = "failed"
+        status_code = 400
+        response_content = {"detail": str(exc)}
+    except Exception as exc:
+        caught_exception = exc
+        final_status = "failed"
+        status_code = 500
+        response_content = {"detail": "Server error: {}".format(str(exc))}
+    finally:
+        try:
+            with session.stage("request.cleanup_temp_files", category="cleanup"):
+                cleanup_summary = _cleanup_temp_paths(temp_paths)
+                update_current_stage(**cleanup_summary)
+                if cleanup_summary.get("errors"):
+                    mark_current_stage("warning")
+        except Exception:
+            pass
+        session.finish(final_status, caught_exception)
+        diagnostics_payload = session.payload()
+        response_content["diagnostics"] = diagnostics_payload
+        _persist_diagnostics(diagnostics_payload)
+        session.deactivate()
+
+    return JSONResponse(status_code=status_code, content=response_content)
 
 
 @app.post("/api/light/manipulate")
@@ -788,59 +905,170 @@ async def analyze_basic(
     startStopFiles: Optional[List[UploadFile]] = File(None),
     sourceFileName: Optional[str] = Form(None),
 ):
+    source_filename = sourceFileName or file.filename
+    session = DiagnosticSession("/api/analyze/basic", source_file_name=source_filename).activate()
+    temp_paths = []
+    status_code = 200
+    response_content = {}
+    final_status = "completed"
+    caught_exception = None
+
     try:
-        analysis_config = json.loads(analysisConfig or "{}")
-        metric_requests = analysis_config.get("metrics", [])
-        family_requests = analysis_config.get("families", [])
-        analysis_scope = analysis_config.get("analysisScope", "metric")
-        algorithm_request = analysis_config.get("algorithm")
-        sleep_window_settings = analysis_config.get("sleepWindowSettings", {})
-        analysis_window_settings = analysis_config.get("analysisWindowSettings", {}) or {}
-        source_filename = sourceFileName or file.filename
-        analysis_window_settings = {**analysis_window_settings, "sourceFileName": source_filename}
-        _json_or_empty(csvMapping)
+        with session.stage("request.parse_analysis_config", category="request"):
+            analysis_config = json.loads(analysisConfig or "{}")
+            metric_requests = analysis_config.get("metrics", [])
+            family_requests = analysis_config.get("families", [])
+            analysis_scope = analysis_config.get("analysisScope", "metric")
+            algorithm_request = analysis_config.get("algorithm")
+            sleep_window_settings = analysis_config.get("sleepWindowSettings", {})
+            analysis_window_settings = analysis_config.get("analysisWindowSettings", {}) or {}
+            analysis_window_settings = {**analysis_window_settings, "sourceFileName": source_filename}
+            _json_or_empty(csvMapping)
+            update_current_stage(
+                analysis_mode=analysisMode,
+                analysis_scope=analysis_scope,
+                requested_metrics=[item.get("id") for item in metric_requests if item.get("id")],
+                requested_families=[item.get("id") for item in family_requests if item.get("id")],
+                algorithm=(algorithm_request or {}).get("id"),
+                analysis_window_mode=analysis_window_settings.get("mode", "full"),
+                support_file_counts={
+                    "masking": len(maskingFiles or []),
+                    "sleep_diary": len(sleepDiaryFiles or []),
+                    "start_stop": len(startStopFiles or []),
+                },
+            )
 
-        tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path)
+        with session.stage("upload.primary_file", category="upload"):
+            tmp_path = _write_upload_to_temp(file)
+            temp_paths.append(tmp_path)
+            session.input_file = uploaded_file_summary(
+                tmp_path,
+                original_name=source_filename,
+                content_type=file.content_type,
+            )
+            update_current_stage(**session.input_file)
 
-        masking_paths = [_write_upload_to_temp(item) for item in (maskingFiles or [])]
-        diary_paths = [_write_upload_to_temp(item) for item in (sleepDiaryFiles or [])]
-        start_stop_paths = [_write_upload_to_temp(item) for item in (startStopFiles or [])]
-        support_file_summary = _apply_support_file_logic(
-            raw,
-            masking_paths=masking_paths,
-            diary_paths=diary_paths,
-            start_stop_paths=start_stop_paths,
-            support_settings=analysis_config.get("supportFileSettings", {}),
-            source_filename=source_filename,
-        )
+        with session.stage("input.detect_reader", category="reader"):
+            reader_type = infer_reader_type(tmp_path)
+            update_current_stage(detected_input_type=reader_type)
+            if reader_type == "tabular":
+                raise ValueError(
+                    "This file is currently being detected as a generic tabular file, not a native "
+                    "pyActigraphy-supported format. Upload a native actigraphy file, raw .gt3x/.bin/.cwa, "
+                    "or a pre-converted accelerometer *timeSeries.csv.gz file."
+                )
 
-        results = run_basic_pyactigraphy_analysis(
-            raw=raw,
-            metric_requests=metric_requests,
-            family_requests=family_requests,
-            analysis_scope=analysis_scope,
-            algorithm_request=algorithm_request,
-            sleep_window_settings=sleep_window_settings,
-            analysis_window_settings=analysis_window_settings,
-        )
+        with session.stage(
+            "input.load_recording",
+            category="reader",
+            details={"detected_input_type": reader_type},
+        ):
+            raw = load_native_file(tmp_path, reader_type)
+            update_current_stage(raw_class=type(raw).__name__, raw_module=type(raw).__module__)
 
-        warnings = quick_qc(results)
+        with session.stage("input.inspect_recording", category="data_validation"):
+            session.recording = raw_recording_summary(raw)
+            update_current_stage(**session.recording)
+            data_summary = session.recording.get("data", {})
+            if not data_summary.get("available"):
+                raise ValueError("The file loaded, but the reader did not expose an activity data series.")
+            activity_summary = data_summary.get("activity", {})
+            if activity_summary.get("valid_rows", 0) < 2:
+                raise ValueError("The file loaded, but fewer than two valid activity rows were available.")
+            if activity_summary.get("zero_fraction") == 1:
+                mark_current_stage("warning", outcome="activity_series_is_entirely_zero")
 
-        return JSONResponse(
-            content={
-                "results": results,
-                "qcWarnings": warnings,
-                "supportFileSummary": support_file_summary,
-                "detected_input_type": reader_type,
-                "native_reader_used": True,
-            }
-        )
+        masking_paths = []
+        diary_paths = []
+        start_stop_paths = []
+        with session.stage("upload.support_files", category="upload"):
+            support_upload_summaries = {"masking": [], "sleep_diary": [], "start_stop": []}
+            for item in maskingFiles or []:
+                path = _write_upload_to_temp(item)
+                temp_paths.append(path)
+                masking_paths.append(path)
+                support_upload_summaries["masking"].append(uploaded_file_summary(path, item.filename, item.content_type))
+            for item in sleepDiaryFiles or []:
+                path = _write_upload_to_temp(item)
+                temp_paths.append(path)
+                diary_paths.append(path)
+                support_upload_summaries["sleep_diary"].append(uploaded_file_summary(path, item.filename, item.content_type))
+            for item in startStopFiles or []:
+                path = _write_upload_to_temp(item)
+                temp_paths.append(path)
+                start_stop_paths.append(path)
+                support_upload_summaries["start_stop"].append(uploaded_file_summary(path, item.filename, item.content_type))
+            update_current_stage(files=support_upload_summaries)
 
-    except ValueError as e:
-        return JSONResponse(status_code=400, content={"detail": str(e)})
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Server error: {}".format(str(e))}
-        )
+        with session.stage("preprocessing.apply_support_files", category="preprocessing"):
+            support_file_summary = _apply_support_file_logic(
+                raw,
+                masking_paths=masking_paths,
+                diary_paths=diary_paths,
+                start_stop_paths=start_stop_paths,
+                support_settings=analysis_config.get("supportFileSettings", {}),
+                source_filename=source_filename,
+            )
+            update_current_stage(summary=support_file_summary)
+            session.recording["after_support_files"] = raw_recording_summary(raw).get("data", {})
+
+        with session.stage("analysis.execute", category="analysis"):
+            results = run_basic_pyactigraphy_analysis(
+                raw=raw,
+                metric_requests=metric_requests,
+                family_requests=family_requests,
+                analysis_scope=analysis_scope,
+                algorithm_request=algorithm_request,
+                sleep_window_settings=sleep_window_settings,
+                analysis_window_settings=analysis_window_settings,
+            )
+            update_current_stage(result_keys=list(results.keys()), result_count=len(results))
+
+        with session.stage("analysis.quality_control", category="quality_control"):
+            warnings = quick_qc(results)
+            update_current_stage(warning_count=len(warnings), warnings=warnings)
+
+        failed_or_warning_stages = [
+            stage for stage in session.stages
+            if stage.get("status") in {"failed", "warning"}
+            and stage.get("name") not in {"analysis.execute"}
+        ]
+        if failed_or_warning_stages:
+            final_status = "completed_with_warnings"
+
+        response_content = {
+            "results": results,
+            "qcWarnings": warnings,
+            "supportFileSummary": support_file_summary,
+            "detected_input_type": reader_type,
+            "native_reader_used": True,
+        }
+
+    except ValueError as exc:
+        caught_exception = exc
+        final_status = "failed"
+        status_code = 400
+        response_content = {"detail": str(exc)}
+    except Exception as exc:
+        caught_exception = exc
+        final_status = "failed"
+        status_code = 500
+        response_content = {"detail": "Server error: {}".format(str(exc))}
+    finally:
+        try:
+            with session.stage("request.cleanup_temp_files", category="cleanup"):
+                cleanup_summary = _cleanup_temp_paths(temp_paths)
+                update_current_stage(**cleanup_summary)
+                if cleanup_summary.get("errors"):
+                    mark_current_stage("warning")
+        except Exception:
+            pass
+
+        session.finish(final_status, caught_exception)
+        diagnostics_payload = session.payload()
+        response_content["diagnostics"] = diagnostics_payload
+        _persist_diagnostics(diagnostics_payload)
+        session.deactivate()
+
+    return JSONResponse(status_code=status_code, content=response_content)
+

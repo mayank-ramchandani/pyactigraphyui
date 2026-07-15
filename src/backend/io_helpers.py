@@ -5,6 +5,7 @@ import csv
 import pandas as pd
 import pyActigraphy
 
+from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
 from .accelerometer_loader import (
     load_accelerometer_as_baseraw,
     load_accelerometer_csv_as_baseraw,
@@ -390,18 +391,36 @@ def _read_gt3x_file(file_path: str):
         format_name="ActiGraph GT3X raw preview via pygt3x",
     )
 
-def load_native_file(file_path: str, reader_type: str):
+def load_native_file(file_path: str, reader_type: str, activity_mapping: str = "original"):
+    requested_mapping = normalize_activity_mapping(activity_mapping)
+
     if reader_type == "raw_accelerometer_needs_conversion":
-        return load_accelerometer_as_baseraw(file_path, epoch_period=30)
-    
+        return load_accelerometer_as_baseraw(
+            file_path, epoch_period=30, activity_mapping=requested_mapping
+        )
+
     if reader_type == "geneactiv_bin_accelerometer":
-        return read_raw_geneactiv_bin(file_path, resample_freq="30s")
+        return read_raw_geneactiv_bin(
+            file_path, resample_freq="30s", activity_mapping=requested_mapping
+        )
 
     if reader_type == "accelerometer_timeseries_csv":
-        return load_accelerometer_csv_as_baseraw(file_path, epoch_period=30)
+        return load_accelerometer_csv_as_baseraw(
+            file_path, epoch_period=30, activity_mapping=requested_mapping
+        )
 
     if reader_type == "gt3x":
-        return load_gt3x_as_baseraw(file_path, epoch_period=30)
+        return load_gt3x_as_baseraw(
+            file_path, epoch_period=30, activity_mapping=requested_mapping
+        )
+
+    if requested_mapping != "original":
+        raise ValueError(
+            f"{requested_mapping.upper()} requires calibrated raw tri-axial acceleration. "
+            f"The detected '{reader_type}' reader exposes an existing activity/count series only. "
+            "Use Original / device activity for this file, or upload a raw GENEActiv .bin, "
+            "raw ActiGraph .gt3x, or a compatible preprocessed time-series containing the requested mapping."
+        )
 
     method_name = READERS.get(reader_type)
     if method_name is None:
@@ -411,7 +430,16 @@ def load_native_file(file_path: str, reader_type: str):
     if reader is None:
         raise ValueError("This pyActigraphy installation does not expose '{}'.".format(method_name))
 
-    return _unwrap_pyactigraphy_reader(reader(file_path))
+    raw = _unwrap_pyactigraphy_reader(reader(file_path))
+    return attach_mapping_metadata(
+        raw,
+        mapping_metadata(
+            "original",
+            "original",
+            source=f"pyActigraphy:{reader_type}",
+            available_mappings=["original"],
+        ),
+    )
 
 
 def _find_first_existing(columns, candidates):

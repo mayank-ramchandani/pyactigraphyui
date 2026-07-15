@@ -14,6 +14,7 @@ create table if not exists public.analysis_runs (
   analysis_mode text,
   selected_algorithm text,
   activity_channel text,
+  activity_mapping text not null default 'original',
   detected_input_type text,
   results jsonb not null default '{}'::jsonb,
   qc_warnings jsonb not null default '[]'::jsonb,
@@ -23,6 +24,10 @@ create table if not exists public.analysis_runs (
   app_version text,
   created_at timestamptz not null default now()
 );
+
+-- Safe migration for projects where analysis_runs already existed before activity mapping was added.
+alter table public.analysis_runs
+  add column if not exists activity_mapping text not null default 'original';
 
 alter table public.analysis_runs enable row level security;
 

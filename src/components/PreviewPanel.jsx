@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import ActivityMappingPanel, { activityMappingLabel } from "./ActivityMappingPanel";
 import { downloadBlob, downloadJson, previewToRows, rowsToCsv } from "../services/exportUtils";
 import {
   LineChart,
@@ -52,6 +53,8 @@ export default function PreviewPanel({
   lightFiles = [],
   selectedLightPreviewFile = "",
   setSelectedLightPreviewFile = () => {},
+  activityMapping = "original",
+  setActivityMapping = () => {},
   onPreview,
 }) {
   const [search, setSearch] = useState("");
@@ -85,7 +88,10 @@ export default function PreviewPanel({
     previewData?.light_summary?.y_axis_label ||
     previewData?.light_y_axis_label ||
     "Light intensity";
-  const activityAxisLabel = "Activity";
+  const mappingFromResponse = previewData?.activity_mapping || {};
+  const activityAxisLabel = mode === "activity"
+    ? activityMappingLabel(mappingFromResponse.resolved || activityMapping)
+    : "Activity";
   const yAxisLabel = mode === "light" ? lightAxisLabel : activityAxisLabel;
   const yValueLabel = mode === "light" ? lightAxisLabel : activityAxisLabel;
 
@@ -182,6 +188,14 @@ export default function PreviewPanel({
             </div>
           )}
         </div>
+
+        {mode === "activity" && (
+          <ActivityMappingPanel
+            value={activityMapping}
+            onChange={setActivityMapping}
+            compact
+          />
+        )}
 
         <div>
           <button

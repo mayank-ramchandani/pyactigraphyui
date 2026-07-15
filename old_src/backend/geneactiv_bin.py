@@ -1,9 +1,12 @@
 import math
+import os
 import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import pandas as pd
+
+from .diagnostics import record_diagnostic_event, update_current_stage
 import numpy as np
 
 
@@ -470,6 +473,12 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
     pages_decoded = 0
     samples_decoded = 0
     resample_ns = _parse_resample_freq_ns(resample_freq)
+    diagnostic_page_interval = max(1, int(os.getenv("GENEACTIV_DIAGNOSTIC_PAGE_INTERVAL", "5000")))
+    update_current_stage(
+        parser="direct_geneactiv_streaming_reader",
+        resample_freq=resample_freq,
+        diagnostic_page_interval=diagnostic_page_interval,
+    )
 
     def consume_page(page: Dict[str, str], page_hex: str) -> None:
         nonlocal pages_decoded, samples_decoded
@@ -527,6 +536,18 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
 
         samples_decoded += int(n)
         pages_decoded += 1
+        if pages_decoded % diagnostic_page_interval == 0:
+            update_current_stage(
+                pages_decoded=pages_decoded,
+                samples_decoded=samples_decoded,
+                resampled_bucket_count=len(buckets),
+            )
+            record_diagnostic_event(
+                "geneactiv_parse_progress",
+                pages_decoded=pages_decoded,
+                samples_decoded=samples_decoded,
+                resampled_bucket_count=len(buckets),
+            )
 
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         for raw_line in f:
@@ -600,6 +621,19 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
         "LIGHT": light_log,
         "LIGHT_LUX": light_lux,
     })
+
+    update_current_stage(
+        pages_decoded=pages_decoded,
+        samples_decoded=samples_decoded,
+        output_rows=int(len(activity)),
+        resample_freq=resample_freq,
+    )
+    record_diagnostic_event(
+        "geneactiv_parse_completed",
+        pages_decoded=pages_decoded,
+        samples_decoded=samples_decoded,
+        output_rows=int(len(activity)),
+    )
 
     return GeneActivRaw(
         data=activity,

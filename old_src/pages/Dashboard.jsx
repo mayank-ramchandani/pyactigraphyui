@@ -44,6 +44,59 @@ function getExtension(name) {
   return parts.length > 1 ? `.${parts.pop()}` : "";
 }
 
+function createApiError(message, res, data = null) {
+  const error = new Error(message);
+  error.httpStatus = res?.status || null;
+  error.diagnostics = data?.diagnostics || {
+    schema_version: "client-transport-1.0",
+    request_id: null,
+    endpoint: res?.url || null,
+    status: "failed",
+    transport: {
+      http_status: res?.status || null,
+      status_text: res?.statusText || null,
+      content_type: res?.headers?.get?.("content-type") || null,
+      message,
+    },
+  };
+  return error;
+}
+
+function clientFailureDiagnostics(error, file, endpoint) {
+  const existing = error?.diagnostics || {};
+  return {
+    schema_version: existing.schema_version || "client-transport-1.0",
+    request_id: existing.request_id || null,
+    endpoint: existing.endpoint || endpoint,
+    source_file_name: existing.source_file_name || file?.name || null,
+    status: existing.status || "failed",
+    started_at: existing.started_at || new Date().toISOString(),
+    finished_at: new Date().toISOString(),
+    total_duration_seconds: existing.total_duration_seconds ?? null,
+    error: existing.error || null,
+    input_file: existing.input_file || {
+      file_name: file?.name || null,
+      extension: getExtension(file?.name),
+      size_bytes: file?.size ?? null,
+      size_mb: file?.size != null ? Number((file.size / (1024 * 1024)).toFixed(3)) : null,
+      content_type: file?.type || null,
+      sha256: null,
+      sha256_status: "not_calculated_in_browser",
+    },
+    recording: existing.recording || {},
+    stages: existing.stages || [],
+    events: existing.events || [],
+    environment: existing.environment || { browser: navigator.userAgent },
+    transport: {
+      ...(existing.transport || {}),
+      endpoint,
+      file_name: file?.name || null,
+      file_size_mb: file?.size != null ? Number((file.size / (1024 * 1024)).toFixed(3)) : null,
+      message: error?.message || "Request failed before structured backend diagnostics were returned.",
+    },
+  };
+}
+
 export default function Dashboard() {
   const [currentStep, setCurrentStep] = useState("1");
   const [maxUnlockedStep, setMaxUnlockedStep] = useState("1");
@@ -292,11 +345,14 @@ export default function Dashboard() {
 
   const parseJsonResponse = async (res) => {
     const text = await res.text();
+    const contentType = res.headers.get("content-type") || "";
+
     if (!text) {
-      throw new Error(`Empty response from server (${res.status})`);
+      const error = createApiError(`Empty response from server (${res.status})`, res);
+      error.diagnostics.transport.response_preview = "";
+      throw error;
     }
 
-    const contentType = res.headers.get("content-type") || "";
     const looksLikeJson = contentType.includes("application/json") || /^[\s\r\n]*[\[{]/.test(text);
 
     if (!looksLikeJson) {
@@ -306,22 +362,28 @@ export default function Dashboard() {
         .replace(/<[^>]+>/g, " ")
         .replace(/\s+/g, " ")
         .trim()
-        .slice(0, 300);
+        .slice(0, 1000);
 
-      throw new Error(
+      const message =
         `Server returned ${res.status} ${res.statusText || "non-JSON response"} instead of JSON. ` +
-          `This usually means the upload was rejected, the backend ran out of memory, or the request timed out.` +
-          (serverMessage ? ` Server message: ${serverMessage}` : "")
-      );
+        `This usually means the upload was rejected, the backend ran out of memory, or the request timed out.` +
+        (serverMessage ? ` Server message: ${serverMessage}` : "");
+      const error = createApiError(message, res);
+      error.diagnostics.transport.response_preview = serverMessage;
+      error.diagnostics.transport.response_length = text.length;
+      throw error;
     }
 
     try {
       return JSON.parse(text);
-    } catch (error) {
-      throw new Error(
+    } catch (parseError) {
+      const message =
         `Server response was not valid JSON (${res.status}). ` +
-          `This can happen when a large raw file crashes the backend during conversion.`
-      );
+        `This can happen when a large raw file crashes the backend during conversion or analysis.`;
+      const error = createApiError(message, res);
+      error.diagnostics.transport.response_preview = text.slice(0, 1000);
+      error.diagnostics.transport.parse_error = parseError.message;
+      throw error;
     }
   };
 
@@ -492,10 +554,11 @@ export default function Dashboard() {
 
   const runSelectedLightMetrics = async (targetFile = lightFile, startingStep = 1, totalSteps = 1, fileLabel = "") => {
     if (!targetFile || selectedLightMetrics.length === 0) {
-      return {};
+      return { results: {}, diagnostics: {} };
     }
 
     const nextLightResults = {};
+    const nextLightDiagnostics = {};
     const errors = [];
 
     for (let index = 0; index < selectedLightMetrics.length; index += 1) {
@@ -527,12 +590,15 @@ export default function Dashboard() {
         const data = await parseJsonResponse(res);
 
         if (!res.ok) {
-          throw new Error(data?.detail || `Failed to run ${metricId}.`);
+          throw createApiError(data?.detail || `Failed to run ${metricId}.`, res, data);
         }
 
-        nextLightResults[metricId] = data;
+        const { diagnostics: lightDiagnosticPayload, ...lightResultPayload } = data || {};
+        nextLightResults[metricId] = lightResultPayload;
+        nextLightDiagnostics[metricId] = lightDiagnosticPayload || null;
       } catch (err) {
         errors.push(`${metricId}: ${err.message || "failed"}`);
+        nextLightDiagnostics[metricId] = clientFailureDiagnostics(err, targetFile, buildApiUrl("api/light/analyze"));
       } finally {
         setProgressStage(
           `${fileLabel ? `${fileLabel}: ` : ""}Finished light metric ${metricNumber} of ${selectedLightMetrics.length}`,
@@ -544,7 +610,7 @@ export default function Dashboard() {
 
     setLightResults(nextLightResults);
     setLightAnalysisError(errors.length ? errors.join(" | ") : "");
-    return nextLightResults;
+    return { results: nextLightResults, diagnostics: nextLightDiagnostics };
   };
 
   const handleGenerateResults = async () => {
@@ -597,7 +663,7 @@ export default function Dashboard() {
 
           const data = await parseJsonResponse(res);
           if (!res.ok) {
-            throw new Error(data?.detail || "Failed to generate results.");
+            throw createApiError(data?.detail || "Failed to generate results.", res, data);
           }
 
           completedSteps += 1;
@@ -605,24 +671,36 @@ export default function Dashboard() {
 
           const results = data.results || {};
           const lightTargetFile = lightFiles.length > 0 ? lightFile : sourceFile;
-          const generatedLightResults = await runSelectedLightMetrics(
+          const generatedLightRun = await runSelectedLightMetrics(
             lightTargetFile,
             completedSteps,
             totalSteps,
             sourceFile.name
           );
+          const generatedLightResults = generatedLightRun.results;
+          const generatedLightDiagnostics = generatedLightRun.diagnostics;
           completedSteps += lightMetricCount;
           setProgressStage(`Finished all selected metrics for ${fileLabel}`, completedSteps, totalSteps);
+
+          const lightHasFailures = Object.values(generatedLightDiagnostics || {}).some(
+            (diagnostic) => diagnostic?.status === "failed"
+          );
+          const activityStatus = data.diagnostics?.status || "completed";
+          const combinedStatus = lightHasFailures && activityStatus === "completed"
+            ? "completed_with_warnings"
+            : activityStatus;
 
           const row = {
             fileName: sourceFile.name,
             fileSizeMb: Number((sourceFile.size / (1024 * 1024)).toFixed(3)),
-            status: "completed",
+            status: combinedStatus,
             results,
             qcWarnings: data.qcWarnings || [],
             supportFileSummary: data.supportFileSummary || null,
             detectedInputType: data.detected_input_type || null,
+            diagnostics: data.diagnostics || null,
             lightResults: generatedLightResults,
+            lightDiagnostics: generatedLightDiagnostics,
           };
           batchResults.push(row);
           setMultiFileResults([...batchResults]);
@@ -647,7 +725,10 @@ export default function Dashboard() {
             results: {},
             qcWarnings: [],
             supportFileSummary: null,
+            detectedInputType: null,
+            diagnostics: clientFailureDiagnostics(err, sourceFile, buildApiUrl("api/analyze/basic")),
             lightResults: {},
+            lightDiagnostics: {},
           };
           batchResults.push(row);
           setMultiFileResults([...batchResults]);

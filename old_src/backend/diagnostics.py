@@ -303,11 +303,11 @@ def raw_recording_summary(raw: Any) -> Dict[str, Any]:
     metadata = getattr(raw, "metadata", None)
     if isinstance(metadata, dict):
         safe_meta = {}
-        for key in ["pages_decoded", "samples_decoded", "resample_freq", "direct_geneactiv_reader", "light_channels", "activity_mapping", "available_activity_mappings"]:
+        for key in ["pages_decoded", "samples_decoded", "resample_freq", "direct_geneactiv_reader", "light_channels"]:
             if key in metadata:
                 safe_meta[key] = metadata[key]
         payload["reader_metadata"] = safe_meta
-    for attr in ["_ui_accelerometer_summary", "_ui_source_format", "_ui_detected_time_column", "_ui_detected_activity_column", "_ui_detected_light_column", "_ui_activity_mapping", "_ui_activity_mapping_requested", "_ui_activity_units", "_ui_activity_mapping_metadata"]:
+    for attr in ["_ui_accelerometer_summary", "_ui_source_format", "_ui_detected_time_column", "_ui_detected_activity_column", "_ui_detected_light_column"]:
         value = getattr(raw, attr, None)
         if value is not None:
             payload.setdefault("ui_reader_metadata", {})[attr] = value
