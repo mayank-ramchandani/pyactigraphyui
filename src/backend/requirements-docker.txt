@@ -12,3 +12,5 @@ pyActigraphy==1.2.2
 accelerometer==6.2.3
 pygt3x==0.7.1
 agcounts==0.2.6
+# Runtime diagnostics (memory/process telemetry)
+psutil==6.1.1

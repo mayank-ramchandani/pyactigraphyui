@@ -99,9 +99,6 @@ export default function Dashboard() {
     method: "crespo_aot",
     minRestWindowHours: 3,
     maxRestWindowHours: 14,
-    fallbackRestWindowHours: 8,
-    fallbackSearchStartHour: 20,
-    fallbackSearchStopHour: 12,
     crespoParams: {
       mode: "default",
       zeta: 15,

@@ -10,13 +10,13 @@ import { LIGHT_METRIC_DEFINITIONS } from "./LightMetricsPanel";
 
 
 const RESULT_INFO_OVERRIDES = {
-  sleep_window_source: "Shows whether TST, WASO, and sleep efficiency used a sleep diary/user-defined window, an estimated rest window, or no available sleep window.",
+  sleep_window_source: "Shows whether TST, WASO, and sleep efficiency used a sleep diary/user-defined window, a pyActigraphy-estimated rest window, or no available sleep window.",
   sleep_window_method: "Shows which method produced the sleep/rest window used for window-dependent sleep metrics.",
   sleep_window_count: "Number of sleep/rest windows used in the sleep metric calculations.",
   time_in_bed_minutes: "Total minutes inside the diary-defined or estimated rest window. Sleep efficiency is calculated relative to this window.",
-  sleep_window_estimated: "True means the sleep/rest window was estimated from the activity pattern rather than supplied by a sleep diary or manual interval.",
-  sleep_window_notes: "Backend notes about how the sleep/rest window was selected or why a fallback was used.",
-  sleep_window_details_summary: "Human-readable summary of each estimated sleep/rest window, including the overnight search range and selected lowest-activity block when fallback detection was used.",
+  sleep_window_estimated: "True means the sleep/rest window was estimated by the selected pyActigraphy Crespo_AoT/Roenneberg_AoT method rather than supplied by a sleep diary or manual interval.",
+  sleep_window_notes: "Backend notes about how the sleep/rest window was selected, or why Crespo_AoT/Roenneberg_AoT could not produce a usable window.",
+  sleep_window_details_summary: "Human-readable summary of each diary-defined or pyActigraphy-estimated sleep/rest window.",
   sleep_window_details: "Structured per-night diagnostics for the sleep/rest window detection method.",
   analysis_window_mode: "Shows whether metrics were calculated on the whole recording or selected analysis intervals.",
   analysis_window_count: "Number of selected analysis intervals used for this run.",
@@ -189,46 +189,31 @@ function SleepWindowDetailsCard({ details }) {
     <div style={{ border: "1px solid #bae6fd", borderRadius: 16, padding: 16, background: "#f0f9ff", marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <div style={{ fontWeight: 800 }}>Sleep Window Analysis Details</div>
-        <InfoBubble text="This section explains exactly how the sleep/rest window was selected. For fallback windows, the backend searches each overnight period, computes a rolling low-activity window, and uses the lowest sustained activity block as the estimated rest window." />
+        <InfoBubble text="This section explains exactly how the sleep/rest window was selected. Windows come from a sleep diary/manual window or from the selected pyActigraphy Crespo_AoT/Roenneberg_AoT onset-offset detector. No low-activity fallback window is used." />
       </div>
       <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}>
-        These diagnostics are especially useful when Crespo_AoT or Roenneberg_AoT did not return usable activity onset/offset arrays and the fallback low-activity overnight window was used.
+        These diagnostics show the actual sleep/rest windows used for window-dependent sleep metrics. If Crespo_AoT or Roenneberg_AoT does not return usable activity onset/offset arrays, those metrics will be unavailable rather than estimated with a fallback window.
       </div>
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
           <thead>
             <tr>
               <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Night/date</th>
-              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Expected overnight search range</th>
-              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Lowest sustained activity block found</th>
-              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Fallback sleep/rest window</th>
+              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Sleep/rest window</th>
               <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #bae6fd" }}>Duration</th>
-              <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #bae6fd" }}>Rolling mean activity</th>
-              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Detection details</th>
+              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bae6fd" }}>Method/source</th>
             </tr>
           </thead>
           <tbody>
             {details.map((item, idx) => (
               <tr key={`${item.start || item.date}-${idx}`}>
                 <td style={{ padding: 8, borderTop: "1px solid #bae6fd" }}>{formatSleepDetailValue(item.date)}</td>
-                <td style={{ padding: 8, borderTop: "1px solid #bae6fd" }}>
-                  <div>{formatSleepDetailValue(item.expected_search_range)}</div>
-                  {item.expected_search_start && item.expected_search_stop && (
-                    <div style={{ color: "#64748b", fontSize: 12 }}>{item.expected_search_start} → {item.expected_search_stop}</div>
-                  )}
-                </td>
-                <td style={{ padding: 8, borderTop: "1px solid #bae6fd" }}>{formatSleepDetailValue(item.lowest_sustained_activity_block || `${item.start || ""} to ${item.stop || ""}`)}</td>
                 <td style={{ padding: 8, borderTop: "1px solid #bae6fd" }}>{formatSleepDetailValue(`${item.start || "—"} → ${item.stop || "—"}`)}</td>
                 <td style={{ padding: 8, borderTop: "1px solid #bae6fd", textAlign: "right" }}>{item.duration_hours != null ? `${formatSleepDetailValue(item.duration_hours)} h` : "—"}</td>
-                <td style={{ padding: 8, borderTop: "1px solid #bae6fd", textAlign: "right" }}>{formatSleepDetailValue(item.rolling_mean_activity)}</td>
                 <td style={{ padding: 8, borderTop: "1px solid #bae6fd", fontSize: 13, color: "#475569" }}>
                   <div>Method: {formatSleepDetailValue(item.method)}</div>
+                  <div>Source: {formatSleepDetailValue(item.source)}</div>
                   <div>Estimated: {formatSleepDetailValue(item.estimated)}</div>
-                  {item.target_window_hours != null && <div>Target window: {item.target_window_hours} h</div>}
-                  {item.min_window_hours != null && item.max_window_hours != null && <div>Allowed range: {item.min_window_hours}–{item.max_window_hours} h</div>}
-                  {item.resample_frequency && <div>Search resolution: {item.resample_frequency}</div>}
-                  {item.points_in_search_range != null && <div>Search points: {item.points_in_search_range}</div>}
-                  {item.points_in_detected_window != null && <div>Window points: {item.points_in_detected_window}</div>}
                 </td>
               </tr>
             ))}
