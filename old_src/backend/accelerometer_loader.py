@@ -20,6 +20,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 
+from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
 from .diagnostics import record_diagnostic_event, update_current_stage
 
 try:
@@ -90,7 +91,50 @@ def _pick_time_column(df: pd.DataFrame) -> str:
     return col
 
 
-def _pick_activity_column(df: pd.DataFrame) -> str:
+def _pick_activity_column(df: pd.DataFrame, activity_mapping: str = "original") -> Tuple[str, str]:
+    requested_mapping = normalize_activity_mapping(activity_mapping)
+
+    if requested_mapping == "mad":
+        col = _pick_column(
+            df,
+            [
+                "mad",
+                "MAD",
+                "mad_mg",
+                "MAD_mg",
+                "meanAmplitudeDeviation",
+                "mean_amplitude_deviation",
+            ],
+        )
+        if col is None:
+            raise AccelerometerProcessingError(
+                "MAD cannot be reconstructed from this preprocessed accelerometer time-series. "
+                "Upload a raw GENEActiv .bin or raw ActiGraph .gt3x file, or provide a time-series file containing a MAD column."
+            )
+        return str(col), "mad"
+
+    if requested_mapping == "enmo":
+        col = _pick_column(
+            df,
+            [
+                "enmo",
+                "ENMO",
+                "ENMO_mg",
+                "acc",
+                "accOverallAvg",
+                "acc_overall_avg",
+                "acc-overall-avg",
+                "acc-overall-avg(mg)",
+                "accImputed",
+            ],
+        )
+        if col is None:
+            raise AccelerometerProcessingError(
+                "ENMO was selected, but this time-series does not contain an ENMO/acc column. "
+                "Use Original activity or upload raw calibrated X/Y/Z data."
+            )
+        return str(col), "enmo"
+
     col = _pick_column(
         df,
         [
@@ -108,11 +152,14 @@ def _pick_activity_column(df: pd.DataFrame) -> str:
         ],
     )
     if col is not None:
-        return col
+        resolved = "enmo" if _normalise_column_name(col) in {
+            "acc", "accoverallavg", "accimputed", "enmo", "enmomg"
+        } else "original"
+        return str(col), resolved
 
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     if numeric_cols:
-        return numeric_cols[0]
+        return str(numeric_cols[0]), "original"
 
     raise AccelerometerProcessingError(
         "Could not find an activity/acceleration column. Expected `acc`, `ENMO`, `activity`, or `VM`."
@@ -135,7 +182,7 @@ def parse_accelerometer_time_column(series: pd.Series) -> pd.Series:
 
 def looks_like_accelerometer_timeseries_df(df: pd.DataFrame) -> bool:
     cols = {_normalise_column_name(c) for c in df.columns}
-    return "time" in cols and ("acc" in cols or "enmo" in cols or "activity" in cols or "vm" in cols)
+    return "time" in cols and ("acc" in cols or "enmo" in cols or "mad" in cols or "activity" in cols or "vm" in cols)
 
 
 def looks_like_accelerometer_timeseries_file(file_path: str, sep: Optional[str] = None) -> bool:
@@ -338,7 +385,7 @@ def load_accelerometer_timeseries_csv(
     if not looks_like_accelerometer_timeseries_df(df):
         raise AccelerometerProcessingError(
             "This CSV does not look like an accelerometer timeSeries file. Expected at least "
-            "a `time` column and an `acc`/`ENMO`/`activity`/`VM` column."
+            "a `time` column and an `acc`/`ENMO`/`MAD`/`activity`/`VM` column."
         )
     return df, {
         "_server_side_conversion": False,
@@ -347,9 +394,14 @@ def load_accelerometer_timeseries_csv(
     }
 
 
-def _prepare_timeseries(df: pd.DataFrame, epoch_period: int = DEFAULT_EPOCH_PERIOD):
+def _prepare_timeseries(
+    df: pd.DataFrame,
+    epoch_period: int = DEFAULT_EPOCH_PERIOD,
+    activity_mapping: str = "original",
+):
+    requested_mapping = normalize_activity_mapping(activity_mapping)
     time_col = _pick_time_column(df)
-    activity_col = _pick_activity_column(df)
+    activity_col, resolved_mapping = _pick_activity_column(df, requested_mapping)
     light_col = _pick_light_column(df)
 
     work = df.copy()
@@ -371,15 +423,32 @@ def _prepare_timeseries(df: pd.DataFrame, epoch_period: int = DEFAULT_EPOCH_PERI
     if light_col is not None:
         light = pd.to_numeric(work.loc[activity.index, light_col], errors="coerce").rename("light")
 
-    return activity.rename("activity"), light, inferred_freq, str(time_col), str(activity_col), str(light_col) if light_col else None
+    activity_name = "MAD_mg" if resolved_mapping == "mad" else "ENMO_mg" if resolved_mapping == "enmo" else "activity"
+    details = mapping_metadata(
+        requested_mapping,
+        resolved_mapping,
+        source="accelerometer_timeseries",
+        activity_column=str(activity_col),
+        epoch_seconds=int(epoch_period),
+        available_mappings=[resolved_mapping] if requested_mapping != "original" else ["original", resolved_mapping],
+        note=(
+            "Oxford accelerometer `acc`/ENMO columns are treated as epoch-level ENMO in mg."
+            if resolved_mapping == "enmo"
+            else None
+        ),
+    )
+    return activity.rename(activity_name), light, inferred_freq, str(time_col), str(activity_col), str(light_col) if light_col else None, details
 
 
 def summarize_accelerometer_dataframe(
     df: pd.DataFrame,
     summary: Optional[Dict[str, Any]] = None,
     epoch_period: int = DEFAULT_EPOCH_PERIOD,
+    activity_mapping: str = "original",
 ) -> Dict[str, Any]:
-    activity, light, inferred_freq, time_col, activity_col, light_col = _prepare_timeseries(df, epoch_period)
+    activity, light, inferred_freq, time_col, activity_col, light_col, mapping_details = _prepare_timeseries(
+        df, epoch_period, activity_mapping=activity_mapping
+    )
     payload = {
         "rows": int(len(df)),
         "valid_activity_rows": int(len(activity)),
@@ -394,6 +463,7 @@ def summarize_accelerometer_dataframe(
         "activity_min": float(activity.min()),
         "activity_max": float(activity.max()),
         "activity_nonzero_fraction": float((activity > 0).mean()),
+        "activity_mapping": mapping_details,
         "light_available": light is not None,
         "first_rows": df.head(5).astype(str).to_dict(orient="records"),
         "accelerometer_summary": summary or {},
@@ -414,11 +484,14 @@ def _build_baseraw_from_dataframe(
     summary: Dict[str, Any],
     name: str,
     epoch_period: int = DEFAULT_EPOCH_PERIOD,
+    activity_mapping: str = "original",
 ):
     if BaseRaw is None:
         raise AccelerometerProcessingError("pyActigraphy.io.BaseRaw is not available in this backend environment.")
 
-    activity, light, inferred_freq, time_col, activity_col, light_col = _prepare_timeseries(df, epoch_period)
+    activity, light, inferred_freq, time_col, activity_col, light_col, mapping_details = _prepare_timeseries(
+        df, epoch_period, activity_mapping=activity_mapping
+    )
 
     raw = BaseRaw(
         name=name,
@@ -437,13 +510,14 @@ def _build_baseraw_from_dataframe(
     raw._ui_detected_time_column = time_col
     raw._ui_detected_activity_column = activity_col
     raw._ui_detected_light_column = light_col
-    return raw
+    return attach_mapping_metadata(raw, mapping_details)
 
 
 def load_accelerometer_as_baseraw(
     input_path: str,
     epoch_period: int = DEFAULT_EPOCH_PERIOD,
     java_heap_mb: Optional[int] = DEFAULT_JAVA_HEAP_MB,
+    activity_mapping: str = "original",
 ):
     """Load a small raw .bin/.cwa file as pyActigraphy BaseRaw via lightweight accProcess."""
     df, summary = run_accelerometer_process_lightweight(
@@ -451,28 +525,45 @@ def load_accelerometer_as_baseraw(
         epoch_period=epoch_period,
         java_heap_mb=java_heap_mb,
     )
-    return _build_baseraw_from_dataframe(df, summary, Path(input_path).stem, epoch_period=epoch_period)
+    return _build_baseraw_from_dataframe(
+        df, summary, Path(input_path).stem, epoch_period=epoch_period, activity_mapping=activity_mapping
+    )
 
 
-def load_accelerometer_csv_as_baseraw(file_path: str, epoch_period: int = DEFAULT_EPOCH_PERIOD):
+def load_accelerometer_csv_as_baseraw(
+    file_path: str,
+    epoch_period: int = DEFAULT_EPOCH_PERIOD,
+    activity_mapping: str = "original",
+):
     """Load an uploaded accelerometer *timeSeries.csv(.gz) file as pyActigraphy BaseRaw."""
     df, summary = load_accelerometer_timeseries_csv(file_path, epoch_period=epoch_period)
-    return _build_baseraw_from_dataframe(df, summary, Path(file_path).stem, epoch_period=epoch_period)
+    return _build_baseraw_from_dataframe(
+        df, summary, Path(file_path).stem, epoch_period=epoch_period, activity_mapping=activity_mapping
+    )
 
 
 def convert_bin_lightweight_summary(
     input_path: str,
     epoch_period: int = DEFAULT_EPOCH_PERIOD,
     java_heap_mb: Optional[int] = DEFAULT_JAVA_HEAP_MB,
+    activity_mapping: str = "original",
 ) -> Dict[str, Any]:
     df, summary = run_accelerometer_process_lightweight(
         input_path,
         epoch_period=epoch_period,
         java_heap_mb=java_heap_mb,
     )
-    return summarize_accelerometer_dataframe(df, summary=summary, epoch_period=epoch_period)
+    return summarize_accelerometer_dataframe(
+        df, summary=summary, epoch_period=epoch_period, activity_mapping=activity_mapping
+    )
 
 
-def summarize_uploaded_accelerometer_csv(file_path: str, epoch_period: int = DEFAULT_EPOCH_PERIOD) -> Dict[str, Any]:
+def summarize_uploaded_accelerometer_csv(
+    file_path: str,
+    epoch_period: int = DEFAULT_EPOCH_PERIOD,
+    activity_mapping: str = "original",
+) -> Dict[str, Any]:
     df, summary = load_accelerometer_timeseries_csv(file_path, epoch_period=epoch_period)
-    return summarize_accelerometer_dataframe(df, summary=summary, epoch_period=epoch_period)
+    return summarize_accelerometer_dataframe(
+        df, summary=summary, epoch_period=epoch_period, activity_mapping=activity_mapping
+    )

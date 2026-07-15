@@ -5,7 +5,7 @@ samples with ActiGraph's pygt3x package and then builds a pyActigraphy BaseRaw
 object from either:
 
 1. ActiLife-style epoch counts via ActiGraph's Python agcounts package; or
-2. ENMO/vector-magnitude epoch summaries as a fallback.
+2. ENMO or MAD epoch summaries from calibrated raw axes.
 
 The counts path is preferred for pyActigraphy algorithms whose thresholds expect
 ActiGraph-style counts. The ENMO path is useful for quick previews and
@@ -21,6 +21,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
 
 try:
     from pyActigraphy.io import BaseRaw
@@ -219,50 +221,89 @@ def _counts_activity_from_axes(raw_axes: pd.DataFrame, sample_rate: float, epoch
     }
 
 
-def _enmo_activity_from_axes(raw_axes: pd.DataFrame, epoch_period: int) -> Tuple[pd.Series, Dict[str, Any]]:
+def _vector_magnitude_g(raw_axes: pd.DataFrame) -> pd.Series:
     axes = raw_axes[["X", "Y", "Z"]].astype(float)
     vm = np.sqrt((axes ** 2).sum(axis=1))
-    # If values look like g-units, convert VM to ENMO mg; otherwise keep vector magnitude.
-    if pd.Series(vm).quantile(0.95) < 16:
-        activity = ((pd.Series(vm, index=raw_axes.index) - 1.0).clip(lower=0) * 1000.0).rename("ENMO_mg")
-        mode = "enmo_mg"
-    else:
-        activity = pd.Series(vm, index=raw_axes.index).rename("vector_magnitude")
-        mode = "vector_magnitude"
+    vm = pd.Series(vm, index=raw_axes.index, name="vector_magnitude_g")
+    q95 = float(vm.quantile(0.95)) if len(vm) else float("nan")
+    if not np.isfinite(q95) or q95 >= 16:
+        raise GT3XProcessingError(
+            "ENMO/MAD require calibrated tri-axial acceleration in g units. "
+            f"The detected vector-magnitude 95th percentile was {q95:.3g}, which does not look like g units."
+        )
+    return vm
+
+
+def _enmo_activity_from_axes(raw_axes: pd.DataFrame, epoch_period: int) -> Tuple[pd.Series, Dict[str, Any]]:
+    vm = _vector_magnitude_g(raw_axes)
+    activity = ((vm - 1.0).clip(lower=0) * 1000.0).rename("ENMO_mg")
     activity = activity.resample(pd.to_timedelta(epoch_period, unit="s")).mean().dropna()
-    return activity, {"_gt3x_activity_mode": mode}
+    return activity, {"_gt3x_activity_mode": "enmo", "_activity_units": "mg"}
+
+
+def _mad_activity_from_axes(raw_axes: pd.DataFrame, epoch_period: int) -> Tuple[pd.Series, Dict[str, Any]]:
+    vm = _vector_magnitude_g(raw_axes)
+    epoch = pd.to_timedelta(epoch_period, unit="s")
+
+    def _mad(values: pd.Series) -> float:
+        array = values.to_numpy(dtype=np.float64, copy=False)
+        if len(array) == 0:
+            return float("nan")
+        return float(np.mean(np.abs(array - array.mean())) * 1000.0)
+
+    activity = vm.resample(epoch).apply(_mad).dropna().rename("MAD_mg")
+    return activity, {"_gt3x_activity_mode": "mad", "_activity_units": "mg"}
 
 
 def prepare_gt3x_activity_series(
     file_path: str,
     epoch_period: int = DEFAULT_GT3X_EPOCH_PERIOD,
     activity_mode: str = DEFAULT_GT3X_ACTIVITY_MODE,
+    activity_mapping: str = "original",
 ) -> Tuple[pd.Series, Dict[str, Any], pd.DataFrame]:
     df, metadata = read_gt3x_dataframe(file_path)
     raw_axes, sample_rate, timestamp_col, axes = _prepare_raw_axes(df, metadata)
 
-    mode = (activity_mode or "counts").strip().lower()
+    requested_mapping = normalize_activity_mapping(activity_mapping)
+    mode = (activity_mode or "counts").strip().lower() if requested_mapping == "original" else requested_mapping
     mode_meta: Dict[str, Any]
+    resolved_mapping = requested_mapping
     try:
         if mode == "counts":
             activity, mode_meta = _counts_activity_from_axes(raw_axes, sample_rate, epoch_period)
-        elif mode in {"enmo", "enmo_mg", "vm", "vector_magnitude"}:
+            resolved_mapping = "original"
+        elif mode in {"enmo", "enmo_mg"}:
             activity, mode_meta = _enmo_activity_from_axes(raw_axes, epoch_period)
+            resolved_mapping = "enmo"
+        elif mode in {"mad", "mad_mg"}:
+            activity, mode_meta = _mad_activity_from_axes(raw_axes, epoch_period)
+            resolved_mapping = "mad"
         else:
-            raise GT3XProcessingError(f"Unsupported GT3X_ACTIVITY_MODE: {activity_mode}")
+            raise GT3XProcessingError(f"Unsupported GT3X activity mode/mapping: {mode}")
     except Exception as exc:
         if mode == "counts":
             activity, mode_meta = _enmo_activity_from_axes(raw_axes, epoch_period)
             mode_meta["_gt3x_counts_fallback_reason"] = str(exc)
+            resolved_mapping = "enmo"
         else:
             raise
 
     if len(activity) < 2:
         raise GT3XProcessingError("The .gt3x conversion produced fewer than two valid activity epochs.")
 
+    activity_mapping_metadata = mapping_metadata(
+        requested_mapping,
+        resolved_mapping,
+        source="pygt3x_raw_axes",
+        epoch_seconds=int(epoch_period),
+        calibrated_axes=True,
+        available_mappings=["original", "enmo", "mad"],
+        original_mode=activity_mode,
+    )
     metadata.update(mode_meta)
     metadata.update(
         {
+            "_activity_mapping": activity_mapping_metadata,
             "_epoch_period_seconds": int(epoch_period),
             "_sample_rate_hz": float(sample_rate),
             "_timestamp_column": timestamp_col,
@@ -278,6 +319,7 @@ def load_gt3x_as_baseraw(
     file_path: str,
     epoch_period: int = DEFAULT_GT3X_EPOCH_PERIOD,
     activity_mode: str = DEFAULT_GT3X_ACTIVITY_MODE,
+    activity_mapping: str = "original",
 ):
     if BaseRaw is None:
         raise GT3XProcessingError("pyActigraphy.io.BaseRaw is not available in this backend environment.")
@@ -286,6 +328,7 @@ def load_gt3x_as_baseraw(
         file_path,
         epoch_period=epoch_period,
         activity_mode=activity_mode,
+        activity_mapping=activity_mapping,
     )
 
     raw = BaseRaw(
@@ -301,18 +344,20 @@ def load_gt3x_as_baseraw(
     )
     raw._ui_gt3x_summary = metadata
     raw._ui_source_format = "gt3x_pygt3x"
-    return raw
+    return attach_mapping_metadata(raw, metadata.get("_activity_mapping") or mapping_metadata(activity_mapping))
 
 
 def summarize_gt3x_file(
     file_path: str,
     epoch_period: int = DEFAULT_GT3X_EPOCH_PERIOD,
     activity_mode: str = DEFAULT_GT3X_ACTIVITY_MODE,
+    activity_mapping: str = "original",
 ) -> Dict[str, Any]:
     activity, metadata, df = prepare_gt3x_activity_series(
         file_path,
         epoch_period=epoch_period,
         activity_mode=activity_mode,
+        activity_mapping=activity_mapping,
     )
     return {
         "rows": int(len(df)),
@@ -326,6 +371,7 @@ def summarize_gt3x_file(
         "activity_min": float(activity.min()),
         "activity_max": float(activity.max()),
         "activity_nonzero_fraction": float((activity > 0).mean()),
+        "activity_mapping": metadata.get("_activity_mapping"),
         "light_available": False,
         "first_rows": df.head(5).astype(str).to_dict(orient="records"),
         "gt3x_summary": metadata,

@@ -82,6 +82,11 @@ def _json_safe(value: Any, depth: int = 0):
     if isinstance(value, (list, tuple, set)):
         return [_json_safe(item, depth + 1) for item in value]
     try:
+        if hasattr(value, "tolist") and not isinstance(value, (str, bytes)):
+            return _json_safe(value.tolist(), depth + 1)
+    except Exception:
+        pass
+    try:
         if hasattr(value, "item"):
             return _json_safe(value.item(), depth + 1)
     except Exception:
@@ -91,6 +96,15 @@ def _json_safe(value: Any, depth: int = 0):
     if isinstance(value, pd.DataFrame):
         return {"type": "DataFrame", "shape": list(value.shape), "columns": [str(c) for c in value.columns][:50]}
     return _safe_text(value, 2000)
+
+
+def make_json_safe(value: Any):
+    """Public wrapper used immediately before API response serialization.
+
+    This is deliberately defensive and supports NumPy/Pandas values that can
+    otherwise escape metric-level serialization.
+    """
+    return _json_safe(value)
 
 
 def _traceback_text(exc: BaseException) -> str:

@@ -8,6 +8,7 @@ import {
 } from "../services/configUtils";
 import { LIGHT_METRIC_DEFINITIONS } from "./LightMetricsPanel";
 import DiagnosticPanel, { downloadDiagnostics } from "./DiagnosticPanel";
+import { activityMappingLabel } from "./ActivityMappingPanel";
 
 
 const RESULT_INFO_OVERRIDES = {
@@ -318,6 +319,7 @@ export default function ResultsPanel({
   analysisLoading,
   analysisProgress = {},
   analysisMode,
+  activityMapping = "original",
   supportFileSummary,
   lightResults = {},
   selectedLightMetrics = [],
@@ -372,6 +374,10 @@ export default function ResultsPanel({
 
         <div style={{ color: "#64748b", fontSize: 14 }}>
           Selected algorithm: <strong>{selectedAlgorithm ? getAlgorithmLabel(algorithmRegistry, selectedAlgorithm) : "Not selected"}</strong>
+        </div>
+
+        <div style={{ color: "#64748b", fontSize: 14 }}>
+          Activity mapping: <strong>{activityMappingLabel(activityMapping)}</strong>
         </div>
       </div>
 
@@ -510,6 +516,7 @@ export default function ResultsPanel({
                       fileName: item.fileName,
                       status: item.status,
                       error: item.error || null,
+                      activityMapping: item.activityMapping || null,
                       diagnostics: item.diagnostics || null,
                       lightDiagnostics: item.lightDiagnostics || {},
                     })),
@@ -531,6 +538,7 @@ export default function ResultsPanel({
                   <tr>
                     <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #e2e8f0" }}>File</th>
                     <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #e2e8f0" }}>Status</th>
+                    <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #e2e8f0" }}>Mapping</th>
                     {displayBatchMetricKeys.map((key) => (
                       <th key={key} style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #e2e8f0" }}>
                         {resultLabel(metricRegistry, key)}
@@ -545,6 +553,9 @@ export default function ResultsPanel({
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", fontWeight: 700, overflowWrap: "anywhere", fontSize: 13 }}>{item.fileName}</td>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", color: isCompletedStatus(item.status) ? (item.status === "completed_with_warnings" ? "#9a3412" : "#166534") : "#991b1b", overflowWrap: "anywhere", fontSize: 13 }}>
                         {isCompletedStatus(item.status) ? statusLabel(item.status) : item.error || "Failed"}
+                      </td>
+                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", fontSize: 13, overflowWrap: "anywhere" }}>
+                        {activityMappingLabel(item.activityMapping?.resolved || item.activityMapping?.requested || activityMapping)}
                       </td>
                       {displayBatchMetricKeys.map((key) => (
                         <td key={`${item.fileName}-${key}`} style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right", fontSize: 13, overflowWrap: "anywhere" }}>
@@ -579,6 +590,10 @@ export default function ResultsPanel({
                     </div>
                   ) : (
                     <div style={{ marginTop: 14 }}>
+                      <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1e3a8a", fontSize: 13 }}>
+                        Activity mapping used: <strong>{activityMappingLabel(item.activityMapping?.resolved || item.activityMapping?.requested || activityMapping)}</strong>
+                        {item.activityMapping?.source ? ` · Source: ${item.activityMapping.source}` : ""}
+                      </div>
                       <div style={{ border: "1px solid #e2e8f0", borderRadius: 14, padding: 12, background: "#f8fafc", marginBottom: 12, maxHeight: 460, overflowY: "auto" }}>
                         <div style={{ fontWeight: 700, marginBottom: 8 }}>Summary Table</div>
                         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
@@ -672,6 +687,9 @@ export default function ResultsPanel({
 
       {resultsGenerated && !hasBatchResults && (
         <>
+          <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1e3a8a", fontSize: 13 }}>
+            Activity mapping used: <strong>{activityMappingLabel(activityMapping)}</strong>
+          </div>
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc", marginBottom: 16 }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Summary Table</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>

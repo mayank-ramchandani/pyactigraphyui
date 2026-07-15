@@ -48,3 +48,9 @@ GENEACTIV_DIAGNOSTIC_PAGE_INTERVAL=5000
 ```
 
 For Azure, set `APP_DATA_DIR` to a mounted persistent path if diagnostic history should survive container revisions. Otherwise, rely on the downloadable report and Azure log stream.
+## Plain `Internal Server Error` after metrics finish
+
+Periodic pyActigraphy metrics such as `ISp`, `IVp`, and `RAp` may return NumPy arrays or Pandas objects. Those objects must be converted before they are passed to Starlette `JSONResponse`; otherwise response construction can raise after the endpoint analysis handler has finished and the browser receives only plain-text HTTP 500.
+
+This build converts nested NumPy/Pandas metric values to JSON-safe Python lists, dictionaries, scalars, and `null` values. It also installs a final unhandled-exception JSON handler. Container termination, reverse-proxy timeouts, and operating-system OOM kills still occur outside Python and therefore must be confirmed from Azure/container logs.
+

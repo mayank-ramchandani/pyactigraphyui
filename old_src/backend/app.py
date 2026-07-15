@@ -12,6 +12,7 @@ import logging
 
 from pydantic import BaseModel, Field
 
+from .activity_mapping import normalize_activity_mapping, raw_mapping_metadata
 from .analysis import (
     run_basic_pyactigraphy_analysis,
     build_native_preview,
@@ -39,6 +40,7 @@ from .diagnostics import (
     DiagnosticSession,
     mark_current_stage,
     raw_recording_summary,
+    record_suppressed_exception,
     update_current_stage,
     uploaded_file_summary,
 )
@@ -189,7 +191,7 @@ def _json_or_empty(value):
         return {}
 
 
-def _load_native_supported_file(file_path: str):
+def _load_native_supported_file(file_path: str, activity_mapping: str = "original"):
     reader_type = infer_reader_type(file_path)
 
     if reader_type == "tabular":
@@ -199,7 +201,7 @@ def _load_native_supported_file(file_path: str):
             "or a pre-converted accelerometer *timeSeries.csv.gz file."
         )
 
-    raw = load_native_file(file_path, reader_type)
+    raw = load_native_file(file_path, reader_type, activity_mapping=activity_mapping)
     return raw, reader_type
 
 
@@ -208,6 +210,7 @@ async def convert_accelerometer_lite(
     file: UploadFile = File(...),
     epochPeriod: int = Form(30),
     javaHeapMb: Optional[int] = Form(DEFAULT_JAVA_HEAP_MB or 0),
+    activityMapping: str = Form("original"),
 ):
     """Diagnostic endpoint for raw .bin/.cwa/.gt3x files or uploaded timeSeries CSVs.
 
@@ -216,6 +219,7 @@ async def convert_accelerometer_lite(
     """
     try:
         tmp_path = _write_upload_to_temp(file)
+        requested_mapping = normalize_activity_mapping(activityMapping)
         suffix = Path(file.filename or tmp_path).suffix.lower()
 
         if suffix in (".bin", ".cwa"):
@@ -223,6 +227,7 @@ async def convert_accelerometer_lite(
                 tmp_path,
                 epoch_period=epochPeriod,
                 java_heap_mb=javaHeapMb or None,
+                activity_mapping=requested_mapping,
             )
             mode = "server_side_raw_bin_conversion"
         elif suffix == ".gt3x":
@@ -230,10 +235,11 @@ async def convert_accelerometer_lite(
                 tmp_path,
                 epoch_period=epochPeriod,
                 activity_mode=DEFAULT_GT3X_ACTIVITY_MODE,
+                activity_mapping=requested_mapping,
             )
             mode = "server_side_gt3x_pygt3x"
         else:
-            payload = summarize_uploaded_accelerometer_csv(tmp_path, epoch_period=epochPeriod)
+            payload = summarize_uploaded_accelerometer_csv(tmp_path, epoch_period=epochPeriod, activity_mapping=requested_mapping)
             mode = "uploaded_accelerometer_timeseries_csv"
 
         return JSONResponse(
@@ -255,6 +261,7 @@ async def convert_accelerometer_lite(
 async def preview_basic(
     file: UploadFile = File(...),
     activityChannel: str = Form("VM"),
+    activityMapping: str = Form("original"),
     resampleFreq: str = Form("1min"),
     csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
     csvSeparator: str = Form(","),  # accepted for frontend compatibility, ignored here
@@ -266,7 +273,9 @@ async def preview_basic(
         _json_or_empty(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path)
+        requested_mapping = normalize_activity_mapping(activityMapping)
+        raw, reader_type = _load_native_supported_file(tmp_path, activity_mapping=requested_mapping)
+        mapping_details = raw_mapping_metadata(raw)
 
         preview = build_native_preview(
             raw=raw,
@@ -279,6 +288,7 @@ async def preview_basic(
                 **preview,
                 "detected_input_type": reader_type,
                 "native_reader_used": True,
+                "activity_mapping": mapping_details,
             }
         )
 
@@ -894,6 +904,7 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
 async def analyze_basic(
     file: UploadFile = File(...),
     activityChannel: str = Form("VM"),
+    activityMapping: str = Form("original"),
     activityTransform: str = Form("none"),
     lightTransform: str = Form("none"),
     analysisMode: str = Form("standard"),
@@ -916,6 +927,7 @@ async def analyze_basic(
     try:
         with session.stage("request.parse_analysis_config", category="request"):
             analysis_config = json.loads(analysisConfig or "{}")
+            requested_mapping = normalize_activity_mapping(activityMapping)
             metric_requests = analysis_config.get("metrics", [])
             family_requests = analysis_config.get("families", [])
             analysis_scope = analysis_config.get("analysisScope", "metric")
@@ -931,6 +943,7 @@ async def analyze_basic(
                 requested_families=[item.get("id") for item in family_requests if item.get("id")],
                 algorithm=(algorithm_request or {}).get("id"),
                 analysis_window_mode=analysis_window_settings.get("mode", "full"),
+                activity_mapping_requested=requested_mapping,
                 support_file_counts={
                     "masking": len(maskingFiles or []),
                     "sleep_diary": len(sleepDiaryFiles or []),
@@ -963,8 +976,13 @@ async def analyze_basic(
             category="reader",
             details={"detected_input_type": reader_type},
         ):
-            raw = load_native_file(tmp_path, reader_type)
-            update_current_stage(raw_class=type(raw).__name__, raw_module=type(raw).__module__)
+            raw = load_native_file(tmp_path, reader_type, activity_mapping=requested_mapping)
+            mapping_details = raw_mapping_metadata(raw)
+            update_current_stage(
+                raw_class=type(raw).__name__,
+                raw_module=type(raw).__module__,
+                activity_mapping=mapping_details,
+            )
 
         with session.stage("input.inspect_recording", category="data_validation"):
             session.recording = raw_recording_summary(raw)
@@ -1025,8 +1043,31 @@ async def analyze_basic(
             update_current_stage(result_keys=list(results.keys()), result_count=len(results))
 
         with session.stage("analysis.quality_control", category="quality_control"):
-            warnings = quick_qc(results)
-            update_current_stage(warning_count=len(warnings), warnings=warnings)
+            try:
+                warnings = quick_qc(results)
+            except Exception as qc_exc:
+                # Quality-control checks are advisory. Preserve the metric results
+                # even if a future QC rule encounters an unexpected return type.
+                record_suppressed_exception(
+                    "quick_qc",
+                    qc_exc,
+                    note="QC is non-fatal; analysis metric results were preserved.",
+                )
+                warnings = [
+                    "Automated quality-control checks could not be completed. "
+                    "The calculated metric results were preserved; see diagnostics for the QC exception."
+                ]
+
+            if requested_mapping != "original" and (algorithm_request or {}).get("id"):
+                warnings.append(
+                    f"{requested_mapping.upper()} was used as the activity mapping. "
+                    "Sleep-algorithm thresholds validated for device counts may not transfer directly to mg units."
+                )
+
+            if warnings:
+                mark_current_stage("warning", warning_count=len(warnings), warnings=warnings)
+            else:
+                update_current_stage(warning_count=0, warnings=[])
 
         failed_or_warning_stages = [
             stage for stage in session.stages
@@ -1042,6 +1083,7 @@ async def analyze_basic(
             "supportFileSummary": support_file_summary,
             "detected_input_type": reader_type,
             "native_reader_used": True,
+            "activity_mapping": mapping_details,
         }
 
     except ValueError as exc:

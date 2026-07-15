@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
+from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
 from .diagnostics import record_diagnostic_event, update_current_stage
 import numpy as np
 
@@ -88,7 +89,7 @@ def _decode_measurement_array(page_hex: str, calibration: Dict[str, float]):
     try:
         raw = np.frombuffer(bytes.fromhex(page_hex[:usable_len]), dtype=np.uint8).reshape(-1, 6).astype(np.uint64)
     except Exception:
-        return None, None
+        return None, None, None
 
     values = (
         (raw[:, 0] << 40)
@@ -123,7 +124,7 @@ def _decode_measurement_array(page_hex: str, calibration: Dict[str, float]):
     vm = np.sqrt((x * x) + (y * y) + (z * z))
     enmo = np.maximum(vm - 1.0, 0.0) * 1000.0
     light_lux = light_raw * lux_cal / volts
-    return enmo, light_lux
+    return enmo, vm, light_lux
 
 
 class SimpleLightRecording:
@@ -444,7 +445,11 @@ def _parse_resample_freq_ns(resample_freq: Optional[str]) -> Optional[int]:
         return int(pd.Timedelta("1min").value)
 
 
-def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneActivRaw:
+def read_raw_geneactiv_bin(
+    file_path: str,
+    resample_freq: str = "1min",
+    activity_mapping: str = "original",
+) -> GeneActivRaw:
     """Read a GENEActiv .bin file without shelling out to accProcess.
 
     GENEActiv .bin exports are text-like files containing hex-encoded samples. The
@@ -453,6 +458,10 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
     aggregates directly into the requested epoch buckets, so 100+ MB files can be
     previewed/analyzed without hitting the Oxford accProcess size gate.
     """
+    requested_mapping = normalize_activity_mapping(activity_mapping)
+    if requested_mapping == "mad" and not resample_freq:
+        raise ValueError("MAD requires an epoch/resample frequency so within-epoch deviation can be calculated.")
+
     header: Dict[str, str] = {}
     calibration = {
         "x_gain": 1.0,
@@ -466,6 +475,9 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
     }
 
     buckets: Dict[int, Dict[str, float]] = {}
+    mad_by_bucket: Dict[int, float] = {}
+    active_mad_bucket_ns: Optional[int] = None
+    active_mad_parts: List[np.ndarray] = []
     rows: List[Dict] = []
     in_header = True
     current_page: Dict[str, str] = {}
@@ -478,7 +490,33 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
         parser="direct_geneactiv_streaming_reader",
         resample_freq=resample_freq,
         diagnostic_page_interval=diagnostic_page_interval,
+        activity_mapping_requested=requested_mapping,
     )
+
+    def flush_active_mad_bucket() -> None:
+        nonlocal active_mad_bucket_ns, active_mad_parts
+        if active_mad_bucket_ns is None or not active_mad_parts:
+            active_mad_bucket_ns = None
+            active_mad_parts = []
+            return
+        values = np.concatenate(active_mad_parts).astype(np.float64, copy=False)
+        if len(values):
+            mean_vm = float(values.mean())
+            mad_by_bucket[int(active_mad_bucket_ns)] = float(np.mean(np.abs(values - mean_vm)) * 1000.0)
+        active_mad_bucket_ns = None
+        active_mad_parts = []
+
+    def add_mad_samples(bucket_ns: int, vm_values: np.ndarray) -> None:
+        nonlocal active_mad_bucket_ns, active_mad_parts
+        bucket_ns = int(bucket_ns)
+        if active_mad_bucket_ns is None:
+            active_mad_bucket_ns = bucket_ns
+        elif bucket_ns != active_mad_bucket_ns:
+            if bucket_ns < active_mad_bucket_ns:
+                raise ValueError("GENEActiv pages were not chronological; exact MAD epoch aggregation could not be guaranteed.")
+            flush_active_mad_bucket()
+            active_mad_bucket_ns = bucket_ns
+        active_mad_parts.append(np.asarray(vm_values, dtype=np.float64))
 
     def consume_page(page: Dict[str, str], page_hex: str) -> None:
         nonlocal pages_decoded, samples_decoded
@@ -497,8 +535,8 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
         page_ns = int(page_time.value)
         ns_per_sample = int(round(1_000_000_000 / float(freq)))
         temperature = _parse_float(page.get("temperature"))
-        enmo_values, light_lux_values = _decode_measurement_array(page_hex, calibration)
-        if enmo_values is None or light_lux_values is None or len(enmo_values) == 0:
+        enmo_values, vm_values, light_lux_values = _decode_measurement_array(page_hex, calibration)
+        if enmo_values is None or vm_values is None or light_lux_values is None or len(enmo_values) == 0:
             return
 
         n = len(enmo_values)
@@ -521,6 +559,8 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
                 if temperature is not None:
                     bucket["temperature_sum"] += float(temperature) * int(counts[idx])
                     bucket["temperature_count"] += int(counts[idx])
+                if requested_mapping == "mad":
+                    add_mad_samples(int(bucket_ns), vm_values[inverse == idx])
         else:
             for sample_idx in range(n):
                 light_lux = float(light_lux_values[sample_idx])
@@ -585,6 +625,8 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
 
     if not in_header:
         consume_page(current_page, hex_data)
+    if requested_mapping == "mad":
+        flush_active_mad_bucket()
 
     if resample_ns:
         if not buckets:
@@ -599,6 +641,7 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
             row = {
                 "timestamp": pd.Timestamp(bucket_ns),
                 "enmo": bucket["enmo_sum"] / count,
+                "mad": mad_by_bucket.get(int(bucket_ns)),
                 "light_lux": light_lux,
                 "light_log": math.log10(max(light_lux, 0.0) + 1.0),
             }
@@ -613,7 +656,22 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
         df = pd.DataFrame(rows).set_index("timestamp").sort_index()
         df["light_log"] = df["light_lux"].astype(float).map(lambda x: math.log10(max(x, 0.0) + 1.0))
 
-    activity = df["enmo"].astype(float).rename("ENMO_mg")
+    resolved_mapping = "enmo" if requested_mapping == "original" else requested_mapping
+    if resolved_mapping == "mad":
+        activity = pd.to_numeric(df["mad"], errors="coerce").dropna().rename("MAD_mg")
+        if len(activity) < 2:
+            raise ValueError("MAD mapping did not produce enough valid GENEActiv epochs.")
+    else:
+        activity = df["enmo"].astype(float).rename("ENMO_mg")
+
+    activity_mapping_metadata = mapping_metadata(
+        requested_mapping,
+        resolved_mapping,
+        source="direct_geneactiv_streaming_reader",
+        epoch=str(resample_freq),
+        calibrated_axes=True,
+        available_mappings=["enmo", "mad"],
+    )
     light_lux = df["light_lux"].astype(float).rename("LIGHT_LUX")
     light_log = df["light_log"].astype(float).rename("LIGHT")
 
@@ -627,15 +685,17 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
         samples_decoded=samples_decoded,
         output_rows=int(len(activity)),
         resample_freq=resample_freq,
+        activity_mapping=activity_mapping_metadata,
     )
     record_diagnostic_event(
         "geneactiv_parse_completed",
         pages_decoded=pages_decoded,
         samples_decoded=samples_decoded,
         output_rows=int(len(activity)),
+        activity_mapping=activity_mapping_metadata,
     )
 
-    return GeneActivRaw(
+    raw = GeneActivRaw(
         data=activity,
         light=light,
         metadata={
@@ -648,6 +708,9 @@ def read_raw_geneactiv_bin(file_path: str, resample_freq: str = "1min") -> GeneA
                 "LIGHT_LUX": "lux",
             },
             "direct_geneactiv_reader": True,
+            "activity_mapping": activity_mapping_metadata,
+            "available_activity_mappings": ["enmo", "mad"],
         },
     )
+    return attach_mapping_metadata(raw, activity_mapping_metadata)
 
