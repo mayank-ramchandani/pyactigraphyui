@@ -274,6 +274,70 @@ def _np_iv(df, binarize=False, threshold=0):
     return (numerator / denominator.replace(0, pd.NA)).rename("IV")
 
 
+def _series_frequency(series: pd.Series) -> pd.Timedelta:
+    try:
+        freq = getattr(series.index, "freq", None)
+        if freq is not None:
+            return pd.Timedelta(freq)
+    except Exception:
+        pass
+    try:
+        inferred = pd.infer_freq(series.index)
+        if inferred:
+            return pd.Timedelta(inferred)
+    except Exception:
+        pass
+    try:
+        diffs = series.index.to_series().diff().dropna()
+        if len(diffs):
+            return pd.Timedelta(diffs.median())
+    except Exception:
+        pass
+    return pd.Timedelta("1min")
+
+
+def _average_daily_profile(series: pd.Series, cyclic: bool = True) -> pd.Series:
+    """Average epochs by clock time, matching pyActigraphy's L5/M10 basis."""
+    series = pd.to_numeric(series, errors="coerce").dropna().sort_index()
+    if len(series) == 0 or not isinstance(series.index, pd.DatetimeIndex):
+        return pd.Series(dtype=float)
+    freq = _series_frequency(series)
+    if freq <= pd.Timedelta(0):
+        freq = pd.Timedelta("1min")
+    time_of_day = series.index - series.index.normalize()
+    profile = series.groupby(time_of_day).mean()
+    expected_points = max(1, int(round(pd.Timedelta("24h") / freq)))
+    expected_index = pd.timedelta_range(start="0s", periods=expected_points, freq=freq)
+    profile = profile.reindex(expected_index)
+    profile.index.freq = expected_index.freq
+    if not cyclic:
+        return profile
+    second = profile.copy()
+    second.index = second.index + pd.Timedelta("24h")
+    cyclic_profile = pd.concat([profile, second])
+    try:
+        cyclic_profile.index.freq = expected_index.freq
+    except Exception:
+        pass
+    return cyclic_profile
+
+
+def _lmx_from_average_day(series: pd.Series, period: str, lowest: bool = True):
+    avgdaily = _average_daily_profile(series, cyclic=True)
+    if len(avgdaily) == 0:
+        return None, None
+    freq = _series_frequency(series)
+    n_epochs = max(1, int(pd.Timedelta(period) / freq))
+    mean_activity = avgdaily.rolling(period, min_periods=n_epochs).sum().shift(-n_epochs + 1)
+    # Start positions after the first 24 h duplicate the same circular windows.
+    candidates = mean_activity.loc[mean_activity.index < pd.Timedelta("24h")].dropna()
+    if len(candidates) == 0:
+        return None, None
+    start = candidates.idxmin() if lowest else candidates.idxmax()
+    value = float(candidates.loc[start] / n_epochs)
+    return start, value
+
+
 @dataclass
 class GeneActivRaw:
     data: pd.Series
@@ -292,6 +356,21 @@ class GeneActivRaw:
 
     def _activity_series(self):
         series = pd.to_numeric(self.data, errors="coerce").dropna()
+        if not isinstance(series.index, pd.DatetimeIndex):
+            series.index = pd.to_datetime(series.index, errors="coerce")
+            series = series[~pd.isna(series.index)]
+        return series.sort_index()
+
+    @property
+    def raw_data(self):
+        """Unmasked activity series expected by pyActigraphy's Crespo code.
+
+        Native pyActigraphy Raw objects expose both ``data`` and ``raw_data``.
+        The streaming GENEActiv reader has no separate mask layer, so the
+        decoded epoch series is the appropriate raw-data representation.
+        Missing epochs are retained after ``asfreq`` during scoring.
+        """
+        series = pd.to_numeric(self.data, errors="coerce")
         if not isinstance(series.index, pd.DatetimeIndex):
             series.index = pd.to_datetime(series.index, errors="coerce")
             series = series[~pd.isna(series.index)]
@@ -339,11 +418,59 @@ class GeneActivRaw:
     def Oakley(self, threshold="automatic"):
         return self._rest_score(None if threshold == "automatic" else threshold)
 
+    def resampled_data(self, freq="1min", binarize=False, threshold=4):
+        series = self._activity_series().resample(freq).mean()
+        if binarize:
+            series = (series > float(threshold)).astype(int)
+        return series
+
+    @property
+    def frequency(self):
+        return _series_frequency(self._activity_series())
+
+    def _run_scoring_mixin(self, method_name, *args, **kwargs):
+        from pyActigraphy.sleep.scoring_base import ScoringMixin
+        method = getattr(ScoringMixin, method_name)
+        original_data = self.data
+        try:
+            series = self._activity_series()
+            freq = _series_frequency(series)
+            # ScoringMixin algorithms use ``index.freq`` internally. ``asfreq``
+            # sets it explicitly and represents real recording gaps as NaN.
+            self.data = series.asfreq(freq)
+            return method(self, *args, **kwargs)
+        finally:
+            self.data = original_data
+
     def Crespo(self, *args, **kwargs):
-        return self._rest_score(None)
+        # Use the actual pyActigraphy implementation on the streaming-decoded
+        # epoch series. GeneActivRaw provides the Raw-like ``data``,
+        # ``raw_data``, ``frequency``, and ``resampled_data`` interfaces used by
+        # the scoring mixin.
+        try:
+            return self._run_scoring_mixin("Crespo", *args, **kwargs)
+        except Exception:
+            # Defensive fallback for environments where pyActigraphy cannot be
+            # imported. This is intentionally not used for AoT detection.
+            return (self._activity_series() > self._auto_rest_threshold(None)).astype(int)
+
+    def Crespo_AoT(self, *args, **kwargs):
+        try:
+            return self._run_scoring_mixin("Crespo_AoT", *args, **kwargs)
+        except Exception as exc:
+            raise RuntimeError(f"pyActigraphy Crespo_AoT could not run on the decoded GENEActiv series: {exc}") from exc
 
     def Roenneberg(self, *args, **kwargs):
-        return self._rest_score(None)
+        try:
+            return self._run_scoring_mixin("Roenneberg", *args, **kwargs)
+        except Exception:
+            return self._rest_score(None)
+
+    def Roenneberg_AoT(self, *args, **kwargs):
+        try:
+            return self._run_scoring_mixin("Roenneberg_AoT", *args, **kwargs)
+        except Exception as exc:
+            raise RuntimeError(f"pyActigraphy Roenneberg_AoT could not run on the decoded GENEActiv series: {exc}") from exc
 
     def SleepRegularityIndex(self, algo=None, threshold=None):
         score = self._rest_score(threshold)
@@ -381,13 +508,40 @@ class GeneActivRaw:
         # Active-to-rest transition probability fallback.
         return self._transition_probability(True, False, threshold=threshold)
 
-    def RA(self, binarize=True, threshold=4):
-        series = self.data.dropna()
+    def L5(self, binarize=True, threshold=4):
+        series = self._activity_series()
         if binarize:
             series = (series > float(threshold)).astype(float)
-        l5 = series.rolling("5h", min_periods=1).mean().min()
-        m10 = series.rolling("10h", min_periods=1).mean().max()
-        return (m10 - l5) / (m10 + l5) if (m10 + l5) != 0 else None
+        _start, value = _lmx_from_average_day(series, "5h", lowest=True)
+        return value
+
+    def M10(self, binarize=True, threshold=4):
+        series = self._activity_series()
+        if binarize:
+            series = (series > float(threshold)).astype(float)
+        _start, value = _lmx_from_average_day(series, "10h", lowest=False)
+        return value
+
+    def RA(self, binarize=True, threshold=4):
+        series = self._activity_series()
+        if binarize:
+            series = (series > float(threshold)).astype(float)
+        l5_start, l5 = _lmx_from_average_day(series, "5h", lowest=True)
+        m10_start, m10 = _lmx_from_average_day(series, "10h", lowest=False)
+        denominator = (m10 + l5) if m10 is not None and l5 is not None else None
+        value = ((m10 - l5) / denominator) if denominator not in (None, 0) else None
+        self._ui_last_ra_components = {
+            "method": "pyactigraphy_average_daily_profile_equivalent",
+            "binarize": bool(binarize),
+            "threshold": float(threshold),
+            "l5": l5,
+            "m10": m10,
+            "l5_start": str(l5_start) if l5_start is not None else None,
+            "m10_start": str(m10_start) if m10_start is not None else None,
+            "ra": value,
+            "ra_at_upper_boundary": bool(value is not None and abs(float(value) - 1.0) < 1e-12),
+        }
+        return value
 
     def IS(self, freq="1min", binarize=True, threshold=4):
         df = self.data.rename("activity").to_frame()
@@ -484,6 +638,8 @@ def read_raw_geneactiv_bin(
     hex_data = ""
     pages_decoded = 0
     samples_decoded = 0
+    file_size_bytes = os.path.getsize(file_path)
+    bytes_consumed = 0
     resample_ns = _parse_resample_freq_ns(resample_freq)
     diagnostic_page_interval = max(1, int(os.getenv("GENEACTIV_DIAGNOSTIC_PAGE_INTERVAL", "5000")))
     update_current_stage(
@@ -491,6 +647,8 @@ def read_raw_geneactiv_bin(
         resample_freq=resample_freq,
         diagnostic_page_interval=diagnostic_page_interval,
         activity_mapping_requested=requested_mapping,
+        file_size_bytes=file_size_bytes,
+        progress_message="Decoding raw GENEActiv pages",
     )
 
     def flush_active_mad_bucket() -> None:
@@ -581,6 +739,10 @@ def read_raw_geneactiv_bin(
                 pages_decoded=pages_decoded,
                 samples_decoded=samples_decoded,
                 resampled_bucket_count=len(buckets),
+                bytes_consumed=bytes_consumed,
+                file_size_bytes=file_size_bytes,
+                progress_fraction=min(0.99, bytes_consumed / file_size_bytes) if file_size_bytes else None,
+                progress_message=f"Decoded {pages_decoded:,} GENEActiv pages",
             )
             record_diagnostic_event(
                 "geneactiv_parse_progress",
@@ -591,6 +753,7 @@ def read_raw_geneactiv_bin(
 
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         for raw_line in f:
+            bytes_consumed += len(raw_line.encode("utf-8", errors="ignore"))
             line = raw_line.strip()
             if not line:
                 continue
@@ -686,6 +849,10 @@ def read_raw_geneactiv_bin(
         output_rows=int(len(activity)),
         resample_freq=resample_freq,
         activity_mapping=activity_mapping_metadata,
+        bytes_consumed=file_size_bytes,
+        file_size_bytes=file_size_bytes,
+        progress_fraction=1.0,
+        progress_message=f"Decoded {pages_decoded:,} GENEActiv pages into {len(activity):,} epochs",
     )
     record_diagnostic_event(
         "geneactiv_parse_completed",

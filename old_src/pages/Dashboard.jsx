@@ -40,6 +40,47 @@ function buildApiUrl(path) {
   return `${base}${cleanPath}`;
 }
 
+function createRequestId() {
+  try {
+    return crypto.randomUUID();
+  } catch (_error) {
+    return `analysis-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+}
+
+function postFormDataWithUploadProgress(url, formData, onUploadProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+
+    xhr.upload.onprogress = (event) => {
+      if (typeof onUploadProgress === "function" && event.lengthComputable) {
+        onUploadProgress(event.loaded, event.total);
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error while uploading the recording."));
+    xhr.ontimeout = () => reject(new Error("The upload or analysis request timed out."));
+    xhr.onabort = () => reject(new Error("The upload or analysis request was cancelled."));
+    xhr.onload = () => {
+      const responseText = xhr.responseText || "";
+      const contentType = xhr.getResponseHeader("content-type") || "";
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        statusText: xhr.statusText,
+        url,
+        headers: {
+          get: (name) => String(name || "").toLowerCase() === "content-type" ? contentType : null,
+        },
+        text: async () => responseText,
+      });
+    };
+
+    xhr.send(formData);
+  });
+}
+
 function getExtension(name) {
   const parts = name?.toLowerCase().split(".") || [];
   return parts.length > 1 ? `.${parts.pop()}` : "";
@@ -136,6 +177,9 @@ export default function Dashboard() {
     current: 0,
     total: 0,
     percent: 0,
+    filePercent: 0,
+    detail: "",
+    requestId: null,
   });
 
   const [selectedMetrics, setSelectedMetrics] = useState(
@@ -337,12 +381,15 @@ export default function Dashboard() {
   const setProgressStage = (phase, current, total) => {
     const safeTotal = Math.max(1, Number(total) || 1);
     const safeCurrent = Math.min(Math.max(0, Number(current) || 0), safeTotal);
-    setAnalysisProgress({
+    setAnalysisProgress((previous) => ({
+      ...previous,
       phase,
       current: safeCurrent,
       total: safeTotal,
       percent: Math.round((safeCurrent / safeTotal) * 100),
-    });
+      filePercent: Math.round((safeCurrent / safeTotal) * 100),
+      detail: "",
+    }));
   };
 
   const parseJsonResponse = async (res) => {
@@ -672,10 +719,71 @@ export default function Dashboard() {
           (uploadedFiles.sleepDiary || []).forEach((file) => formData.append("sleepDiaryFiles", file));
           (uploadedFiles.startStop || []).forEach((file) => formData.append("startStopFiles", file));
 
-          const res = await fetch(buildApiUrl("api/analyze/basic"), {
-            method: "POST",
-            body: formData,
+          const requestId = createRequestId();
+          formData.append("requestId", requestId);
+
+          let progressTimer = null;
+          let lastBackendProgress = 0;
+          const updateOverallFileProgress = (fileFraction, progressPayload = {}) => {
+            const boundedFileFraction = Math.min(1, Math.max(0, Number(fileFraction) || 0));
+            const overallPercent = Math.round(((completedSteps + boundedFileFraction) / totalSteps) * 100);
+            setAnalysisProgress((previous) => ({
+              ...previous,
+              phase: progressPayload.phase || previous.phase,
+              current: progressPayload.current ?? previous.current,
+              total: progressPayload.total ?? previous.total,
+              percent: overallPercent,
+              filePercent: Math.round(boundedFileFraction * 100),
+              detail: progressPayload.detail || "",
+              requestId,
+            }));
+          };
+
+          const pollBackendProgress = async () => {
+            try {
+              const progressResponse = await fetch(buildApiUrl(`api/progress/${encodeURIComponent(requestId)}`), {
+                cache: "no-store",
+              });
+              if (!progressResponse.ok) return;
+              const progressData = await progressResponse.json();
+              const backendPercent = Math.max(lastBackendProgress, Number(progressData.percent) || 0);
+              lastBackendProgress = backendPercent;
+              const fileFraction = 0.05 + (backendPercent / 100) * 0.95;
+              const detailParts = [];
+              if (progressData.details?.pages_decoded != null) {
+                detailParts.push(`${Number(progressData.details.pages_decoded).toLocaleString()} pages decoded`);
+              }
+              if (progressData.details?.samples_decoded != null) {
+                detailParts.push(`${Number(progressData.details.samples_decoded).toLocaleString()} samples decoded`);
+              }
+              updateOverallFileProgress(fileFraction, {
+                phase: `${fileLabel}: ${progressData.message || progressData.stage_label || "Running analysis"}`,
+                current: progressData.stage_current || 0,
+                total: progressData.stage_total || 0,
+                detail: detailParts.join(" · "),
+              });
+            } catch (_error) {
+              // Progress polling is advisory; the analysis request remains authoritative.
+            }
+          };
+
+          progressTimer = window.setInterval(pollBackendProgress, 750);
+          const res = await postFormDataWithUploadProgress(
+            buildApiUrl("api/analyze/basic"),
+            formData,
+            (loaded, total) => {
+              const uploadFraction = total > 0 ? loaded / total : 0;
+              updateOverallFileProgress(uploadFraction * 0.05, {
+                phase: `${fileLabel}: Uploading recording (${Math.round(uploadFraction * 100)}%)`,
+                current: 0,
+                total: 0,
+                detail: `${(loaded / (1024 * 1024)).toFixed(1)} of ${(total / (1024 * 1024)).toFixed(1)} MB uploaded`,
+              });
+            }
+          ).finally(() => {
+            if (progressTimer) window.clearInterval(progressTimer);
           });
+          await pollBackendProgress();
 
           const data = await parseJsonResponse(res);
           if (!res.ok) {

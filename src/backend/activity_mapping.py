@@ -1,13 +1,9 @@
-"""Shared activity-mapping helpers for raw accelerometer inputs.
+"""Shared activity-basis helpers for actigraphy and raw accelerometer inputs.
 
-The UI exposes three choices:
-
-- ``original``: preserve the file/device's existing activity representation.
-- ``enmo``: Euclidean Norm Minus One, averaged per epoch and reported in mg.
-- ``mad``: mean amplitude deviation of vector magnitude per epoch, reported in mg.
-
-ENMO and MAD require calibrated tri-axial acceleration, except when an uploaded
-preprocessed time-series already contains the requested mapping as a column.
+The recommended ``auto`` mode keeps a device/source activity series when the
+file already contains one, and uses an epoch-level accelerometer ``acc`` series
+for raw tri-axial inputs.  ``mad`` and the legacy/custom ``enmo`` calculation
+remain available as explicit alternatives.
 """
 
 from __future__ import annotations
@@ -16,31 +12,54 @@ from typing import Any, Dict
 
 
 ACTIVITY_MAPPING_OPTIONS: Dict[str, Dict[str, Any]] = {
-    "original": {
-        "label": "Original / device activity",
+    "auto": {
+        "label": "Recommended source / processed `acc`",
         "units": None,
-        "description": "Use the activity signal already provided by the file or its native reader.",
+        "description": (
+            "Use the file's source/device activity when it exists; otherwise use the "
+            "epoch-level accelerometer-processed `acc` signal for raw X/Y/Z recordings."
+        ),
     },
-    "enmo": {
-        "label": "ENMO",
+    "accelerometer": {
+        "label": "Processed acceleration (`acc` basis)",
         "units": "mg",
-        "description": "Euclidean Norm Minus One: max(sqrt(x²+y²+z²) - 1 g, 0), averaged within each epoch.",
+        "description": (
+            "Use the Oxford accelerometer `acc` column when available, or the memory-safe "
+            "compatible processed-acceleration path for supported raw recordings."
+        ),
+    },
+    "original": {
+        "label": "Source / device activity",
+        "units": None,
+        "description": "Use an activity/count series already supplied by the file or native reader.",
     },
     "mad": {
         "label": "MAD",
         "units": "mg",
         "description": "Mean amplitude deviation of vector magnitude within each epoch.",
     },
+    "enmo": {
+        "label": "Custom ENMO (legacy)",
+        "units": "mg",
+        "description": "Direct Euclidean Norm Minus One calculation retained for comparison and backwards compatibility.",
+    },
 }
 
 
 _ALIASES = {
-    "": "original",
-    "default": "original",
+    "": "auto",
+    "default": "auto",
+    "recommended": "auto",
+    "automatic": "auto",
+    "source_or_acc": "auto",
     "native": "original",
     "device": "original",
     "device_activity": "original",
     "original_activity": "original",
+    "acc": "accelerometer",
+    "processed_acc": "accelerometer",
+    "accelerometer_acc": "accelerometer",
+    "accelerometer_processed": "accelerometer",
     "enmo_mg": "enmo",
     "euclidean_norm_minus_one": "enmo",
     "mean_amplitude_deviation": "mad",
@@ -49,7 +68,7 @@ _ALIASES = {
 
 
 def normalize_activity_mapping(value: Any) -> str:
-    text = str(value or "original").strip().lower()
+    text = str(value or "auto").strip().lower()
     text = _ALIASES.get(text, text)
     if text not in ACTIVITY_MAPPING_OPTIONS:
         supported = ", ".join(ACTIVITY_MAPPING_OPTIONS)
@@ -73,7 +92,7 @@ def mapping_metadata(requested: Any, resolved: str | None = None, **extra: Any) 
 
 
 def attach_mapping_metadata(raw: Any, metadata: Dict[str, Any]) -> Any:
-    """Attach mapping details to pyActigraphy and lightweight raw objects."""
+    """Attach activity-basis details to pyActigraphy and lightweight raw objects."""
     try:
         raw._ui_activity_mapping = metadata.get("resolved")
         raw._ui_activity_mapping_requested = metadata.get("requested")
@@ -102,4 +121,4 @@ def raw_mapping_metadata(raw: Any) -> Dict[str, Any]:
     try:
         return mapping_metadata(requested, resolved)
     except Exception:
-        return mapping_metadata("original", "original")
+        return mapping_metadata("auto", "original")

@@ -36,6 +36,8 @@ from .accelerometer_loader import (
 )
 from .gt3x_loader import summarize_gt3x_file, DEFAULT_GT3X_ACTIVITY_MODE
 
+from .progress import get_progress
+
 from .diagnostics import (
     DiagnosticSession,
     mark_current_stage,
@@ -142,9 +144,21 @@ def version():
             "saved_runs_frontend_supabase": True,
             "structured_diagnostics": True,
             "json_safe_metric_results": True,
+            "live_analysis_progress": True,
+            "geneactiv_ra_average_daily_profile": True,
+            "geneactiv_pyactigraphy_aot": True,
         },
     }
 
+
+
+
+@app.get("/api/progress/{request_id}")
+def analysis_progress(request_id: str):
+    payload = get_progress(request_id)
+    if payload is None:
+        return JSONResponse(status_code=404, content={"ok": False, "detail": "Progress is not available yet."})
+    return {"ok": True, **payload}
 
 @app.post("/api/feedback")
 async def submit_feedback(payload: FeedbackPayload):
@@ -958,8 +972,38 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
 
     return summary
 
+
+
+def _estimate_analysis_stage_total(metric_requests, family_requests, analysis_scope):
+    """Estimate the stages visible in structured diagnostics.
+
+    A full-file run with all ten rest/activity metrics and all four sleep
+    metrics has 26 stages: ten request/pipeline stages, ten metric stages,
+    two sleep setup stages, and four sleep-metric stages. Selected-interval
+    runs can add more metric stages; DiagnosticSession grows the total if
+    additional stages are encountered.
+    """
+    rest_ids = {"ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap", "kra", "kar"}
+    sleep_ids = {"sri", "tst", "waso", "sleep_efficiency"}
+    selected = [item.get("id") for item in (metric_requests or []) if item.get("id")]
+    if analysis_scope == "family" and not selected:
+        family_map = {
+            "amplitude": ["ra", "rap"],
+            "rhythm": ["is", "iv", "ism", "ivm", "isp", "ivp"],
+            "sleep": ["sri", "tst", "waso", "sleep_efficiency"],
+            "fragmentation": ["kra", "kar"],
+        }
+        for family in family_requests or []:
+            selected.extend(family_map.get(family.get("id"), []))
+    selected = list(dict.fromkeys(selected))
+    rest_count = sum(metric_id in rest_ids for metric_id in selected)
+    sleep_count = sum(metric_id in sleep_ids for metric_id in selected)
+    base_pipeline_stages = 10
+    sleep_setup_stages = 2 if sleep_count else 0
+    return base_pipeline_stages + rest_count + sleep_setup_stages + sleep_count
+
 @app.post("/api/analyze/basic")
-async def analyze_basic(
+def analyze_basic(
     file: UploadFile = File(...),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("original"),
@@ -973,9 +1017,15 @@ async def analyze_basic(
     sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
     startStopFiles: Optional[List[UploadFile]] = File(None),
     sourceFileName: Optional[str] = Form(None),
+    requestId: Optional[str] = Form(None),
 ):
     source_filename = sourceFileName or file.filename
-    session = DiagnosticSession("/api/analyze/basic", source_file_name=source_filename).activate()
+    session = DiagnosticSession(
+        "/api/analyze/basic",
+        source_file_name=source_filename,
+        request_id=requestId,
+        expected_stage_total=10,
+    ).activate()
     temp_paths = []
     status_code = 200
     response_content = {}
@@ -991,6 +1041,9 @@ async def analyze_basic(
             analysis_scope = analysis_config.get("analysisScope", "metric")
             algorithm_request = analysis_config.get("algorithm")
             sleep_window_settings = analysis_config.get("sleepWindowSettings", {})
+            session.set_expected_stage_total(
+                _estimate_analysis_stage_total(metric_requests, family_requests, analysis_scope)
+            )
             analysis_window_settings = analysis_config.get("analysisWindowSettings", {}) or {}
             analysis_window_settings = {**analysis_window_settings, "sourceFileName": source_filename}
             _json_or_empty(csvMapping)

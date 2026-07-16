@@ -54,6 +54,15 @@ def quick_qc(metrics: dict):
     ra = metrics.get("ra")
     if ra is not None and _outside_range(ra, 0, 1):
         warnings.append("RA is outside the expected 0-1 range.")
+    else:
+        ra_number = _finite_scalar(ra)
+        if ra_number is not None and abs(ra_number - 1.0) < 1e-12:
+            warnings.append(
+                "RA is exactly 1.000. This is mathematically possible when L5 is zero, "
+                "but it can also indicate that binarization/thresholding made the least-active "
+                "5-hour window entirely inactive. Inspect the RA stage diagnostics for M10, L5, "
+                "threshold, and binarization settings; consider non-binarized RA for ENMO/MAD."
+            )
 
     sleep_efficiency = metrics.get("sleep_efficiency")
     if sleep_efficiency is not None and _outside_range(sleep_efficiency, 0, 100):

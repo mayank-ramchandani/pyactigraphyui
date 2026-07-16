@@ -61,7 +61,7 @@ def quick_qc(metrics: dict):
                 "RA is exactly 1.000. This is mathematically possible when L5 is zero, "
                 "but it can also indicate that binarization/thresholding made the least-active "
                 "5-hour window entirely inactive. Inspect the RA stage diagnostics for M10, L5, "
-                "threshold, and binarization settings; consider non-binarized RA for ENMO/MAD."
+                "threshold, and binarization settings; consider non-binarized RA for processed acceleration, ENMO, or MAD."
             )
 
     sleep_efficiency = metrics.get("sleep_efficiency")

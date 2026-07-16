@@ -319,7 +319,7 @@ export default function ResultsPanel({
   analysisLoading,
   analysisProgress = {},
   analysisMode,
-  activityMapping = "original",
+  activityMapping = "auto",
   supportFileSummary,
   lightResults = {},
   selectedLightMetrics = [],

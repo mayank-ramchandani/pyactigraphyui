@@ -451,7 +451,7 @@ export default function ResultsPanel({
         >
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8, color: "#334155", fontSize: 14 }}>
             <strong>{analysisProgress.phase || "Running analysis"}</strong>
-            <span>{analysisProgress.percent ?? 0}%</span>
+            <span>{analysisProgress.percent ?? 0}% overall</span>
           </div>
           <div style={{ width: "100%", height: 10, borderRadius: 999, background: "#e2e8f0", overflow: "hidden" }}>
             <div
@@ -464,8 +464,12 @@ export default function ResultsPanel({
               }}
             />
           </div>
-          <div style={{ marginTop: 8, color: "#64748b", fontSize: 13 }}>
-            Stage {analysisProgress.current ?? 0} of {analysisProgress.total || 1}. Progress advances by file and by light metric; backend activity/sleep metrics are reported at file level.
+          <div style={{ marginTop: 8, color: "#64748b", fontSize: 13, lineHeight: 1.5 }}>
+            {analysisProgress.total > 0 && analysisProgress.current > 0
+              ? `Backend stage ${analysisProgress.current} of ${analysisProgress.total}. `
+              : "Uploading/preparing the current file. "}
+            Current file: {analysisProgress.filePercent ?? 0}%.
+            {analysisProgress.detail ? <div style={{ marginTop: 3 }}>{analysisProgress.detail}</div> : null}
           </div>
         </div>
       )}

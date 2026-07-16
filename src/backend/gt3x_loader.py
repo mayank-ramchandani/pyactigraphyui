@@ -2,15 +2,15 @@
 
 This module avoids the .gt3x -> .agd requirement. It reads calibrated raw X/Y/Z
 samples with ActiGraph's pygt3x package and then builds a pyActigraphy BaseRaw
-object from either:
+object from one of four scalar activity bases:
 
-1. ActiLife-style epoch counts via ActiGraph's Python agcounts package; or
-2. ENMO or MAD epoch summaries from calibrated raw axes.
+1. The recommended processed epoch-level acceleration (`acc`) basis;
+2. ActiLife-style epoch counts via ActiGraph's Python agcounts package;
+3. MAD epoch summaries; or
+4. The retained custom ENMO calculation.
 
-The counts path is preferred for pyActigraphy algorithms whose thresholds expect
-ActiGraph-style counts. The ENMO path is useful for quick previews and
-non-parametric rest/activity metrics, but thresholds must be interpreted as mg,
-not counts.
+The selected and resolved basis is attached to the raw object so downstream
+metrics and diagnostics can distinguish mg acceleration from device counts.
 """
 
 from __future__ import annotations
@@ -21,6 +21,11 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+try:
+    from scipy.signal import butter, sosfilt, sosfilt_zi
+except Exception:  # pragma: no cover
+    butter = sosfilt = sosfilt_zi = None
 
 from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
 
@@ -241,6 +246,37 @@ def _enmo_activity_from_axes(raw_axes: pd.DataFrame, epoch_period: int) -> Tuple
     return activity, {"_gt3x_activity_mode": "enmo", "_activity_units": "mg"}
 
 
+def _accelerometer_activity_from_axes(
+    raw_axes: pd.DataFrame,
+    sample_rate: float,
+    epoch_period: int,
+) -> Tuple[pd.Series, Dict[str, Any]]:
+    """Create processed epoch-level `acc` from calibrated GT3X axes."""
+    vm = _vector_magnitude_g(raw_axes)
+    values = vm.to_numpy(dtype=np.float64, copy=False)
+    filter_applied = False
+    if butter is not None and sosfilt is not None and sosfilt_zi is not None and float(sample_rate) > 40.0 and len(values):
+        sos = butter(4, 20.0, btype="lowpass", fs=float(sample_rate), output="sos")
+        zi = sosfilt_zi(sos) * float(values[0])
+        values, _ = sosfilt(sos, values, zi=zi)
+        filter_applied = True
+
+    processed = pd.Series(
+        np.maximum(values - 1.0, 0.0) * 1000.0,
+        index=vm.index,
+        name="ACC_mg",
+    )
+    activity = processed.resample(pd.to_timedelta(epoch_period, unit="s")).mean().dropna()
+    return activity, {
+        "_gt3x_activity_mode": "accelerometer_acc",
+        "_activity_units": "mg",
+        "_processing_engine": "pygt3x_calibrated_filtered_vm_acc",
+        "_vector_magnitude_lowpass_hz": 20 if filter_applied else None,
+        "_vector_magnitude_filter_order": 4 if filter_applied else None,
+        "_raw_resampled_to_100_hz": False,
+    }
+
+
 def _mad_activity_from_axes(raw_axes: pd.DataFrame, epoch_period: int) -> Tuple[pd.Series, Dict[str, Any]]:
     vm = _vector_magnitude_g(raw_axes)
     epoch = pd.to_timedelta(epoch_period, unit="s")
@@ -259,17 +295,26 @@ def prepare_gt3x_activity_series(
     file_path: str,
     epoch_period: int = DEFAULT_GT3X_EPOCH_PERIOD,
     activity_mode: str = DEFAULT_GT3X_ACTIVITY_MODE,
-    activity_mapping: str = "original",
+    activity_mapping: str = "auto",
 ) -> Tuple[pd.Series, Dict[str, Any], pd.DataFrame]:
     df, metadata = read_gt3x_dataframe(file_path)
     raw_axes, sample_rate, timestamp_col, axes = _prepare_raw_axes(df, metadata)
 
     requested_mapping = normalize_activity_mapping(activity_mapping)
-    mode = (activity_mode or "counts").strip().lower() if requested_mapping == "original" else requested_mapping
+    if requested_mapping in {"auto", "accelerometer"}:
+        mode = "accelerometer"
+    elif requested_mapping == "original":
+        mode = (activity_mode or "counts").strip().lower()
+    else:
+        mode = requested_mapping
+
     mode_meta: Dict[str, Any]
     resolved_mapping = requested_mapping
     try:
-        if mode == "counts":
+        if mode == "accelerometer":
+            activity, mode_meta = _accelerometer_activity_from_axes(raw_axes, sample_rate, epoch_period)
+            resolved_mapping = "accelerometer"
+        elif mode == "counts":
             activity, mode_meta = _counts_activity_from_axes(raw_axes, sample_rate, epoch_period)
             resolved_mapping = "original"
         elif mode in {"enmo", "enmo_mg"}:
@@ -282,9 +327,9 @@ def prepare_gt3x_activity_series(
             raise GT3XProcessingError(f"Unsupported GT3X activity mode/mapping: {mode}")
     except Exception as exc:
         if mode == "counts":
-            activity, mode_meta = _enmo_activity_from_axes(raw_axes, epoch_period)
+            activity, mode_meta = _accelerometer_activity_from_axes(raw_axes, sample_rate, epoch_period)
             mode_meta["_gt3x_counts_fallback_reason"] = str(exc)
-            resolved_mapping = "enmo"
+            resolved_mapping = "accelerometer"
         else:
             raise
 
@@ -297,7 +342,7 @@ def prepare_gt3x_activity_series(
         source="pygt3x_raw_axes",
         epoch_seconds=int(epoch_period),
         calibrated_axes=True,
-        available_mappings=["original", "enmo", "mad"],
+        available_mappings=["auto", "accelerometer", "original", "mad", "enmo"],
         original_mode=activity_mode,
     )
     metadata.update(mode_meta)
@@ -319,7 +364,7 @@ def load_gt3x_as_baseraw(
     file_path: str,
     epoch_period: int = DEFAULT_GT3X_EPOCH_PERIOD,
     activity_mode: str = DEFAULT_GT3X_ACTIVITY_MODE,
-    activity_mapping: str = "original",
+    activity_mapping: str = "auto",
 ):
     if BaseRaw is None:
         raise GT3XProcessingError("pyActigraphy.io.BaseRaw is not available in this backend environment.")
@@ -351,7 +396,7 @@ def summarize_gt3x_file(
     file_path: str,
     epoch_period: int = DEFAULT_GT3X_EPOCH_PERIOD,
     activity_mode: str = DEFAULT_GT3X_ACTIVITY_MODE,
-    activity_mapping: str = "original",
+    activity_mapping: str = "auto",
 ) -> Dict[str, Any]:
     activity, metadata, df = prepare_gt3x_activity_series(
         file_path,

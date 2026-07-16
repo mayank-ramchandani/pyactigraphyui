@@ -10,6 +10,11 @@ from .activity_mapping import attach_mapping_metadata, mapping_metadata, normali
 from .diagnostics import record_diagnostic_event, update_current_stage
 import numpy as np
 
+try:
+    from scipy.signal import butter, sosfilt, sosfilt_zi
+except Exception:  # pragma: no cover
+    butter = sosfilt = sosfilt_zi = None
+
 
 _KEY_VALUE_RE = re.compile(r"^([^:]+):\s*(.*)$")
 _HEX_RE = re.compile(r"^[0-9A-Fa-f]+$")
@@ -602,7 +607,7 @@ def _parse_resample_freq_ns(resample_freq: Optional[str]) -> Optional[int]:
 def read_raw_geneactiv_bin(
     file_path: str,
     resample_freq: str = "1min",
-    activity_mapping: str = "original",
+    activity_mapping: str = "auto",
 ) -> GeneActivRaw:
     """Read a GENEActiv .bin file without shelling out to accProcess.
 
@@ -641,6 +646,12 @@ def read_raw_geneactiv_bin(
     file_size_bytes = os.path.getsize(file_path)
     bytes_consumed = 0
     resample_ns = _parse_resample_freq_ns(resample_freq)
+
+    acc_filter_sos = None
+    acc_filter_zi = None
+    acc_filter_freq = None
+    acc_filter_expected_next_ns = None
+    acc_filter_applied = False
     diagnostic_page_interval = max(1, int(os.getenv("GENEACTIV_DIAGNOSTIC_PAGE_INTERVAL", "5000")))
     update_current_stage(
         parser="direct_geneactiv_streaming_reader",
@@ -676,6 +687,36 @@ def read_raw_geneactiv_bin(
             active_mad_bucket_ns = bucket_ns
         active_mad_parts.append(np.asarray(vm_values, dtype=np.float64))
 
+    def processed_acc_values(vm_values: np.ndarray, freq: float, page_ns: int, ns_per_sample: int) -> np.ndarray:
+        nonlocal acc_filter_sos, acc_filter_zi, acc_filter_freq
+        nonlocal acc_filter_expected_next_ns, acc_filter_applied
+
+        values = np.asarray(vm_values, dtype=np.float64)
+        if len(values) == 0:
+            return values
+
+        can_filter = butter is not None and sosfilt is not None and sosfilt_zi is not None and float(freq) > 40.0
+        if can_filter:
+            needs_reset = (
+                acc_filter_sos is None
+                or acc_filter_freq is None
+                or abs(float(acc_filter_freq) - float(freq)) > 1e-6
+                or acc_filter_expected_next_ns is None
+                or abs(int(page_ns) - int(acc_filter_expected_next_ns)) > max(2 * int(ns_per_sample), 1_000_000)
+            )
+            if needs_reset:
+                acc_filter_sos = butter(4, 20.0, btype="lowpass", fs=float(freq), output="sos")
+                acc_filter_zi = sosfilt_zi(acc_filter_sos) * float(values[0])
+                acc_filter_freq = float(freq)
+            filtered, acc_filter_zi = sosfilt(acc_filter_sos, values, zi=acc_filter_zi)
+            acc_filter_applied = True
+        else:
+            filtered = values
+
+        acc_filter_expected_next_ns = int(page_ns) + len(values) * int(ns_per_sample)
+        return np.maximum(filtered - 1.0, 0.0) * 1000.0
+
+
     def consume_page(page: Dict[str, str], page_hex: str) -> None:
         nonlocal pages_decoded, samples_decoded
         if not page or not page_hex:
@@ -696,12 +737,19 @@ def read_raw_geneactiv_bin(
         enmo_values, vm_values, light_lux_values = _decode_measurement_array(page_hex, calibration)
         if enmo_values is None or vm_values is None or light_lux_values is None or len(enmo_values) == 0:
             return
+        use_processed_acc = requested_mapping not in {"mad", "enmo"}
+        acc_values = (
+            processed_acc_values(vm_values, float(freq), page_ns, ns_per_sample)
+            if use_processed_acc
+            else enmo_values
+        )
 
         n = len(enmo_values)
         if resample_ns:
             ts_ns = page_ns + (np.arange(n, dtype=np.int64) * ns_per_sample)
             bucket_ids = (ts_ns // resample_ns) * resample_ns
             unique_buckets, inverse = np.unique(bucket_ids, return_inverse=True)
+            acc_sums = np.bincount(inverse, weights=acc_values)
             enmo_sums = np.bincount(inverse, weights=enmo_values)
             light_sums = np.bincount(inverse, weights=light_lux_values)
             counts = np.bincount(inverse)
@@ -709,8 +757,9 @@ def read_raw_geneactiv_bin(
             for idx, bucket_ns in enumerate(unique_buckets):
                 bucket = buckets.setdefault(
                     int(bucket_ns),
-                    {"enmo_sum": 0.0, "light_lux_sum": 0.0, "temperature_sum": 0.0, "count": 0, "temperature_count": 0},
+                    {"acc_sum": 0.0, "enmo_sum": 0.0, "light_lux_sum": 0.0, "temperature_sum": 0.0, "count": 0, "temperature_count": 0},
                 )
+                bucket["acc_sum"] += float(acc_sums[idx])
                 bucket["enmo_sum"] += float(enmo_sums[idx])
                 bucket["light_lux_sum"] += float(light_sums[idx])
                 bucket["count"] += int(counts[idx])
@@ -724,6 +773,7 @@ def read_raw_geneactiv_bin(
                 light_lux = float(light_lux_values[sample_idx])
                 row = {
                     "timestamp": pd.Timestamp(page_ns + sample_idx * ns_per_sample),
+                    "acc": float(acc_values[sample_idx]),
                     "enmo": float(enmo_values[sample_idx]),
                     "light_lux": light_lux,
                     "light_log": math.log10(max(light_lux, 0.0) + 1.0),
@@ -803,6 +853,7 @@ def read_raw_geneactiv_bin(
             light_lux = bucket["light_lux_sum"] / count
             row = {
                 "timestamp": pd.Timestamp(bucket_ns),
+                "acc": bucket.get("acc_sum", bucket["enmo_sum"]) / count,
                 "enmo": bucket["enmo_sum"] / count,
                 "mad": mad_by_bucket.get(int(bucket_ns)),
                 "light_lux": light_lux,
@@ -819,21 +870,46 @@ def read_raw_geneactiv_bin(
         df = pd.DataFrame(rows).set_index("timestamp").sort_index()
         df["light_log"] = df["light_lux"].astype(float).map(lambda x: math.log10(max(x, 0.0) + 1.0))
 
-    resolved_mapping = "enmo" if requested_mapping == "original" else requested_mapping
-    if resolved_mapping == "mad":
+    # Raw GENEActiv files contain calibrated X/Y/Z samples but no native activity-count
+    # channel.  The recommended/accelerometer mode therefore uses the streaming,
+    # gravity-adjusted epoch-level acceleration series as the common `acc` basis.
+    # This avoids materialising hundreds of millions of raw rows for large files.
+    if requested_mapping == "mad":
+        resolved_mapping = "mad"
         activity = pd.to_numeric(df["mad"], errors="coerce").dropna().rename("MAD_mg")
         if len(activity) < 2:
             raise ValueError("MAD mapping did not produce enough valid GENEActiv epochs.")
-    else:
+    elif requested_mapping == "enmo":
+        resolved_mapping = "enmo"
         activity = df["enmo"].astype(float).rename("ENMO_mg")
+    else:
+        resolved_mapping = "accelerometer"
+        activity = df["acc"].astype(float).rename("ACC_mg")
 
+    is_processed_acc = resolved_mapping == "accelerometer"
     activity_mapping_metadata = mapping_metadata(
         requested_mapping,
         resolved_mapping,
-        source="direct_geneactiv_streaming_reader",
+        source="direct_geneactiv_streaming_acc",
+        processing_engine=(
+            "streaming_calibrated_filtered_vm_acc"
+            if is_processed_acc
+            else f"streaming_custom_{resolved_mapping}"
+        ),
         epoch=str(resample_freq),
         calibrated_axes=True,
-        available_mappings=["enmo", "mad"],
+        vector_magnitude_lowpass_hz=20 if is_processed_acc and acc_filter_applied else None,
+        vector_magnitude_filter_order=4 if is_processed_acc and acc_filter_applied else None,
+        raw_resampled_to_100_hz=False if is_processed_acc else None,
+        available_mappings=["auto", "accelerometer", "mad", "enmo"],
+        note=(
+            "Large GENEActiv files use a chunked streaming implementation of the epoch-level `acc` basis, "
+            "including fourth-order 20 Hz vector-magnitude filtering when the sample rate permits, "
+            "to avoid the memory cost of a full raw-data DataFrame. Upload an Oxford accelerometer "
+            "*timeSeries.csv.gz file when byte-for-byte accProcess output is required."
+            if is_processed_acc
+            else "This is an optional custom mapping calculated directly from the calibrated raw samples."
+        ),
     )
     light_lux = df["light_lux"].astype(float).rename("LIGHT_LUX")
     light_log = df["light_log"].astype(float).rename("LIGHT")
@@ -876,7 +952,7 @@ def read_raw_geneactiv_bin(
             },
             "direct_geneactiv_reader": True,
             "activity_mapping": activity_mapping_metadata,
-            "available_activity_mappings": ["enmo", "mad"],
+            "available_activity_mappings": ["auto", "accelerometer", "mad", "enmo"],
         },
     )
     return attach_mapping_metadata(raw, activity_mapping_metadata)

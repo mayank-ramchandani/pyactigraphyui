@@ -53,7 +53,7 @@ export default function PreviewPanel({
   lightFiles = [],
   selectedLightPreviewFile = "",
   setSelectedLightPreviewFile = () => {},
-  activityMapping = "original",
+  activityMapping = "auto",
   setActivityMapping = () => {},
   onPreview,
 }) {
@@ -194,6 +194,7 @@ export default function PreviewPanel({
             value={activityMapping}
             onChange={setActivityMapping}
             compact
+            context="preview"
           />
         )}
 

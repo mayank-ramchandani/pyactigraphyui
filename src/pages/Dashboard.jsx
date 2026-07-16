@@ -253,7 +253,8 @@ export default function Dashboard() {
   const [lightAnalysisError, setLightAnalysisError] = useState("");
 
   const [activityChannel, setActivityChannel] = useState("VM");
-  const [activityMapping, setActivityMapping] = useState("original");
+  const [previewActivityMapping, setPreviewActivityMapping] = useState("auto");
+  const [activityMapping, setActivityMapping] = useState("auto");
   const [activityTransform, setActivityTransform] = useState("none");
   const [lightTransform, setLightTransform] = useState("none");
 
@@ -486,16 +487,20 @@ export default function Dashboard() {
     });
   };
 
-  const handleActivityMappingChange = (nextMapping) => {
-    setActivityMapping(nextMapping);
+  const handlePreviewActivityMappingChange = (nextMapping) => {
+    setPreviewActivityMapping(nextMapping);
     setPreviewLoaded(false);
     setPreviewData(null);
     setActivityPreviewByFile({});
+    setPreviewError("");
+  };
+
+  const handleActivityMappingChange = (nextMapping) => {
+    setActivityMapping(nextMapping);
     setResultsGenerated(false);
     setSummaryResults({});
     setMultiFileResults([]);
     setAnalysisError("");
-    setPreviewError("");
   };
 
   const handleActigraphyFilesChange = (files) => {
@@ -536,7 +541,7 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append("file", targetFile);
       formData.append("activityChannel", activityChannel);
-      formData.append("activityMapping", activityMapping);
+      formData.append("activityMapping", previewActivityMapping);
       formData.append("resampleFreq", "1min");
       formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
       formData.append("csvSeparator", csvSeparator);
@@ -942,7 +947,7 @@ export default function Dashboard() {
 
   const handleLoadSavedRun = (run) => {
     const savedResults = run.results || {};
-    setActivityMapping(run.activity_mapping || "original");
+    setActivityMapping(run.activity_mapping || "auto");
     setSummaryResults(savedResults);
     setQcWarnings(run.qc_warnings || []);
     setSupportFileSummary(run.support_file_summary || null);
@@ -1110,8 +1115,8 @@ export default function Dashboard() {
         lightFiles={lightFiles}
         selectedLightPreviewFile={selectedLightPreviewFile}
         setSelectedLightPreviewFile={setSelectedLightPreviewFile}
-        activityMapping={activityMapping}
-        setActivityMapping={handleActivityMappingChange}
+        activityMapping={previewActivityMapping}
+        setActivityMapping={handlePreviewActivityMappingChange}
         onPreview={onActivityPreview}
       />
     );
@@ -1142,8 +1147,8 @@ export default function Dashboard() {
         lightFiles={lightFiles}
         selectedLightPreviewFile={selectedLightPreviewFile}
         setSelectedLightPreviewFile={setSelectedLightPreviewFile}
-        activityMapping={activityMapping}
-        setActivityMapping={handleActivityMappingChange}
+        activityMapping={previewActivityMapping}
+        setActivityMapping={handlePreviewActivityMappingChange}
         onPreview={onActivityPreview}
       />
     );
