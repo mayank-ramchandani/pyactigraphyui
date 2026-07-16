@@ -571,6 +571,26 @@ def _call_raw_method(raw, method_name, *args, **kwargs):
     return _safe_call(method, *args, **kwargs)
 
 
+def _normalize_sleep_score_convention(scored, algorithm):
+    """Return binary scores using the app convention 1=sleep/rest, 0=wake.
+
+    pyActigraphy's Crespo output uses 1 for active and 0 for rest, whereas
+    Roenneberg and the app's downstream sleep summaries use 1 for sleep/rest.
+    """
+    if scored is None:
+        return None
+    if algorithm != "crespo":
+        return scored
+    try:
+        if isinstance(scored, pd.DataFrame):
+            return 1 - scored.apply(pd.to_numeric, errors="coerce")
+        if isinstance(scored, pd.Series):
+            return (1 - pd.to_numeric(scored, errors="coerce")).rename(scored.name)
+        return 1 - scored
+    except Exception:
+        return scored
+
+
 def _score_algorithm(raw, algorithm, algorithm_params=None):
     algorithm_params = algorithm_params or {}
     params = algorithm_params.get(algorithm, {}) if isinstance(algorithm_params, dict) else {}
@@ -619,14 +639,14 @@ def _score_algorithm(raw, algorithm, algorithm_params=None):
                 kwargs[key] = params[key]
         scored = _safe_call(method, **kwargs) if kwargs else None
         if scored is not None:
-            return scored
+            return _normalize_sleep_score_convention(scored, "crespo")
         alpha_mode = params.get("alphaMode", "default")
         if alpha_mode == "manual":
             alpha = "{}h".format(params.get("alpha", 8))
-            return _safe_call(method, alpha=alpha)
+            return _normalize_sleep_score_convention(_safe_call(method, alpha=alpha), "crespo")
         if alpha_mode == "auto":
-            return _safe_call(method, estimate_zeta=True)
-        return _safe_call(method)
+            return _normalize_sleep_score_convention(_safe_call(method, estimate_zeta=True), "crespo")
+        return _normalize_sleep_score_convention(_safe_call(method), "crespo")
     if algorithm == "roenneberg":
         method = getattr(raw, "Roenneberg", None)
         if method is None or not callable(method):
@@ -1270,7 +1290,12 @@ def _run_basic_pyactigraphy_analysis_single(raw, metric_requests=None, family_re
                 value = compute_metric(raw, metric_id, params=params)
                 resolved = _resolve_series_to_numeric(value)
                 results[metric_id] = resolved
-                update_current_stage(result=result_summary(resolved))
+                extra_stage_details = {}
+                if metric_id == "ra":
+                    ra_components = getattr(raw, "_ui_last_ra_components", None)
+                    if isinstance(ra_components, dict):
+                        extra_stage_details["ra_components"] = ra_components
+                update_current_stage(result=result_summary(resolved), **extra_stage_details)
                 if resolved is None:
                     mark_current_stage(
                         "failed" if stage.get("suppressed_errors") else "warning",

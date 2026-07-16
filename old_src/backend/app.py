@@ -1,5 +1,5 @@
 from typing import Optional, List
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
@@ -39,6 +39,7 @@ from .gt3x_loader import summarize_gt3x_file, DEFAULT_GT3X_ACTIVITY_MODE
 from .diagnostics import (
     DiagnosticSession,
     mark_current_stage,
+    make_json_safe,
     raw_recording_summary,
     record_suppressed_exception,
     update_current_stage,
@@ -78,6 +79,35 @@ def _append_jsonl(filename: str, payload: dict) -> Path:
 
 app = FastAPI()
 
+
+@app.exception_handler(Exception)
+async def unhandled_server_exception(request: Request, exc: Exception):
+    """Keep unexpected backend failures machine-readable during debugging.
+
+    Process termination, ingress timeouts, and container OOM kills cannot be
+    caught here, but ordinary Python and response-serialization exceptions can.
+    """
+    logging.getLogger("actigraphy.unhandled").exception(
+        "Unhandled backend exception for %s", request.url.path
+    )
+    expose_details = os.getenv("EXPOSE_SERVER_ERROR_DETAILS", "true").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+    return JSONResponse(
+        status_code=500,
+        content=make_json_safe({
+            "ok": False,
+            "detail": (
+                f"Unhandled server error: {exc}"
+                if expose_details
+                else "An unexpected server error occurred. Check the backend logs."
+            ),
+            "error_type": type(exc).__name__,
+            "endpoint": request.url.path,
+        }),
+    )
+
+
 _default_cors_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -111,6 +141,7 @@ def version():
             "bin_cwa_accelerometer": True,
             "saved_runs_frontend_supabase": True,
             "structured_diagnostics": True,
+            "json_safe_metric_results": True,
         },
     }
 
@@ -189,6 +220,33 @@ def _json_or_empty(value):
         return json.loads(value or "{}")
     except Exception:
         return {}
+
+
+def _safe_json_response(status_code: int, content):
+    """Return JSON even when a metric produced a NumPy/Pandas object.
+
+    JSONResponse serializes content in its constructor, which occurs after the
+    endpoint's main try/except block. Sanitizing here prevents an otherwise
+    successful analysis from becoming an opaque plain-text HTTP 500.
+    """
+    request_id = None
+    try:
+        if isinstance(content, dict):
+            request_id = (content.get("diagnostics") or {}).get("request_id")
+        safe_content = make_json_safe(content)
+        return JSONResponse(status_code=status_code, content=safe_content)
+    except Exception as exc:
+        logging.getLogger("actigraphy.response").exception("Could not serialize API response")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "detail": "The analysis completed, but the server could not serialize the response.",
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+                "request_id": request_id,
+            },
+        )
 
 
 def _load_native_supported_file(file_path: str, activity_mapping: str = "original"):
@@ -515,7 +573,7 @@ async def analyze_light(
         _persist_diagnostics(diagnostics_payload)
         session.deactivate()
 
-    return JSONResponse(status_code=status_code, content=response_content)
+    return _safe_json_response(status_code=status_code, content=response_content)
 
 
 @app.post("/api/light/manipulate")
@@ -1112,5 +1170,5 @@ async def analyze_basic(
         _persist_diagnostics(diagnostics_payload)
         session.deactivate()
 
-    return JSONResponse(status_code=status_code, content=response_content)
+    return _safe_json_response(status_code=status_code, content=response_content)
 

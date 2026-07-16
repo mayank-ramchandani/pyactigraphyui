@@ -56,6 +56,10 @@ export default function DiagnosticPanel({ diagnostics, title = "Diagnostic repor
   const data = recording.data || {};
   const activity = data.activity || {};
   const transport = diagnostics.transport || {};
+  const raStage = stages.find((stage) => stage?.name === "metric.ra");
+  const raComponents = raStage?.details?.ra_components || null;
+  const sleepWindowStage = stages.find((stage) => stage?.name === "sleep.window_detection");
+  const sleepWindowDetails = sleepWindowStage?.details || null;
 
   return (
     <div style={{ border: "1px solid #cbd5e1", borderRadius: 14, padding: 12, background: "#f8fafc", marginTop: 12 }}>
@@ -101,6 +105,36 @@ export default function DiagnosticPanel({ diagnostics, title = "Diagnostic repor
       )}
 
       <ErrorDetails error={diagnostics.error} label="Request error" />
+
+      {raComponents && (
+        <div style={{ marginTop: 12, padding: 11, borderRadius: 10, background: raComponents.ra_at_upper_boundary ? "#fff7ed" : "#f0fdf4", border: `1px solid ${raComponents.ra_at_upper_boundary ? "#fed7aa" : "#bbf7d0"}`, fontSize: 13 }}>
+          <div style={{ fontWeight: 800, color: raComponents.ra_at_upper_boundary ? "#9a3412" : "#166534" }}>
+            RA calculation details
+          </div>
+          <div style={{ marginTop: 5, display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <span><strong>RA:</strong> {formatNumber(raComponents.ra)}</span>
+            <span><strong>M10:</strong> {formatNumber(raComponents.m10)}</span>
+            <span><strong>L5:</strong> {formatNumber(raComponents.l5)}</span>
+            <span><strong>Binarized:</strong> {raComponents.binarize ? "Yes" : "No"}</span>
+            <span><strong>Threshold:</strong> {formatNumber(raComponents.threshold)}</span>
+          </div>
+          {raComponents.ra_at_upper_boundary && (
+            <div style={{ marginTop: 5, color: "#9a3412" }}>RA equals 1 because L5 is zero while M10 is positive. Review the mapping, units, binarization, and threshold before interpreting it.</div>
+          )}
+        </div>
+      )}
+
+      {sleepWindowDetails && (
+        <div style={{ marginTop: 10, padding: 11, borderRadius: 10, background: sleepWindowDetails.window_count > 0 ? "#f0fdf4" : "#fff7ed", border: `1px solid ${sleepWindowDetails.window_count > 0 ? "#bbf7d0" : "#fed7aa"}`, fontSize: 13 }}>
+          <div style={{ fontWeight: 800, color: sleepWindowDetails.window_count > 0 ? "#166534" : "#9a3412" }}>Sleep-window detection</div>
+          <div style={{ marginTop: 5 }}>
+            <strong>Method:</strong> {sleepWindowDetails.method || "—"} · <strong>Windows:</strong> {sleepWindowDetails.window_count ?? 0}
+          </div>
+          {Array.isArray(sleepWindowDetails.notes) && sleepWindowDetails.notes.length > 0 && (
+            <div style={{ marginTop: 5, color: "#475569" }}>{sleepWindowDetails.notes.join(" ")}</div>
+          )}
+        </div>
+      )}
 
       {stages.length > 0 && (
         <details open style={{ marginTop: 12 }}>

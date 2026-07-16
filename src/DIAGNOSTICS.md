@@ -54,3 +54,47 @@ Periodic pyActigraphy metrics such as `ISp`, `IVp`, and `RAp` may return NumPy a
 
 This build converts nested NumPy/Pandas metric values to JSON-safe Python lists, dictionaries, scalars, and `null` values. It also installs a final unhandled-exception JSON handler. Container termination, reverse-proxy timeouts, and operating-system OOM kills still occur outside Python and therefore must be confirmed from Azure/container logs.
 
+
+## RA calculation for directly decoded GENEActiv `.bin` files
+
+The direct streaming reader now calculates L5 and M10 from the cyclic average daily activity profile before calculating:
+
+```text
+RA = (M10 - L5) / (M10 + L5)
+```
+
+This matches the method used by pyActigraphy's non-parametric metrics rather than searching for the lowest/highest rolling window across the full multi-day recording. The `metric.ra` diagnostic stage includes `ra_components` with M10, L5, their clock-time starts, binarization, threshold, and a boundary flag.
+
+An RA of exactly 1 is mathematically possible when L5 is 0 and M10 is positive. For GENEActiv `.bin` data, the direct reader's original mapping is ENMO in mg. With binarization enabled and a threshold of 4 mg, a completely below-threshold L5 produces RA=1. Review the non-binarized RA when continuous ENMO/MAD amplitude is the intended analysis.
+
+## Crespo/Roenneberg windows for directly decoded `.bin` files
+
+The streaming `GeneActivRaw` adapter now exposes the Raw-like interfaces used by pyActigraphy 1.2.2 (`data`, `raw_data`, `frequency`, and `resampled_data`) and delegates `Crespo_AoT` and `Roenneberg_AoT` to pyActigraphy's actual scoring mixin. No heuristic fallback window is introduced.
+
+The `sleep.window_detection` diagnostic stage reports the selected method, number of windows, notes, and any captured AoT exception. Roenneberg's published implementation is evaluated for 10-minute aggregated activity, so `rsfreq=10min` remains the recommended starting configuration for that method.
+
+## Live progress reporting
+
+The analysis request now includes a client-generated request ID. The frontend polls:
+
+```text
+GET /api/progress/{request_id}
+```
+
+and displays:
+
+- actual browser upload bytes and upload percentage;
+- current backend stage name and human-readable text;
+- current stage number and total;
+- overall completion percentage;
+- GENEActiv pages/samples decoded during the long loading stage.
+
+A run selecting all ten rest/activity metrics and all four sleep metrics has 26 diagnostic stages. The percentage represents completed pipeline work, not an estimated time remaining. The large GENEActiv decoding stage additionally advances from bytes consumed, so it does not appear completely frozen.
+
+Progress records are retained for six hours by default and mirrored to:
+
+```text
+${APP_DATA_DIR:-/tmp/actigraphy-ui-data}/progress/<request_id>.json
+```
+
+Set `ANALYSIS_PROGRESS_TTL_SECONDS` to change retention. In a multi-replica Azure deployment, `APP_DATA_DIR` must be a shared mounted path for polling to work reliably across replicas; otherwise use one backend replica or sticky routing.

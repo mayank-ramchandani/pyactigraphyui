@@ -507,13 +507,61 @@ def _get_activity_series(raw, preferred_channel=None):
     return _coerce_series_to_numeric(data)
 
 
-def _resolve_series_to_numeric(value):
+def _json_ready_metric_value(value, depth=0):
+    """Convert pyActigraphy/Pandas/NumPy results into JSON-safe values.
+
+    Periodic metrics such as ISp, IVp, and RAp may return NumPy arrays,
+    Pandas objects, tuples, or NumPy scalar types rather than a single Python
+    float. Returning those objects directly causes Starlette's JSONResponse to
+    raise *after* the endpoint try/except block, resulting in a plain-text HTTP
+    500 with no structured diagnostics.
+    """
+    if depth > 8:
+        return str(value)
     if value is None:
         return None
-    try:
-        return float(value)
-    except Exception:
+    if isinstance(value, bool):
         return value
+    if isinstance(value, numbers.Number):
+        try:
+            number = float(value)
+            return number if math.isfinite(number) else None
+        except Exception:
+            return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (pd.Timestamp, pd.Timedelta)):
+        return value.isoformat() if isinstance(value, pd.Timestamp) else str(value)
+    if isinstance(value, pd.Series):
+        return [_json_ready_metric_value(item, depth + 1) for item in value.tolist()]
+    if isinstance(value, pd.DataFrame):
+        return [
+            {str(key): _json_ready_metric_value(item, depth + 1) for key, item in row.items()}
+            for row in value.to_dict(orient="records")
+        ]
+    if isinstance(value, dict):
+        return {str(key): _json_ready_metric_value(item, depth + 1) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_ready_metric_value(item, depth + 1) for item in value]
+    try:
+        if hasattr(value, "tolist"):
+            return _json_ready_metric_value(value.tolist(), depth + 1)
+    except Exception:
+        pass
+    try:
+        if hasattr(value, "item"):
+            return _json_ready_metric_value(value.item(), depth + 1)
+    except Exception:
+        pass
+    try:
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except Exception:
+        return str(value)
+
+
+def _resolve_series_to_numeric(value):
+    return _json_ready_metric_value(value)
 
 
 def _call_raw_method(raw, method_name, *args, **kwargs):

@@ -27,6 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from .progress import finish_progress, set_total as set_progress_total, start_progress, update_progress
+
 import pandas as pd
 
 try:  # Optional at import time; requirements include it for deployed builds.
@@ -351,8 +353,8 @@ def result_summary(value: Any) -> Dict[str, Any]:
 
 
 class DiagnosticSession:
-    def __init__(self, endpoint: str, source_file_name: Optional[str] = None):
-        self.request_id = str(uuid.uuid4())
+    def __init__(self, endpoint: str, source_file_name: Optional[str] = None, request_id: Optional[str] = None, expected_stage_total: int = 1):
+        self.request_id = str(request_id or uuid.uuid4())
         self.endpoint = endpoint
         self.source_file_name = source_file_name
         self.started_at = _utc_now()
@@ -365,10 +367,23 @@ class DiagnosticSession:
         self.events = []
         self.environment = environment_summary()
         self._session_token = None
+        self.expected_stage_total = max(1, int(expected_stage_total or 1))
+        self._stage_counter = 0
+        self._completed_stage_count = 0
 
     def activate(self):
         self._session_token = _CURRENT_SESSION.set(self)
+        start_progress(
+            self.request_id,
+            endpoint=self.endpoint,
+            source_file_name=self.source_file_name,
+            total_stages=self.expected_stage_total,
+        )
         return self
+
+    def set_expected_stage_total(self, total: int):
+        self.expected_stage_total = max(1, int(total or 1), self._stage_counter)
+        set_progress_total(self.request_id, self.expected_stage_total)
 
     def deactivate(self):
         if self._session_token is not None:
@@ -390,7 +405,20 @@ class DiagnosticSession:
             "memory_before": memory_snapshot(),
             "suppressed_errors": [],
         }
+        self._stage_counter += 1
+        stage["sequence"] = self._stage_counter
+        if self._stage_counter > self.expected_stage_total:
+            self.expected_stage_total = self._stage_counter
         self.stages.append(stage)
+        update_progress(
+            self.request_id,
+            stage_name=name,
+            stage_current=self._stage_counter,
+            stage_total=self.expected_stage_total,
+            stage_status="running",
+            stage_fraction=0.0,
+            details={"category": category},
+        )
         try:
             _LOGGER.info(json.dumps({
                 "diagnostic_event": "stage_started",
@@ -444,6 +472,20 @@ class DiagnosticSession:
                 }, default=str))
             except Exception:
                 pass
+            self._completed_stage_count += 1
+            update_progress(
+                self.request_id,
+                stage_name=name,
+                stage_current=stage.get("sequence", self._stage_counter),
+                stage_total=self.expected_stage_total,
+                stage_status=stage.get("status", "passed"),
+                stage_fraction=1.0,
+                details={
+                    "duration_seconds": stage.get("duration_seconds"),
+                    "category": category,
+                    "outcome": (stage.get("details") or {}).get("outcome"),
+                },
+            )
             try:
                 _CURRENT_STAGE.reset(token)
             except Exception:
@@ -457,6 +499,13 @@ class DiagnosticSession:
                 "message": _safe_text(exc),
                 "traceback": _traceback_text(exc),
             }
+        finish_progress(
+            self.request_id,
+            "completed" if status in {"completed", "completed_with_warnings"} else "failed",
+            "Analysis complete" if status == "completed" else (
+                "Analysis complete with warnings" if status == "completed_with_warnings" else _safe_text(exc or "Analysis failed", 500)
+            ),
+        )
         try:
             _LOGGER.info(json.dumps({
                 "diagnostic_event": "request_finished",
@@ -517,6 +566,33 @@ def update_current_stage(**updates):
     try:
         details = stage.setdefault("details", {})
         details.update(updates)
+        session = current_session()
+        if session is not None:
+            fraction = updates.get("progress_fraction")
+            if fraction is None:
+                consumed = updates.get("bytes_consumed")
+                total_bytes = updates.get("file_size_bytes")
+                try:
+                    if consumed is not None and total_bytes:
+                        fraction = float(consumed) / float(total_bytes)
+                except Exception:
+                    fraction = None
+            message = updates.get("progress_message")
+            progress_details = {
+                key: updates.get(key)
+                for key in ["pages_decoded", "samples_decoded", "output_rows", "bytes_consumed", "file_size_bytes"]
+                if key in updates
+            }
+            update_progress(
+                session.request_id,
+                stage_name=stage.get("name"),
+                stage_current=stage.get("sequence"),
+                stage_total=session.expected_stage_total,
+                stage_status=stage.get("status", "running"),
+                stage_fraction=fraction,
+                message=message,
+                details=progress_details or None,
+            )
     except Exception:
         pass
 
