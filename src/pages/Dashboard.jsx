@@ -22,6 +22,7 @@ import LightRGBPanel from "../components/LightRGBPanel";
 import AuthBar from "../components/AuthBar";
 import RunHistoryPanel from "../components/RunHistoryPanel";
 import FeedbackButton from "../components/FeedbackButton";
+import DocumentationPanel from "../components/DocumentationPanel";
 
 import {
   getDefaultAlgorithm,
@@ -141,6 +142,7 @@ function clientFailureDiagnostics(error, file, endpoint) {
 
 export default function Dashboard() {
   const [currentStep, setCurrentStep] = useState("1");
+  const [documentationOpen, setDocumentationOpen] = useState(false);
   const [maxUnlockedStep, setMaxUnlockedStep] = useState("1");
 
   const [uploadedFiles, setUploadedFiles] = useState({
@@ -1346,10 +1348,21 @@ export default function Dashboard() {
       }}
     >
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 32, marginBottom: 8 }}>{appConfig.appName}</h1>
-        <p style={{ color: "#475569", marginBottom: 24, lineHeight: 1.5 }}>
-          Sequential actigraphy workflow with separate activity and light preview, optional mapping, support files, and family-aware analysis.
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+          <div>
+            <h1 style={{ fontSize: 32, margin: "0 0 8px" }}>{appConfig.appName}</h1>
+            <p style={{ color: "#475569", margin: 0, lineHeight: 1.5 }}>
+              Sequential actigraphy workflow with separate activity and light preview, optional mapping, support files, and family-aware analysis.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDocumentationOpen((value) => !value)}
+            style={{ padding: "10px 14px", borderRadius: 12, background: documentationOpen ? "#0f172a" : "white", color: documentationOpen ? "white" : "#0f172a", border: "1px solid #cbd5e1", cursor: "pointer", fontWeight: 700 }}
+          >
+            {documentationOpen ? "Close Documentation" : "Documentation"}
+          </button>
+        </div>
 
         {ENABLE_AUTH_RUNS && (
           <>
@@ -1377,6 +1390,9 @@ export default function Dashboard() {
           </>
         )}
 
+        {documentationOpen ? (
+          <DocumentationPanel onClose={() => setDocumentationOpen(false)} />
+        ) : (
         <div
           style={{
             display: "grid",
@@ -1478,6 +1494,7 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       <FeedbackButton

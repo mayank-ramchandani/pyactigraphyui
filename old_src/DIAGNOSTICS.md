@@ -65,7 +65,7 @@ RA = (M10 - L5) / (M10 + L5)
 
 This matches the method used by pyActigraphy's non-parametric metrics rather than searching for the lowest/highest rolling window across the full multi-day recording. The `metric.ra` diagnostic stage includes `ra_components` with M10, L5, their clock-time starts, binarization, threshold, and a boundary flag.
 
-An RA of exactly 1 is mathematically possible when L5 is 0 and M10 is positive. For GENEActiv `.bin` data, the direct reader's original mapping is ENMO in mg. With binarization enabled and a threshold of 4 mg, a completely below-threshold L5 produces RA=1. Review the non-binarized RA when continuous ENMO/MAD amplitude is the intended analysis.
+An RA of exactly 1 is mathematically possible when L5 is 0 and M10 is positive. For raw GENEActiv `.bin` data, the recommended mapping resolves to processed epoch-level acceleration in mg. With binarization enabled and a threshold of 4 mg, a completely below-threshold L5 produces RA=1. Review the non-binarized RA when continuous processed acceleration, ENMO, or MAD amplitude is the intended analysis.
 
 ## Crespo/Roenneberg windows for directly decoded `.bin` files
 

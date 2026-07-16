@@ -2,22 +2,34 @@ import React from "react";
 
 export const ACTIVITY_MAPPING_OPTIONS = [
   {
-    id: "original",
-    label: "Original / device activity",
+    id: "auto",
+    label: "Recommended source / processed `acc`",
     units: "",
-    description: "Preserves the file's existing activity signal or the reader's normal default.",
+    description: "Uses source/device activity when the file already contains it. Raw .bin, .cwa, and .gt3x files use the epoch-level accelerometer `acc` activity basis.",
   },
   {
-    id: "enmo",
-    label: "ENMO",
+    id: "accelerometer",
+    label: "Processed acceleration (`acc` basis)",
     units: "mg",
-    description: "Euclidean Norm Minus One from calibrated X/Y/Z acceleration, averaged into 30-second epochs.",
+    description: "Uses the Oxford accelerometer `acc` column when available; large raw files use the compatible memory-safe processed-acceleration path recorded in diagnostics.",
+  },
+  {
+    id: "original",
+    label: "Source / device activity",
+    units: "",
+    description: "Uses activity counts or another activity series already supplied by the file. Raw files without a native activity channel may resolve to processed acceleration instead.",
   },
   {
     id: "mad",
     label: "MAD",
     units: "mg",
-    description: "Mean amplitude deviation of vector magnitude within each 30-second epoch.",
+    description: "Mean amplitude deviation of vector magnitude within each 30-second epoch. Available only when raw X/Y/Z samples or a MAD column are available.",
+  },
+  {
+    id: "enmo",
+    label: "Custom ENMO (legacy)",
+    units: "mg",
+    description: "Retains the earlier direct ENMO mapping for comparison. The recommended processed `acc` option should normally be used for raw recordings.",
   },
 ];
 
@@ -27,11 +39,13 @@ export function activityMappingLabel(value) {
 }
 
 export default function ActivityMappingPanel({
-  value = "original",
+  value = "auto",
   onChange = () => {},
   compact = false,
+  context = "analysis",
 }) {
   const selected = ACTIVITY_MAPPING_OPTIONS.find((item) => item.id === value) || ACTIVITY_MAPPING_OPTIONS[0];
+  const isPreview = context === "preview";
 
   return (
     <div
@@ -42,9 +56,13 @@ export default function ActivityMappingPanel({
         background: "#eff6ff",
       }}
     >
-      <div style={{ fontWeight: 800, marginBottom: 6 }}>Activity mapping</div>
+      <div style={{ fontWeight: 800, marginBottom: 6 }}>
+        {isPreview ? "Preview activity signal" : "Analysis activity basis"}
+      </div>
       <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
-        ENMO and MAD are available for raw GENEActiv <code>.bin</code> and raw ActiGraph <code>.gt3x</code> files. ENMO may also be available in Oxford accelerometer time-series files. Unsupported mappings return a clear file-level error rather than substituting another signal.
+        {isPreview
+          ? "This only controls the plotted preview. It does not change the activity basis selected later for analysis."
+          : "The selected activity series becomes the basis for all chosen rest/activity metrics. Preview settings are independent."}
       </div>
       <select
         value={value}
@@ -65,9 +83,9 @@ export default function ActivityMappingPanel({
       <div style={{ color: "#1e3a8a", fontSize: 13, marginTop: 8, lineHeight: 1.45 }}>
         {selected.description}
       </div>
-      {value !== "original" && (
+      {["auto", "accelerometer", "mad", "enmo"].includes(value) && !isPreview && (
         <div style={{ color: "#9a3412", fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>
-          Sleep-scoring thresholds originally validated for device counts may not transfer directly to {activityMappingLabel(value)}. Circadian and non-parametric metrics can still be calculated, but threshold-based results should be interpreted with the selected mapping in mind.
+          Count-based thresholds are not automatically equivalent to mg. For RA, IS, IV, M10, and L5, continuous analysis without count binarization is usually the clearer starting point.
         </div>
       )}
     </div>

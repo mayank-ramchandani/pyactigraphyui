@@ -1,24 +1,25 @@
-# ENMO and MAD activity mapping
+# Activity basis and ENMO/MAD alternatives
 
-The web tool now accepts an `activityMapping` value of:
+The web tool accepts an `activityMapping` value of:
 
-- `original` — preserve the reader/device activity signal.
-- `enmo` — Euclidean Norm Minus One, averaged into 30-second epochs and reported in mg.
-- `mad` — mean amplitude deviation of vector magnitude within each 30-second epoch, reported in mg.
+- `auto` — recommended. Use source/device activity when it exists; otherwise use processed epoch-level acceleration (`acc`) for raw X/Y/Z files.
+- `accelerometer` — explicitly require the processed `acc` basis in mg.
+- `original` — prefer the file's source/device activity series.
+- `mad` — calculate or select mean amplitude deviation in mg.
+- `enmo` — retain the direct/custom ENMO mapping for backwards-compatible comparisons.
 
 ## Supported inputs
 
-- Raw GENEActiv `.bin`: ENMO and MAD are calculated by the direct streaming reader from calibrated X/Y/Z samples.
-- Raw ActiGraph `.gt3x`: ENMO and MAD are calculated from calibrated X/Y/Z samples exposed by `pygt3x`.
-- Oxford accelerometer `*timeSeries.csv(.gz)`: ENMO is read from an ENMO/`acc` column. MAD is accepted only when the file already contains a MAD column.
-- Counts-only/native pyActigraphy files: use `original`; ENMO and MAD cannot be reconstructed after raw axes have been discarded.
+| Input | Recommended `auto` | Processed `acc` | Source activity | MAD | Custom ENMO |
+|---|---|---|---|---|---|
+| Raw GENEActiv `.bin` | Processed `acc` | Yes | No native count channel | Yes | Yes |
+| Raw Axivity `.cwa` | Oxford `accProcess` `acc` | Yes | No native count channel | Only if supplied | Only if supplied |
+| Raw ActiGraph `.gt3x` | Processed `acc` | Yes | ActiGraph-style counts when available | Yes | Yes |
+| Oxford `*timeSeries.csv(.gz)` | `acc` column | Yes | If supplied | If supplied | If supplied |
+| Counts-only pyActigraphy formats | Source activity | No | Yes | No | No |
 
-Unsupported selections return a clear file-level error. The backend does not silently substitute another activity mapping.
+For large GENEActiv files, the direct reader uses a memory-safe streaming, calibrated, 20 Hz vector-magnitude-filtered, gravity-adjusted epoch implementation. To reproduce a particular Oxford `accProcess` release exactly, upload that release's generated `*timeSeries.csv.gz`; the app uses its `acc` column directly.
 
-## Interpretation
+Preview mapping and analysis mapping are independent. The resolved mapping, source/engine, units, and epoch are returned in previews, results, and diagnostics.
 
-ENMO and MAD are expressed in mg. pyActigraphy circadian/non-parametric metrics can use these epoch-level series, but sleep algorithms and threshold-based metrics originally validated with device counts may not have equivalent thresholds. The selected and resolved mapping is included in previews, result tables, saved-run metadata, and diagnostic JSON.
-
-## Quality-control behavior
-
-QC checks are advisory and non-fatal. Periodic metrics may return arrays or Pandas objects; emptiness is checked using collection length rather than comparison with `[]`. Any unexpected QC exception is retained as a suppressed diagnostic while calculated metric results are preserved.
+Count thresholds are not automatically equivalent to mg thresholds. Continuous non-binarized analysis should be considered when processed acceleration, MAD, or custom ENMO is used.

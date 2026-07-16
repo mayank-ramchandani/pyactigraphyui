@@ -391,7 +391,7 @@ def _read_gt3x_file(file_path: str):
         format_name="ActiGraph GT3X raw preview via pygt3x",
     )
 
-def load_native_file(file_path: str, reader_type: str, activity_mapping: str = "original"):
+def load_native_file(file_path: str, reader_type: str, activity_mapping: str = "auto"):
     requested_mapping = normalize_activity_mapping(activity_mapping)
 
     if reader_type == "raw_accelerometer_needs_conversion":
@@ -414,12 +414,11 @@ def load_native_file(file_path: str, reader_type: str, activity_mapping: str = "
             file_path, epoch_period=30, activity_mapping=requested_mapping
         )
 
-    if requested_mapping != "original":
+    if requested_mapping not in {"auto", "original"}:
         raise ValueError(
-            f"{requested_mapping.upper()} requires calibrated raw tri-axial acceleration. "
+            f"{requested_mapping.upper()} requires a compatible raw tri-axial or preprocessed mapping. "
             f"The detected '{reader_type}' reader exposes an existing activity/count series only. "
-            "Use Original / device activity for this file, or upload a raw GENEActiv .bin, "
-            "raw ActiGraph .gt3x, or a compatible preprocessed time-series containing the requested mapping."
+            "Choose Recommended/Source activity for this file, or upload raw .bin/.cwa/.gt3x data."
         )
 
     method_name = READERS.get(reader_type)
@@ -434,10 +433,11 @@ def load_native_file(file_path: str, reader_type: str, activity_mapping: str = "
     return attach_mapping_metadata(
         raw,
         mapping_metadata(
-            "original",
+            requested_mapping,
             "original",
             source=f"pyActigraphy:{reader_type}",
-            available_mappings=["original"],
+            available_mappings=["auto", "original"],
+            note="This format already supplies its own device/source activity series.",
         ),
     )
 

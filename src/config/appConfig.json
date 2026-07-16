@@ -41,6 +41,10 @@
     "registryMode": {
       "enabled": true,
       "description": "Metric and algorithm configuration is driven by registry metadata and per-metric parameter resolution."
+    },
+    "documentationCenter": {
+      "enabled": true,
+      "description": "In-app user, methods, diagnostics, limitations, and developer documentation."
     }
   },
   "workflow": [

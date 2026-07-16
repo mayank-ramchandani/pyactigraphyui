@@ -1,0 +1,78 @@
+# Application architecture
+
+## Frontend
+
+The frontend uses React and Vite.
+
+Important modules:
+
+| Module | Responsibility |
+|---|---|
+| `pages/Dashboard.jsx` | Workflow state, uploads, API requests, progress polling, result orchestration |
+| `components/FileSelectionPanel.jsx` | File categories and upload selection |
+| `components/PreviewPanel.jsx` | Activity and light preview controls |
+| `components/ActivityMappingPanel.jsx` | Independent preview/analysis mapping selector |
+| `components/MetricsPanel.jsx` | Metric families, algorithms, parameters, and analysis intervals |
+| `components/ResultsPanel.jsx` | Results, progress, QC, and diagnostics |
+| `components/DiagnosticPanel.jsx` | Per-stage diagnostic presentation and downloads |
+| `components/DocumentationPanel.jsx` | Searchable in-app documentation |
+| `config/*.json` | Workflow, metric, algorithm, family, preview, parameter, and export registries |
+
+## Backend
+
+The backend uses FastAPI/Uvicorn.
+
+| Module | Responsibility |
+|---|---|
+| `backend/app.py` | API endpoints, upload handling, orchestration, JSON errors, feature flags |
+| `backend/io_helpers.py` | Reader inference and native file loading |
+| `backend/geneactiv_bin.py` | Streaming GENEActiv decoding and Raw-like adapter |
+| `backend/gt3x_loader.py` | GT3X raw acceleration loading and mapping |
+| `backend/accelerometer_loader.py` | Oxford converter/time-series support |
+| `backend/activity_mapping.py` | Mapping normalization, resolution, and metadata |
+| `backend/preprocessing.py` | Intervals, masks, and support files |
+| `backend/analysis.py` | Metrics, sleep scoring/windows, light analysis, and previews |
+| `backend/qc.py` | Non-fatal quality control |
+| `backend/diagnostics.py` | Stage instrumentation, memory/timing, exceptions, JSON safety |
+| `backend/progress.py` | Request-scoped live progress |
+
+## Data flow
+
+```text
+Browser upload
+  → temporary file
+  → reader detection
+  → native reader or raw acceleration adapter
+  → activity mapping resolution
+  → timestamp/data validation
+  → start/stop and masking
+  → sleep diary or AoT window detection
+  → selected metrics
+  → quality control
+  → JSON-safe response
+  → results and diagnostic downloads
+  → temporary-file cleanup
+```
+
+## Registry-driven configuration
+
+The registries define user-facing labels and analysis metadata independently from the components. When adding a metric or algorithm, update the registry, backend implementation, documentation, tests, and export handling together.
+
+## API endpoints
+
+| Method and endpoint | Purpose |
+|---|---|
+| `GET /api/version` | Build metadata and feature flags |
+| `GET /api/progress/{request_id}` | Live analysis progress |
+| `POST /api/preview/basic` | Activity preview |
+| `POST /api/analyze/basic` | Main analysis |
+| `POST /api/feedback` | Feedback persistence |
+| Converter/light endpoints | Format-specific conversion, light previews, and light metrics as defined in `backend/app.py` |
+
+## Error boundaries
+
+- Metric calls are isolated so one failure does not erase unrelated results.
+- QC is non-fatal.
+- NumPy/Pandas outputs are converted to JSON-safe types before response construction.
+- A global exception handler returns structured JSON for ordinary unhandled Python errors.
+- Operating-system kills, gateway rejection, and proxy timeouts remain outside the Python error boundary.

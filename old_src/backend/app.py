@@ -147,6 +147,8 @@ def version():
             "live_analysis_progress": True,
             "geneactiv_ra_average_daily_profile": True,
             "geneactiv_pyactigraphy_aot": True,
+            "accelerometer_acc_default": True,
+            "preview_analysis_mapping_decoupled": True,
         },
     }
 
@@ -263,7 +265,7 @@ def _safe_json_response(status_code: int, content):
         )
 
 
-def _load_native_supported_file(file_path: str, activity_mapping: str = "original"):
+def _load_native_supported_file(file_path: str, activity_mapping: str = "auto"):
     reader_type = infer_reader_type(file_path)
 
     if reader_type == "tabular":
@@ -282,7 +284,7 @@ async def convert_accelerometer_lite(
     file: UploadFile = File(...),
     epochPeriod: int = Form(30),
     javaHeapMb: Optional[int] = Form(DEFAULT_JAVA_HEAP_MB or 0),
-    activityMapping: str = Form("original"),
+    activityMapping: str = Form("auto"),
 ):
     """Diagnostic endpoint for raw .bin/.cwa/.gt3x files or uploaded timeSeries CSVs.
 
@@ -333,7 +335,7 @@ async def convert_accelerometer_lite(
 async def preview_basic(
     file: UploadFile = File(...),
     activityChannel: str = Form("VM"),
-    activityMapping: str = Form("original"),
+    activityMapping: str = Form("auto"),
     resampleFreq: str = Form("1min"),
     csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
     csvSeparator: str = Form(","),  # accepted for frontend compatibility, ignored here
@@ -1006,7 +1008,7 @@ def _estimate_analysis_stage_total(metric_requests, family_requests, analysis_sc
 def analyze_basic(
     file: UploadFile = File(...),
     activityChannel: str = Form("VM"),
-    activityMapping: str = Form("original"),
+    activityMapping: str = Form("auto"),
     activityTransform: str = Form("none"),
     lightTransform: str = Form("none"),
     analysisMode: str = Form("standard"),
