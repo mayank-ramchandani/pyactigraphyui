@@ -18,7 +18,7 @@ The web tool accepts an `activityMapping` value of:
 | Oxford `*timeSeries.csv(.gz)` | `acc` column | Yes | If supplied | If supplied | If supplied |
 | Counts-only pyActigraphy formats | Source activity | No | Yes | No | No |
 
-For large GENEActiv files, the direct reader uses a memory-safe streaming, calibrated, 20 Hz vector-magnitude-filtered, gravity-adjusted epoch implementation. To reproduce a particular Oxford `accProcess` release exactly, upload that release's generated `*timeSeries.csv.gz`; the app uses its `acc` column directly.
+For large GENEActiv and GT3X files, direct readers stream calibrated raw data into epochs without building a whole-recording X/Y/Z DataFrame. GT3X device-local timestamps and real gaps are preserved. To reproduce a particular Oxford `accProcess` release exactly, upload that release's generated `*timeSeries.csv.gz`; the app uses its `acc` column directly.
 
 Preview mapping and analysis mapping are independent. The resolved mapping, source/engine, units, and epoch are returned in previews, results, and diagnostics.
 

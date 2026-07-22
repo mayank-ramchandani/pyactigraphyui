@@ -140,6 +140,7 @@ def version():
         "features": {
             "feedback": True,
             "gt3x_pygt3x": True,
+            "gt3x_streaming_epoch_loader": True,
             "bin_cwa_accelerometer": True,
             "saved_runs_frontend_supabase": True,
             "structured_diagnostics": True,
@@ -281,7 +282,7 @@ def _load_native_supported_file(file_path: str, activity_mapping: str = "auto"):
 
 
 @app.post("/api/accelerometer/convert-lite")
-async def convert_accelerometer_lite(
+def convert_accelerometer_lite(
     file: UploadFile = File(...),
     epochPeriod: int = Form(30),
     javaHeapMb: Optional[int] = Form(DEFAULT_JAVA_HEAP_MB or 0),
@@ -292,6 +293,7 @@ async def convert_accelerometer_lite(
     This returns a compact summary rather than running the full pyActigraphy analysis.
     It is useful on low-memory Render instances to confirm that the conversion/loading path works.
     """
+    tmp_path = None
     try:
         tmp_path = _write_upload_to_temp(file)
         requested_mapping = normalize_activity_mapping(activityMapping)
@@ -330,10 +332,12 @@ async def convert_accelerometer_lite(
         return JSONResponse(status_code=400, content={"ok": False, "detail": str(e)})
     except Exception as e:
         return JSONResponse(status_code=500, content={"ok": False, "detail": "Server error: {}".format(str(e))})
+    finally:
+        _cleanup_temp_paths([tmp_path])
 
 
 @app.post("/api/preview/basic")
-async def preview_basic(
+def preview_basic(
     file: UploadFile = File(...),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
@@ -344,6 +348,7 @@ async def preview_basic(
     sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
     startStopFiles: Optional[List[UploadFile]] = File(None),
 ):
+    tmp_path = None
     try:
         _json_or_empty(csvMapping)
 
@@ -374,10 +379,12 @@ async def preview_basic(
             status_code=500,
             content={"detail": "Server error: {}".format(str(e))}
         )
+    finally:
+        _cleanup_temp_paths([tmp_path])
 
 
 @app.post("/api/light/preview")
-async def preview_light(
+def preview_light(
     file: UploadFile = File(...),
     resampleFreq: str = Form("1min"),
     csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
@@ -386,6 +393,7 @@ async def preview_light(
     sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
     startStopFiles: Optional[List[UploadFile]] = File(None),
 ):
+    tmp_path = None
     try:
         _json_or_empty(csvMapping)
 
@@ -419,12 +427,15 @@ async def preview_light(
             status_code=500,
             content={"detail": "Server error: {}".format(str(e))}
         )
+    finally:
+        _cleanup_temp_paths([tmp_path])
 
 @app.post("/api/light/rgb-preview")
-async def preview_light_rgb(
+def preview_light_rgb(
     file: UploadFile = File(...),
     resampleFreq: str = Form("5min"),
 ):
+    tmp_path = None
     try:
         tmp_path = _write_upload_to_temp(file)
         raw, reader_type = _load_native_supported_file(tmp_path)
@@ -446,11 +457,14 @@ async def preview_light_rgb(
             status_code=500,
             content={"detail": "Server error: {}".format(str(e))}
         )
+    finally:
+        _cleanup_temp_paths([tmp_path])
 
 @app.post("/api/light/channels")
-async def light_channels(
+def light_channels(
     file: UploadFile = File(...),
 ):
+    tmp_path = None
     try:
         tmp_path = _write_upload_to_temp(file)
         raw, reader_type = _load_native_supported_file(tmp_path)
@@ -472,10 +486,12 @@ async def light_channels(
             status_code=500,
             content={"detail": "Server error: {}".format(str(e))}
         )
+    finally:
+        _cleanup_temp_paths([tmp_path])
 
 
 @app.post("/api/light/analyze")
-async def analyze_light(
+def analyze_light(
     file: UploadFile = File(...),
     metricId: str = Form(...),
     channel: Optional[str] = Form(None),
@@ -594,7 +610,7 @@ async def analyze_light(
 
 
 @app.post("/api/light/manipulate")
-async def manipulate_light(
+def manipulate_light(
     file: UploadFile = File(...),
     channels: str = Form(""),
     truncateStart: Optional[str] = Form(None),
@@ -607,6 +623,7 @@ async def manipulate_light(
     filterMethod: str = Form("none"),
     filterWindow: str = Form("15min"),
 ):
+    tmp_path = None
     try:
         tmp_path = _write_upload_to_temp(file)
         raw, reader_type = _load_native_supported_file(tmp_path)
@@ -642,6 +659,8 @@ async def manipulate_light(
             status_code=500,
             content={"detail": "Server error: {}".format(str(e))}
         )
+    finally:
+        _cleanup_temp_paths([tmp_path])
 
 
 
@@ -1227,4 +1246,3 @@ def analyze_basic(
         session.deactivate()
 
     return _safe_json_response(status_code=status_code, content=response_content)
-

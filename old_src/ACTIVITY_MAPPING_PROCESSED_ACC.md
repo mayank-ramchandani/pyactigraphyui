@@ -9,9 +9,15 @@ The frontend now defaults to **Recommended source / accelerometer activity**.
 - Uploaded Oxford `*timeSeries.csv.gz` files use their `acc` column directly.
 - MAD and the legacy/custom ENMO mapping remain optional.
 
-## Large GENEActiv files
+## Large raw files
 
 The direct GENEActiv reader uses a chunked, calibrated, gravity-adjusted epoch implementation so large recordings do not have to be expanded into a high-frequency Pandas DataFrame. The diagnostics identify this engine as `streaming_calibrated_filtered_vm_acc`.
+
+The GT3X reader likewise streams `log.bin` activity events into epochs instead
+of calling whole-file `FileReader.to_pandas()`. It preserves the fixed timezone
+from `info.txt`, leaves real gaps missing, and reports checksum or timestamp
+records that were skipped. Diagnostics identify this engine as
+`pygt3x_low_level_streaming_epoch_aggregation`.
 
 For a result that must match a specific Oxford `accProcess` release exactly, process the raw file with that release and upload its `*timeSeries.csv.gz` output. The app will then use the generated `acc` column directly and record the detected column and package summary in diagnostics.
 

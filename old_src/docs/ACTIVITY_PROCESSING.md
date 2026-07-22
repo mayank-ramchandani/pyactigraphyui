@@ -26,7 +26,24 @@ Diagnostics identify the exact engine used, such as:
 
 - `accelerometer_timeseries`;
 - `streaming_calibrated_filtered_vm_acc`;
-- `pygt3x_calibrated_filtered_vm_acc`.
+- `pygt3x_low_level_streaming_epoch_aggregation`.
+
+### GT3X bounded-memory processing
+
+GT3X `log.bin` activity events are decoded in bounded chunks. Calibrated X/Y/Z
+samples are immediately reduced into the requested epoch-level processed `acc`,
+MAD, ENMO, or supported ActiGraph-count basis, then released. The loader never
+calls `FileReader.to_pandas()` for the complete recording.
+
+Event timestamps are converted to the fixed timezone recorded in `info.txt`.
+Real recording gaps remain missing epochs; they are not compressed out of the
+timeline or treated as zero activity. Checksum failures and timestamps outside
+the metadata-defined recording period are skipped and counted in diagnostics.
+
+Streaming ActiGraph-style counts are supported for 30 Hz GT3X recordings. If a
+different sampling rate is requested with the source/count mapping, the loader
+records the reason and resolves to processed acceleration rather than using a
+boundary-inaccurate count approximation.
 
 ### MAD
 

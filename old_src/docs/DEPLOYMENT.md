@@ -68,6 +68,32 @@ Review:
 - temporary output size;
 - simultaneous analyses.
 
+GT3X streaming controls:
+
+```text
+GT3X_STREAM_CHUNK_SECONDS=300
+GT3X_PROGRESS_EVENT_INTERVAL=100000
+GT3X_DEDUPE_WINDOW_SECONDS=300
+GT3X_ISM_FILL_CHUNK_SECONDS=300
+```
+
+The defaults keep raw GT3X buffers small. Increasing the chunk duration can
+improve throughput slightly but also increases peak memory. Multiple workers or
+simultaneous large requests multiply the per-request memory requirement.
+
+Large-file preview and conversion endpoints are synchronous FastAPI handlers so
+their CPU work runs in the server thread pool rather than blocking the event
+loop. Uploaded temporary files are deleted in `finally` blocks on success and
+failure.
+
+## Request duration
+
+Streaming fixes the raw-decoding memory amplification but does not remove
+gateway request deadlines. Measure the complete browser upload, GT3X reduction,
+and selected analysis time. If their sum approaches the platform deadline, use
+a background-job endpoint and polling instead of extending application timeouts
+alone.
+
 ## Progress polling with replicas
 
 Progress is request-scoped and may be mirrored to `APP_DATA_DIR`. For multiple replicas, use shared storage or sticky routing. Otherwise, the poll can reach a replica that does not hold the request state.
@@ -80,6 +106,7 @@ DIAGNOSTIC_SHA256_MAX_MB=512
 DIAGNOSTIC_TRACEBACK_CHARS=12000
 DIAGNOSTIC_SUPPRESSED_ERROR_LIMIT=30
 GENEACTIV_DIAGNOSTIC_PAGE_INTERVAL=5000
+GT3X_PROGRESS_EVENT_INTERVAL=100000
 ANALYSIS_PROGRESS_TTL_SECONDS=21600
 EXPOSE_SERVER_ERROR_DETAILS=false
 ```

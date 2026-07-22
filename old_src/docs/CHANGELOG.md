@@ -1,5 +1,19 @@
 # Change log
 
+## 2026-07-21 — Bounded-memory GT3X loading
+
+- Replaced whole-file `pygt3x.FileReader.to_pandas()` decoding with low-level
+  streamed `log.bin` event processing.
+- Reduced calibrated X/Y/Z directly into epoch-level processed `acc`, MAD,
+  custom ENMO, or supported 30 Hz ActiGraph-style counts.
+- Preserved device-local timestamps and real recording gaps.
+- Added checksum, impossible-timestamp, duplicate-event, calibration, buffer,
+  and GT3X progress diagnostics.
+- Moved CPU-heavy preview/conversion routes into FastAPI's thread pool and
+  guaranteed temporary-upload cleanup.
+- Added synthetic gap/timezone/MAD regression tests and a full 289 MB GT3X
+  benchmark.
+
 ## 2026-07-16 — Documentation centre
 
 - Added a searchable in-app Documentation page.

@@ -439,6 +439,97 @@ export default function Dashboard() {
     }
   };
 
+  const waitForBackgroundJob = async (jobId, onUpdate = null) => {
+    const startedAt = Date.now();
+    const maxWaitMs = 6 * 60 * 60 * 1000;
+    let consecutivePollFailures = 0;
+
+    while (Date.now() - startedAt < maxWaitMs) {
+      try {
+        const statusResponse = await fetch(buildApiUrl(`api/jobs/${encodeURIComponent(jobId)}`), {
+          cache: "no-store",
+        });
+        const statusData = await parseJsonResponse(statusResponse);
+        if (!statusResponse.ok) {
+          throw createApiError(statusData?.detail || "Could not read background job status.", statusResponse, statusData);
+        }
+        consecutivePollFailures = 0;
+        if (typeof onUpdate === "function") onUpdate(statusData);
+
+        if (statusData.status === "completed") {
+          const resultStatus = Number(statusData.result_http_status || 200);
+          const result = statusData.result || {};
+          if (resultStatus < 200 || resultStatus >= 400) {
+            const error = new Error(result?.detail || "Background processing returned an error.");
+            error.httpStatus = resultStatus;
+            error.diagnostics = result?.diagnostics || null;
+            error.backgroundJobTerminal = true;
+            throw error;
+          }
+          return result;
+        }
+
+        if (statusData.status === "failed") {
+          const result = statusData.result || {};
+          const error = new Error(result?.detail || statusData.message || "Background processing failed.");
+          error.httpStatus = Number(statusData.result_http_status || 500);
+          error.diagnostics = result?.diagnostics || null;
+          error.backgroundJobTerminal = true;
+          throw error;
+        }
+      } catch (error) {
+        // A transient polling failure should not discard a job that is still
+        // running successfully in the container.
+        const pollStatus = Number(error?.httpStatus || 0);
+        if (error?.backgroundJobTerminal || (pollStatus >= 400 && pollStatus < 500)) throw error;
+        consecutivePollFailures += 1;
+        if (consecutivePollFailures >= 8) throw error;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+    }
+
+    throw new Error("Background processing exceeded the six-hour job wait limit.");
+  };
+
+  const runBackgroundFormJob = async ({
+    path,
+    formData,
+    jobId,
+    onUploadProgress = null,
+    onUpdate = null,
+  }) => {
+    if (!formData.has("jobId")) formData.append("jobId", jobId);
+    let startResponse;
+
+    try {
+      startResponse = await postFormDataWithUploadProgress(
+        buildApiUrl(path),
+        formData,
+        onUploadProgress
+      );
+      const startData = await parseJsonResponse(startResponse);
+      if (!startResponse.ok) {
+        throw createApiError(startData?.detail || "Could not start background processing.", startResponse, startData);
+      }
+      return waitForBackgroundJob(startData.job_id || jobId, onUpdate);
+    } catch (error) {
+      // If ingress closed exactly as the upload completed, the server may still
+      // have accepted the known client-generated job ID. Recover by polling it.
+      if ([503, 504].includes(Number(error?.httpStatus))) {
+        try {
+          const recoveryResponse = await fetch(buildApiUrl(`api/jobs/${encodeURIComponent(jobId)}`), {
+            cache: "no-store",
+          });
+          if (recoveryResponse.ok) return waitForBackgroundJob(jobId, onUpdate);
+        } catch (_recoveryError) {
+          // Preserve the original transport error when no job was created.
+        }
+      }
+      throw error;
+    }
+  };
+
   const goToStep = (stepId) => {
     if (Number(stepId) <= Number(maxUnlockedStep)) {
       setCurrentStep(stepId);
@@ -550,16 +641,12 @@ export default function Dashboard() {
       (uploadedFiles.masking || []).forEach((file) => formData.append("maskingFiles", file));
       (uploadedFiles.sleepDiary || []).forEach((file) => formData.append("sleepDiaryFiles", file));
       (uploadedFiles.startStop || []).forEach((file) => formData.append("startStopFiles", file));
-
-      const res = await fetch(buildApiUrl("api/preview/basic"), {
-        method: "POST",
-        body: formData,
+      const previewJobId = createRequestId();
+      const data = await runBackgroundFormJob({
+        path: "api/jobs/preview/basic",
+        formData,
+        jobId: previewJobId,
       });
-
-      const data = await parseJsonResponse(res);
-      if (!res.ok) {
-        throw new Error(data?.detail || "Failed to load activity preview.");
-      }
 
       const labeledData = { ...data, preview_file_name: targetFile.name };
       setSelectedPreviewFile(targetFile.name);
@@ -775,10 +862,11 @@ export default function Dashboard() {
           };
 
           progressTimer = window.setInterval(pollBackendProgress, 750);
-          const res = await postFormDataWithUploadProgress(
-            buildApiUrl("api/analyze/basic"),
+          const data = await runBackgroundFormJob({
+            path: "api/jobs/analyze/basic",
             formData,
-            (loaded, total) => {
+            jobId: requestId,
+            onUploadProgress: (loaded, total) => {
               const uploadFraction = total > 0 ? loaded / total : 0;
               updateOverallFileProgress(uploadFraction * 0.05, {
                 phase: `${fileLabel}: Uploading recording (${Math.round(uploadFraction * 100)}%)`,
@@ -786,16 +874,22 @@ export default function Dashboard() {
                 total: 0,
                 detail: `${(loaded / (1024 * 1024)).toFixed(1)} of ${(total / (1024 * 1024)).toFixed(1)} MB uploaded`,
               });
-            }
-          ).finally(() => {
+            },
+            onUpdate: (jobData) => {
+              const progressData = jobData?.progress;
+              if (!progressData) return;
+              const backendPercent = Math.max(lastBackendProgress, Number(progressData.percent) || 0);
+              lastBackendProgress = backendPercent;
+              updateOverallFileProgress(0.05 + (backendPercent / 100) * 0.95, {
+                phase: `${fileLabel}: ${progressData.message || progressData.stage_label || jobData.message || "Running analysis"}`,
+                current: progressData.stage_current || 0,
+                total: progressData.stage_total || 0,
+              });
+            },
+          }).finally(() => {
             if (progressTimer) window.clearInterval(progressTimer);
           });
           await pollBackendProgress();
-
-          const data = await parseJsonResponse(res);
-          if (!res.ok) {
-            throw createApiError(data?.detail || "Failed to generate results.", res, data);
-          }
 
           completedSteps += 1;
           setProgressStage(`Activity/sleep metrics complete for ${fileLabel}`, completedSteps, totalSteps);

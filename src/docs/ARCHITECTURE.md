@@ -35,12 +35,15 @@ The backend uses FastAPI/Uvicorn.
 | `backend/qc.py` | Non-fatal quality control |
 | `backend/diagnostics.py` | Stage instrumentation, memory/timing, exceptions, JSON safety |
 | `backend/progress.py` | Request-scoped live progress |
+| `backend/job_manager.py` | Bounded background executor and persistent job/result state |
 
 ## Data flow
 
 ```text
 Browser upload
-  → temporary file
+  → per-job input file
+  → HTTP 202 with job ID
+  → bounded background worker
   → reader detection
   → native reader or raw acceleration adapter
   → activity mapping resolution
@@ -49,7 +52,8 @@ Browser upload
   → sleep diary or AoT window detection
   → selected metrics
   → quality control
-  → JSON-safe response
+  → stored JSON-safe result
+  → job/result polling
   → results and diagnostic downloads
   → temporary-file cleanup
 ```
@@ -64,6 +68,9 @@ The registries define user-facing labels and analysis metadata independently fro
 |---|---|
 | `GET /api/version` | Build metadata and feature flags |
 | `GET /api/progress/{request_id}` | Live analysis progress |
+| `GET /api/jobs/{job_id}` | Background preview/analysis status and completed result |
+| `POST /api/jobs/preview/basic` | Start an activity-preview job; returns HTTP 202 |
+| `POST /api/jobs/analyze/basic` | Start a main-analysis job; returns HTTP 202 |
 | `POST /api/preview/basic` | Activity preview |
 | `POST /api/analyze/basic` | Main analysis |
 | `POST /api/feedback` | Feedback persistence |
@@ -76,3 +83,4 @@ The registries define user-facing labels and analysis metadata independently fro
 - NumPy/Pandas outputs are converted to JSON-safe types before response construction.
 - A global exception handler returns structured JSON for ordinary unhandled Python errors.
 - Operating-system kills, gateway rejection, and proxy timeouts remain outside the Python error boundary.
+- Background execution removes decoding and analysis from the ingress request, but the initial browser upload must still finish within the platform's upload/request limit.
