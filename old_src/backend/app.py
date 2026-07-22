@@ -2,6 +2,7 @@ from typing import Optional, List
 from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.datastructures import Headers
 import json
 import os
 import tempfile
@@ -9,6 +10,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import uuid
 import logging
+import re
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +39,13 @@ from .accelerometer_loader import (
 from .gt3x_loader import summarize_gt3x_file, DEFAULT_GT3X_ACTIVITY_MODE
 
 from .progress import get_progress
+from .job_manager import (
+    create_job_record,
+    get_job,
+    get_job_result,
+    submit_job,
+    update_job,
+)
 
 from .diagnostics import (
     DiagnosticSession,
@@ -141,6 +150,7 @@ def version():
             "feedback": True,
             "gt3x_pygt3x": True,
             "gt3x_streaming_epoch_loader": True,
+            "background_preview_analysis_jobs": True,
             "bin_cwa_accelerometer": True,
             "saved_runs_frontend_supabase": True,
             "structured_diagnostics": True,
@@ -198,6 +208,61 @@ def _write_upload_to_temp(upload: UploadFile):
             size_mb=round(bytes_written / (1024 * 1024), 3),
         )
         return tmp.name
+
+
+def _safe_job_input_name(filename: Optional[str], prefix: str) -> str:
+    basename = Path(filename or "upload").name
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", basename).strip("._") or "upload"
+    return f"{prefix}-{cleaned}"[:240]
+
+
+def _write_upload_to_job(upload: UploadFile, job_dir: Path, prefix: str) -> dict:
+    """Persist an upload before its request-scoped UploadFile is closed."""
+    target = job_dir / "inputs" / _safe_job_input_name(upload.filename, prefix)
+    bytes_written = 0
+    upload.file.seek(0)
+    with target.open("wb") as handle:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            handle.write(chunk)
+            bytes_written += len(chunk)
+    return {
+        "path": str(target),
+        "filename": upload.filename or target.name,
+        "content_type": upload.content_type,
+        "size_bytes": bytes_written,
+    }
+
+
+def _uploads_from_job_specs(specs):
+    """Open stored job inputs as UploadFile objects for existing route logic."""
+    opened = []
+    uploads = []
+    for spec in specs or []:
+        handle = open(spec["path"], "rb")
+        opened.append(handle)
+        uploads.append(
+            UploadFile(
+                file=handle,
+                filename=spec.get("filename"),
+                headers=Headers({"content-type": spec.get("content_type") or "application/octet-stream"}),
+            )
+        )
+    return uploads, opened
+
+
+def _response_outcome(response) -> dict:
+    status_code = int(getattr(response, "status_code", 200))
+    body = getattr(response, "body", b"")
+    if isinstance(body, bytes):
+        body = body.decode("utf-8", errors="replace")
+    try:
+        content = json.loads(body) if body else {}
+    except Exception:
+        content = {"detail": str(body)[:4000]}
+    return {"http_status": status_code, "content": content}
 
 
 def _cleanup_temp_paths(paths):
@@ -1246,3 +1311,194 @@ def analyze_basic(
         session.deactivate()
 
     return _safe_json_response(status_code=status_code, content=response_content)
+
+
+def _background_preview_worker(primary_spec: dict, options: dict) -> dict:
+    uploads, opened = _uploads_from_job_specs([primary_spec])
+    try:
+        response = preview_basic(
+            file=uploads[0],
+            activityChannel=options.get("activityChannel", "VM"),
+            activityMapping=options.get("activityMapping", "auto"),
+            resampleFreq=options.get("resampleFreq", "1min"),
+            csvMapping=options.get("csvMapping", "{}"),
+            csvSeparator=options.get("csvSeparator", ","),
+        )
+        return _response_outcome(response)
+    finally:
+        for handle in opened:
+            try:
+                handle.close()
+            except Exception:
+                pass
+
+
+def _background_analysis_worker(primary_spec: dict, support_specs: dict, options: dict) -> dict:
+    primary_uploads, primary_opened = _uploads_from_job_specs([primary_spec])
+    masking_uploads, masking_opened = _uploads_from_job_specs(support_specs.get("masking"))
+    diary_uploads, diary_opened = _uploads_from_job_specs(support_specs.get("sleep_diary"))
+    start_stop_uploads, start_stop_opened = _uploads_from_job_specs(support_specs.get("start_stop"))
+    opened = primary_opened + masking_opened + diary_opened + start_stop_opened
+    try:
+        response = analyze_basic(
+            file=primary_uploads[0],
+            activityChannel=options.get("activityChannel", "VM"),
+            activityMapping=options.get("activityMapping", "auto"),
+            activityTransform=options.get("activityTransform", "none"),
+            lightTransform=options.get("lightTransform", "none"),
+            analysisMode=options.get("analysisMode", "standard"),
+            analysisConfig=options.get("analysisConfig", "{}"),
+            csvMapping=options.get("csvMapping", "{}"),
+            csvSeparator=options.get("csvSeparator", ","),
+            maskingFiles=masking_uploads or None,
+            sleepDiaryFiles=diary_uploads or None,
+            startStopFiles=start_stop_uploads or None,
+            sourceFileName=options.get("sourceFileName"),
+            requestId=options.get("requestId"),
+        )
+        return _response_outcome(response)
+    finally:
+        for handle in opened:
+            try:
+                handle.close()
+            except Exception:
+                pass
+
+
+@app.get("/api/jobs/{job_id}")
+def background_job_status(job_id: str):
+    record = get_job(job_id)
+    if record is None:
+        return JSONResponse(status_code=404, content={"ok": False, "detail": "Background job was not found."})
+
+    payload = {"ok": True, **record}
+    request_id = record.get("request_id")
+    progress_payload = get_progress(request_id) if request_id else None
+    if progress_payload is not None:
+        payload["progress"] = progress_payload
+
+    if record.get("result_available"):
+        stored_result = get_job_result(job_id) or {}
+        payload["result_http_status"] = int(stored_result.get("http_status", 500))
+        payload["result"] = stored_result.get("content", {})
+    return _safe_json_response(status_code=200, content=payload)
+
+
+@app.post("/api/jobs/preview/basic")
+def start_background_preview_basic(
+    file: UploadFile = File(...),
+    activityChannel: str = Form("VM"),
+    activityMapping: str = Form("auto"),
+    resampleFreq: str = Form("1min"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
+    jobId: Optional[str] = Form(None),
+):
+    created_job_id = None
+    try:
+        created_job_id, directory = create_job_record(
+            "preview_basic",
+            requested_job_id=jobId,
+            request_id=jobId,
+            source_file_name=file.filename,
+        )
+        primary_spec = _write_upload_to_job(file, directory, "primary")
+        options = {
+            "activityChannel": activityChannel,
+            "activityMapping": activityMapping,
+            "resampleFreq": resampleFreq,
+            "csvMapping": csvMapping,
+            "csvSeparator": csvSeparator,
+        }
+        submit_job(
+            created_job_id,
+            lambda: _background_preview_worker(primary_spec, options),
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "ok": True,
+                "job_id": created_job_id,
+                "request_id": created_job_id,
+                "status": "queued",
+                "status_url": f"/api/jobs/{created_job_id}",
+            },
+        )
+    except Exception as exc:
+        if created_job_id:
+            try:
+                update_job(created_job_id, status="failed", message=str(exc), finished_at=datetime.now(timezone.utc).isoformat())
+            except Exception:
+                pass
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Could not start preview job: {exc}"})
+
+
+@app.post("/api/jobs/analyze/basic")
+def start_background_analyze_basic(
+    file: UploadFile = File(...),
+    activityChannel: str = Form("VM"),
+    activityMapping: str = Form("auto"),
+    activityTransform: str = Form("none"),
+    lightTransform: str = Form("none"),
+    analysisMode: str = Form("standard"),
+    analysisConfig: str = Form("{}"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
+    maskingFiles: Optional[List[UploadFile]] = File(None),
+    sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
+    startStopFiles: Optional[List[UploadFile]] = File(None),
+    sourceFileName: Optional[str] = Form(None),
+    requestId: Optional[str] = Form(None),
+    jobId: Optional[str] = Form(None),
+):
+    created_job_id = None
+    source_filename = sourceFileName or file.filename
+    try:
+        created_job_id, directory = create_job_record(
+            "analyze_basic",
+            requested_job_id=jobId or requestId,
+            request_id=requestId or jobId,
+            source_file_name=source_filename,
+        )
+        effective_request_id = requestId or created_job_id
+        primary_spec = _write_upload_to_job(file, directory, "primary")
+        support_specs = {"masking": [], "sleep_diary": [], "start_stop": []}
+        for index, upload in enumerate(maskingFiles or []):
+            support_specs["masking"].append(_write_upload_to_job(upload, directory, f"masking-{index}"))
+        for index, upload in enumerate(sleepDiaryFiles or []):
+            support_specs["sleep_diary"].append(_write_upload_to_job(upload, directory, f"diary-{index}"))
+        for index, upload in enumerate(startStopFiles or []):
+            support_specs["start_stop"].append(_write_upload_to_job(upload, directory, f"start-stop-{index}"))
+        options = {
+            "activityChannel": activityChannel,
+            "activityMapping": activityMapping,
+            "activityTransform": activityTransform,
+            "lightTransform": lightTransform,
+            "analysisMode": analysisMode,
+            "analysisConfig": analysisConfig,
+            "csvMapping": csvMapping,
+            "csvSeparator": csvSeparator,
+            "sourceFileName": source_filename,
+            "requestId": effective_request_id,
+        }
+        submit_job(
+            created_job_id,
+            lambda: _background_analysis_worker(primary_spec, support_specs, options),
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "ok": True,
+                "job_id": created_job_id,
+                "request_id": effective_request_id,
+                "status": "queued",
+                "status_url": f"/api/jobs/{created_job_id}",
+            },
+        )
+    except Exception as exc:
+        if created_job_id:
+            try:
+                update_job(created_job_id, status="failed", message=str(exc), finished_at=datetime.now(timezone.utc).isoformat())
+            except Exception:
+                pass
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Could not start analysis job: {exc}"})

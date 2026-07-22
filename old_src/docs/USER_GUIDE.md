@@ -22,6 +22,10 @@ Confirm:
 
 The preview is for visual inspection. It can display a different signal from the activity basis later selected for analysis.
 
+For large raw files, the upload starts a background preview job. Keep the page
+open while the interface polls the job; decoding may continue beyond the
+hosting platform's ordinary HTTP request deadline.
+
 Check:
 
 - recording start and stop dates;
@@ -65,7 +69,9 @@ For processed `acc`, MAD, or ENMO, begin with continuous non-binarized RA, IS, a
 
 ## 9. Generate results
 
-The interface reports upload progress, the current backend stage, stage number, pipeline percentage, and raw-page/sample progress where available.
+The interface reports upload progress, the background-job state, current
+backend stage, stage number, pipeline percentage, and raw-page/sample progress
+where available. Keep the page open until the completed result is retrieved.
 
 Review:
 

@@ -409,9 +409,10 @@ ADVANCED_FAMILY_IDS = {"cosinor", "flm", "mfdfa", "ssa", "clustering"}
 
 def _safe_float(value):
     try:
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except Exception:
-        return value
+        return None
 
 
 def _safe_call(callable_obj, *args, **kwargs):

@@ -1,5 +1,17 @@
 # Change log
 
+## 2026-07-21 — Background jobs for the 240-second ingress limit
+
+- Added HTTP 202 background-job submission and result polling for activity
+  preview and main analysis.
+- Kept GT3X decoding and selected metrics outside the original upload request.
+- Added a one-worker default to protect 2 GiB deployments from concurrent
+  large-recording memory multiplication.
+- Persisted job status/results under `APP_DATA_DIR` and removed job input files
+  after completion.
+- Added frontend recovery when ingress closes exactly as a known job ID is
+  accepted.
+
 ## 2026-07-21 — Bounded-memory GT3X loading
 
 - Replaced whole-file `pygt3x.FileReader.to_pandas()` decoding with low-level

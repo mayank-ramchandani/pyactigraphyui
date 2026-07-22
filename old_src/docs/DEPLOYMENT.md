@@ -81,22 +81,39 @@ The defaults keep raw GT3X buffers small. Increasing the chunk duration can
 improve throughput slightly but also increases peak memory. Multiple workers or
 simultaneous large requests multiply the per-request memory requirement.
 
-Large-file preview and conversion endpoints are synchronous FastAPI handlers so
-their CPU work runs in the server thread pool rather than blocking the event
-loop. Uploaded temporary files are deleted in `finally` blocks on success and
-failure.
+Large-file activity preview and analysis use a bounded background executor.
+Keep the worker count at one on a 2 GiB deployment:
+
+```text
+ANALYSIS_JOB_MAX_WORKERS=1
+ANALYSIS_JOB_TTL_SECONDS=21600
+```
+
+Per-job input files are deleted after completion; job metadata and result JSON
+are retained until the TTL. The original synchronous endpoints remain for API
+compatibility, but the bundled frontend uses `/api/jobs/preview/basic` and
+`/api/jobs/analyze/basic`.
 
 ## Request duration
 
-Streaming fixes the raw-decoding memory amplification but does not remove
-gateway request deadlines. Measure the complete browser upload, GT3X reduction,
-and selected analysis time. If their sum approaches the platform deadline, use
-a background-job endpoint and polling instead of extending application timeouts
-alone.
+Azure Container Apps HTTP ingress has a fixed 240-second request timeout.
+Streaming fixes raw-decoding memory amplification; background jobs ensure GT3X
+reduction and metric execution no longer count against that HTTP deadline. The
+initial browser upload still does. If the upload itself approaches 240 seconds,
+use direct/resumable Azure Blob upload rather than sending file bytes through
+the Container Apps HTTP endpoint.
+
+The bundled queue runs inside the API container. Configure the Container App
+with **minimum replicas = 1** so Azure cannot scale it to zero while a detached
+job is running. For the simplest local-job deployment, also use **maximum
+replicas = 1**. A production multi-replica deployment should use shared
+`APP_DATA_DIR` plus a durable external queue, or an Azure Container Apps Job.
 
 ## Progress polling with replicas
 
-Progress is request-scoped and may be mirrored to `APP_DATA_DIR`. For multiple replicas, use shared storage or sticky routing. Otherwise, the poll can reach a replica that does not hold the request state.
+Progress and job records are mirrored to `APP_DATA_DIR`. For multiple replicas,
+use shared storage. In-memory job execution is not restart-resilient; use a
+durable queue/Container Apps Job when automatic recovery is required.
 
 ## Diagnostic settings
 
@@ -108,6 +125,8 @@ DIAGNOSTIC_SUPPRESSED_ERROR_LIMIT=30
 GENEACTIV_DIAGNOSTIC_PAGE_INTERVAL=5000
 GT3X_PROGRESS_EVENT_INTERVAL=100000
 ANALYSIS_PROGRESS_TTL_SECONDS=21600
+ANALYSIS_JOB_MAX_WORKERS=1
+ANALYSIS_JOB_TTL_SECONDS=21600
 EXPOSE_SERVER_ERROR_DETAILS=false
 ```
 

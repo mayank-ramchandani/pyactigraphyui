@@ -211,6 +211,7 @@ export default function DocumentationPanel({ onClose }) {
             <li><strong>413:</strong> upload was rejected by a proxy or ingress before analysis.</li>
             <li><strong>Plain 500:</strong> inspect backend/container logs; structured JSON should be returned for ordinary Python exceptions.</li>
             <li><strong>Exit 137/restart:</strong> commonly indicates memory pressure or container termination.</li>
+            <li><strong>504 stream timeout:</strong> Azure ended a synchronous request at 240 seconds; confirm the background-job feature and <Code>/api/jobs/...</Code> endpoints are deployed.</li>
             <li><strong>HTML instead of JSON:</strong> usually a gateway, timeout, or platform error page.</li>
           </ul>
         </Card>
@@ -229,7 +230,7 @@ export default function DocumentationPanel({ onClose }) {
             <li>Direct memory-safe processed <Code>acc</Code> may not be byte-identical to every Oxford <Code>accProcess</Code> release.</li>
             <li>Derived mg signals and proprietary device counts are not interchangeable.</li>
             <li>Sleep algorithms can execute on generic activity series without being validated for that exact mapping.</li>
-            <li>Large-file success depends on proxy limits, container memory, temporary storage, request duration, and worker configuration.</li>
+            <li>Large-file success depends on upload limits, container memory, temporary storage, background-worker configuration, and keeping at least one replica active.</li>
             <li>A successful calculation is not proof of scientific validity; inspect QC and reference comparisons.</li>
           </ul>
         </Card>
@@ -246,8 +247,9 @@ export default function DocumentationPanel({ onClose }) {
             rows={[
               ["GET /api/version", "Deployment version and enabled feature flags."],
               ["GET /api/progress/{request_id}", "Live progress for an active analysis request."],
-              ["POST /api/preview/basic", "Load and summarize an activity preview."],
-              ["POST /api/analyze/basic", "Run preprocessing, metrics, sleep analysis, QC, and diagnostics."],
+              ["GET /api/jobs/{job_id}", "Poll background status and retrieve a completed result."],
+              ["POST /api/jobs/preview/basic", "Upload and start an activity-preview job."],
+              ["POST /api/jobs/analyze/basic", "Upload and start preprocessing, metrics, sleep analysis, QC, and diagnostics."],
               ["POST /api/feedback", "Store user feedback in APP_DATA_DIR."],
             ]}
           />

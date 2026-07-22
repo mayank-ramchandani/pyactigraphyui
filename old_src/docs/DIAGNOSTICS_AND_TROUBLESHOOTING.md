@@ -47,6 +47,16 @@ Progress can include:
 
 The percentage represents pipeline completion, not estimated time remaining. A long raw-decoding stage can dominate elapsed time.
 
+Large activity preview and analysis requests first return a job ID and then poll:
+
+```text
+GET /api/jobs/{job_id}
+```
+
+Job states are `queued`, `running`, `completed`, or `failed`. Completed endpoint
+results are stored under the job record so a 240-second ingress timeout cannot
+discard a successful long-running analysis.
+
 Progress records are stored under:
 
 ```text
@@ -54,6 +64,12 @@ ${APP_DATA_DIR:-/tmp/actigraphy-ui-data}/progress/
 ```
 
 In a multi-replica deployment, use shared storage, one replica, or sticky routing so the polling request can locate the same progress record.
+
+Job records and results are stored under:
+
+```text
+${APP_DATA_DIR:-/tmp/actigraphy-ui-data}/jobs/
+```
 
 ## Common failures
 
@@ -90,6 +106,15 @@ For GT3X, confirm that diagnostics report
 
 Usually an Nginx, ingress, hosting, timeout, or platform error page. Capture HTTP status, content type, and the first portion of the response body.
 
+### HTTP 504 with `stream timeout`
+
+Azure Container Apps HTTP ingress ends a request after 240 seconds. Confirm the
+deployed `/api/version` response includes
+`background_preview_analysis_jobs: true`, and confirm the frontend calls the
+`/api/jobs/...` endpoints. A 504 on the job-start request means the upload itself
+did not finish within the ingress window; use a faster connection or direct
+resumable Blob upload for that case.
+
 ### Metric returns `null`
 
 Review the metric stage and suppressed exceptions. The metric can be unsupported for the raw-object type, require more days, require sleep windows, or have returned a non-scalar value that failed validation.
@@ -120,4 +145,6 @@ DIAGNOSTIC_SUPPRESSED_ERROR_LIMIT=30
 GENEACTIV_DIAGNOSTIC_PAGE_INTERVAL=5000
 GT3X_PROGRESS_EVENT_INTERVAL=100000
 ANALYSIS_PROGRESS_TTL_SECONDS=21600
+ANALYSIS_JOB_MAX_WORKERS=1
+ANALYSIS_JOB_TTL_SECONDS=21600
 ```

@@ -37,10 +37,11 @@ only a bounded X/Y/Z chunk and the epoch-level output. Diagnostics include raw
 samples reduced, events read, checksum failures, impossible timestamps skipped,
 missing output epochs, calibration method, and requested/resolved mapping.
 
-A large recording can still exceed an ingress request deadline because upload,
-decoding, and analysis currently occur within one HTTP request. If that happens
-after the memory-safe loader is deployed, the next architectural step is a
-background analysis job with a job ID and result polling.
+Large recordings are submitted as background preview/analysis jobs. The server
+returns a job ID after receiving the upload, and the frontend polls for progress
+and the final result while decoding and metrics continue outside the original
+HTTP request. The browser-to-server upload itself must still complete within the
+hosting platform's ingress deadline.
 
 ## Exact Oxford processing
 

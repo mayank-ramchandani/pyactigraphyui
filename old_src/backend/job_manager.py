@@ -27,8 +27,6 @@ import traceback
 from typing import Any, Callable, Dict, Optional, Tuple
 import uuid
 
-from .diagnostics import make_json_safe
-
 
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
 _LOCK = threading.RLock()
@@ -65,15 +63,7 @@ def _job_dir(job_id: str) -> Path:
 def _atomic_json_write(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(
-            make_json_safe(payload),
-            ensure_ascii=False,
-            default=str,
-            allow_nan=False,
-        ),
-        encoding="utf-8",
-    )
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, default=str), encoding="utf-8")
     tmp.replace(path)
 
 
@@ -232,3 +222,4 @@ def _run_job(job_id: str, worker: Callable[[], Dict[str, Any]]) -> None:
 def submit_job(job_id: str, worker: Callable[[], Dict[str, Any]]) -> None:
     """Submit a previously-created job to the bounded executor."""
     _EXECUTOR.submit(_run_job, job_id, worker)
+

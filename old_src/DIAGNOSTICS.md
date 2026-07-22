@@ -25,6 +25,12 @@ The Results page displays these stages and can download either an individual dia
 
 An HTTP `413`, proxy timeout, or abrupt container termination can occur before FastAPI returns JSON. In that case, the browser creates a client transport diagnostic. It will not have a backend request ID. Use the HTTP status, response preview, filename/size, and Azure/Nginx logs to identify the gateway failure.
 
+Large activity preview and analysis now use background jobs. The upload request
+returns HTTP 202 with a job ID, and the frontend polls `GET /api/jobs/{job_id}`
+until the result is available. This prevents Azure's 240-second HTTP ingress
+deadline from discarding long-running GT3X decoding or metric calculations. It
+does not bypass the deadline for the initial file upload itself.
+
 ## Server logs and persistence
 
 Each stage start/finish and GENEActiv/`accProcess` progress event is emitted as structured JSON through the `actigraphy.diagnostics` logger. This is especially useful when the container is killed during a large-file stage and no API response can be returned.
