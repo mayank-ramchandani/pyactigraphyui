@@ -1,5 +1,14 @@
 # Change log
 
+## 2026-07-22 — Strict JSON for recording previews
+
+- Converted missing and non-finite preview points to JSON `null` after
+  resampling recordings that contain gaps.
+- Routed activity previews through the same JSON-safety boundary as analyses.
+- Enforced strict JSON when persisting background-job results so `NaN` and
+  infinite numeric values cannot reappear during polling.
+- Added regression coverage for gapped previews and background results.
+
 ## 2026-07-21 — Background jobs for the 240-second ingress limit
 
 - Added HTTP 202 background-job submission and result polling for activity

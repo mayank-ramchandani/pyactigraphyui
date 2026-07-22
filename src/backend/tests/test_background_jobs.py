@@ -9,7 +9,13 @@ import numpy as np
 import pandas as pd
 
 from backend.analysis import build_native_preview
-from backend.job_manager import create_job_record, get_job, get_job_result, submit_job
+from backend.job_manager import (
+    create_job_record,
+    get_job,
+    get_job_result,
+    job_runtime_info,
+    submit_job,
+)
 
 
 class BackgroundJobTests(unittest.TestCase):
@@ -90,6 +96,23 @@ class BackgroundJobTests(unittest.TestCase):
 
             self.assertEqual(record["status"], "completed")
             self.assertIsNone(result["content"]["preview_value"])
+
+    def test_runtime_info_identifies_replica_revision_and_storage_scope(self):
+        with patch.dict(
+            os.environ,
+            {
+                "APP_DATA_DIR": "/data/actigraphy-ui",
+                "CONTAINER_APP_REPLICA_NAME": "backend--rev-a-abc123",
+                "CONTAINER_APP_REVISION": "backend--rev-a",
+            },
+            clear=False,
+        ):
+            runtime = job_runtime_info()
+
+        self.assertEqual(runtime["replica"], "backend--rev-a-abc123")
+        self.assertEqual(runtime["revision"], "backend--rev-a")
+        self.assertTrue(runtime["persistent_data_dir_configured"])
+        self.assertEqual(runtime["job_store_scope"], "configured_path")
 
 
 if __name__ == "__main__":

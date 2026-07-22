@@ -109,6 +109,12 @@ job is running. For the simplest local-job deployment, also use **maximum
 replicas = 1**. A production multi-replica deployment should use shared
 `APP_DATA_DIR` plus a durable external queue, or an Azure Container Apps Job.
 
+Use **single revision mode** and route 100% of traffic to the current revision.
+If more than one replica is required, enable HTTP session affinity and mount an
+Azure Files share at `/data/actigraphy-ui`; setting `APP_DATA_DIR` alone does
+not create persistent storage. The bundled frontend includes credentials on
+job requests so Azure's affinity cookie can be used.
+
 ## Progress polling with replicas
 
 Progress and job records are mirrored to `APP_DATA_DIR`. For multiple replicas,

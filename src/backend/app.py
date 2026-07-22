@@ -43,6 +43,7 @@ from .job_manager import (
     create_job_record,
     get_job,
     get_job_result,
+    job_runtime_info,
     submit_job,
     update_job,
 )
@@ -152,6 +153,7 @@ def version():
             "gt3x_streaming_epoch_loader": True,
             "background_preview_analysis_jobs": True,
             "strict_preview_json": True,
+            "resilient_background_job_polling": True,
             "bin_cwa_accelerometer": True,
             "saved_runs_frontend_supabase": True,
             "structured_diagnostics": True,
@@ -163,6 +165,7 @@ def version():
             "preview_analysis_mapping_decoupled": True,
             "documentation_center": True,
         },
+        "runtime": job_runtime_info(),
     }
 
 
@@ -1371,9 +1374,22 @@ def _background_analysis_worker(primary_spec: dict, support_specs: dict, options
 def background_job_status(job_id: str):
     record = get_job(job_id)
     if record is None:
-        return JSONResponse(status_code=404, content={"ok": False, "detail": "Background job was not found."})
+        return JSONResponse(
+            status_code=404,
+            content={
+                "ok": False,
+                "code": "background_job_not_found",
+                "detail": (
+                    "Background job state is not visible on this backend instance. "
+                    "This is retryable briefly; persistent failures usually mean polling "
+                    "reached another replica/revision or the original replica restarted."
+                ),
+                "retryable": True,
+                "runtime": job_runtime_info(),
+            },
+        )
 
-    payload = {"ok": True, **record}
+    payload = {"ok": True, **record, "runtime": job_runtime_info()}
     request_id = record.get("request_id")
     progress_payload = get_progress(request_id) if request_id else None
     if progress_payload is not None:
@@ -1424,6 +1440,7 @@ def start_background_preview_basic(
                 "request_id": created_job_id,
                 "status": "queued",
                 "status_url": f"/api/jobs/{created_job_id}",
+                "runtime": job_runtime_info(),
             },
         )
     except Exception as exc:
@@ -1495,6 +1512,7 @@ def start_background_analyze_basic(
                 "request_id": effective_request_id,
                 "status": "queued",
                 "status_url": f"/api/jobs/{created_job_id}",
+                "runtime": job_runtime_info(),
             },
         )
     except Exception as exc:

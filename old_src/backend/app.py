@@ -151,6 +151,7 @@ def version():
             "gt3x_pygt3x": True,
             "gt3x_streaming_epoch_loader": True,
             "background_preview_analysis_jobs": True,
+            "strict_preview_json": True,
             "bin_cwa_accelerometer": True,
             "saved_runs_frontend_supabase": True,
             "structured_diagnostics": True,
@@ -428,7 +429,8 @@ def preview_basic(
             resample_freq=resampleFreq,
         )
 
-        return JSONResponse(
+        return _safe_json_response(
+            status_code=200,
             content={
                 **preview,
                 "detected_input_type": reader_type,

@@ -71,6 +71,20 @@ Job records and results are stored under:
 ${APP_DATA_DIR:-/tmp/actigraphy-ui-data}/jobs/
 ```
 
+### Background job was not found
+
+The upload and polling requests reached different backend state. Common causes
+are multiple replicas with replica-local storage, multiple active revisions,
+scale-to-zero/restart, or `APP_DATA_DIR` pointing at a directory that is not an
+actual mounted share. Use single revision mode, minimum and maximum replicas of
+one for the local executor, and `APP_DATA_DIR=/data/actigraphy-ui` backed by an
+Azure Files mount. Session affinity can reduce cross-replica routing but does
+not preserve jobs if a replica is replaced.
+
+The status endpoint now retries transient missing-job responses in the bundled
+frontend and reports the accepting and polling replica/revision when state is
+still unavailable after the grace period.
+
 ## Common failures
 
 ### HTTP 413

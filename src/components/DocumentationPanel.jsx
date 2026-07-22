@@ -212,6 +212,7 @@ export default function DocumentationPanel({ onClose }) {
             <li><strong>Plain 500:</strong> inspect backend/container logs; structured JSON should be returned for ordinary Python exceptions.</li>
             <li><strong>Exit 137/restart:</strong> commonly indicates memory pressure or container termination.</li>
             <li><strong>504 stream timeout:</strong> Azure ended a synchronous request at 240 seconds; confirm the background-job feature and <Code>/api/jobs/...</Code> endpoints are deployed.</li>
+            <li><strong>Background job not found:</strong> upload and polling reached different replica state; use one active revision/replica or shared persistent <Code>APP_DATA_DIR</Code> storage.</li>
             <li><strong>HTML instead of JSON:</strong> usually a gateway, timeout, or platform error page.</li>
           </ul>
         </Card>
