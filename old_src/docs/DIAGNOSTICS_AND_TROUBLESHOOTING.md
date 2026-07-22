@@ -43,7 +43,6 @@ Progress can include:
 - current stage number and total;
 - overall and current-file percentage;
 - GENEActiv pages and samples decoded.
-- GT3X events read, raw samples reduced, and `log.bin` completion percentage.
 
 The percentage represents pipeline completion, not estimated time remaining. A long raw-decoding stage can dominate elapsed time.
 
@@ -82,10 +81,6 @@ Inspect Azure/container logs using the request time and filename.
 
 Commonly associated with an operating-system or container memory kill. Python cannot return a structured traceback after the process is terminated.
 
-For GT3X, confirm that diagnostics report
-`pygt3x_low_level_streaming_epoch_aggregation`. If they report a whole-file
-`to_pandas` path, the deployed backend is not this memory-safe revision.
-
 ### HTML returned instead of JSON
 
 Usually an Nginx, ingress, hosting, timeout, or platform error page. Capture HTTP status, content type, and the first portion of the response body.
@@ -118,6 +113,5 @@ DIAGNOSTIC_SHA256_MAX_MB=512
 DIAGNOSTIC_TRACEBACK_CHARS=12000
 DIAGNOSTIC_SUPPRESSED_ERROR_LIMIT=30
 GENEACTIV_DIAGNOSTIC_PAGE_INTERVAL=5000
-GT3X_PROGRESS_EVENT_INTERVAL=100000
 ANALYSIS_PROGRESS_TTL_SECONDS=21600
 ```

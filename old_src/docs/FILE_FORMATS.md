@@ -6,7 +6,7 @@ Support depends on both the file extension and the actual columns or channels av
 |---|---|---|---|---|
 | GENEActiv `.bin` | Raw X/Y/Z and possible light/temperature | Processed `acc` | MAD, custom ENMO | Large files use streamed decoding; diagnostics record the engine and sampling metadata. |
 | Axivity `.cwa` | Raw X/Y/Z | Processed `acc` through supported conversion | Mapping availability depends on output | Java and Oxford `accelerometer` dependencies may be required. |
-| ActiGraph `.gt3x` | Raw calibrated X/Y/Z | Processed `acc` | MAD, custom ENMO, 30 Hz ActiGraph-style counts | `log.bin` is streamed directly to epochs; gaps and the device timezone are preserved. Legacy archives without `log.bin` require local conversion/export. |
+| ActiGraph `.gt3x` | Raw calibrated X/Y/Z | Processed `acc` | MAD, custom ENMO | Results are not equivalent to proprietary ActiGraph counts unless a count-generating method is used. |
 | ActiGraph `.agd` | Device count/activity series | Source/device activity | Normally none | Preferred when the analysis is intended to remain on the ActiGraph count scale. |
 | Actiwatch `.awd` and other native pyActigraphy formats | Device activity | Source/device activity | Normally none | Reader and metric availability depend on the corresponding pyActigraphy class. |
 | Oxford `*timeSeries.csv(.gz)` | Epoch-level `acc` and related columns | Existing `acc` column | Existing compatible columns | Use when exact output from a chosen `accProcess` version is required. |
@@ -29,18 +29,6 @@ For XYZ-derived calculations, the application must know or correctly infer:
 - gaps and incomplete epochs.
 
 A generic CSV containing arbitrary X/Y/Z values should not be treated as calibrated acceleration without explicit metadata.
-
-## Large GT3X recordings
-
-The backend does not construct a whole-recording raw Pandas DataFrame. It keeps
-only a bounded X/Y/Z chunk and the epoch-level output. Diagnostics include raw
-samples reduced, events read, checksum failures, impossible timestamps skipped,
-missing output epochs, calibration method, and requested/resolved mapping.
-
-A large recording can still exceed an ingress request deadline because upload,
-decoding, and analysis currently occur within one HTTP request. If that happens
-after the memory-safe loader is deployed, the next architectural step is a
-background analysis job with a job ID and result polling.
 
 ## Exact Oxford processing
 

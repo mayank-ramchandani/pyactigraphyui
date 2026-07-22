@@ -149,6 +149,7 @@ def version():
             "geneactiv_pyactigraphy_aot": True,
             "accelerometer_acc_default": True,
             "preview_analysis_mapping_decoupled": True,
+            "documentation_center": True,
         },
     }
 
