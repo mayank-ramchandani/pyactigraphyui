@@ -53,6 +53,9 @@ function postFormDataWithUploadProgress(url, formData, onUploadProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url, true);
+    // Required for Azure Container Apps cookie-based session affinity when
+    // the frontend and backend are hosted on different origins.
+    xhr.withCredentials = true;
 
     xhr.upload.onprogress = (event) => {
       if (typeof onUploadProgress === "function" && event.lengthComputable) {
@@ -439,18 +442,52 @@ export default function Dashboard() {
     }
   };
 
-  const waitForBackgroundJob = async (jobId, onUpdate = null) => {
+  const waitForBackgroundJob = async (jobId, onUpdate = null, acceptedRuntime = null) => {
     const startedAt = Date.now();
     const maxWaitMs = 6 * 60 * 60 * 1000;
+    const discoveryGraceMs = 60 * 1000;
     let consecutivePollFailures = 0;
+    let lastMissingJobPayload = null;
 
     while (Date.now() - startedAt < maxWaitMs) {
       try {
         const statusResponse = await fetch(buildApiUrl(`api/jobs/${encodeURIComponent(jobId)}`), {
           cache: "no-store",
+          credentials: "include",
         });
         const statusData = await parseJsonResponse(statusResponse);
         if (!statusResponse.ok) {
+          if (
+            statusResponse.status === 404 &&
+            statusData?.code === "background_job_not_found" &&
+            Date.now() - startedAt < discoveryGraceMs
+          ) {
+            // A different replica/revision may answer one poll. Keep trying
+            // long enough for affinity/routing to settle instead of discarding
+            // a job which is still processing successfully elsewhere.
+            lastMissingJobPayload = statusData;
+            consecutivePollFailures = 0;
+            await new Promise((resolve) => window.setTimeout(resolve, 1000));
+            continue;
+          }
+          if (statusResponse.status === 404 && statusData?.code === "background_job_not_found") {
+            const accepted = acceptedRuntime || {};
+            const polled = statusData?.runtime || lastMissingJobPayload?.runtime || {};
+            const acceptedLocation = [accepted.revision, accepted.replica].filter(Boolean).join(" / ");
+            const polledLocation = [polled.revision, polled.replica].filter(Boolean).join(" / ");
+            const locationDetail =
+              acceptedLocation || polledLocation
+                ? ` Upload accepted by ${acceptedLocation || "an unknown instance"}; polling reached ${polledLocation || "an unknown instance"}.`
+                : "";
+            const error = createApiError(
+              `Background job state was lost or is stored on another backend replica.${locationDetail} ` +
+                "Use one active revision and one replica, or mount shared persistent storage at APP_DATA_DIR.",
+              statusResponse,
+              statusData
+            );
+            error.backgroundJobTerminal = true;
+            throw error;
+          }
           throw createApiError(statusData?.detail || "Could not read background job status.", statusResponse, statusData);
         }
         consecutivePollFailures = 0;
@@ -512,7 +549,7 @@ export default function Dashboard() {
       if (!startResponse.ok) {
         throw createApiError(startData?.detail || "Could not start background processing.", startResponse, startData);
       }
-      return waitForBackgroundJob(startData.job_id || jobId, onUpdate);
+      return waitForBackgroundJob(startData.job_id || jobId, onUpdate, startData.runtime || null);
     } catch (error) {
       // If ingress closed exactly as the upload completed, the server may still
       // have accepted the known client-generated job ID. Recover by polling it.
@@ -520,6 +557,7 @@ export default function Dashboard() {
         try {
           const recoveryResponse = await fetch(buildApiUrl(`api/jobs/${encodeURIComponent(jobId)}`), {
             cache: "no-store",
+            credentials: "include",
           });
           if (recoveryResponse.ok) return waitForBackgroundJob(jobId, onUpdate);
         } catch (_recoveryError) {
@@ -837,6 +875,7 @@ export default function Dashboard() {
             try {
               const progressResponse = await fetch(buildApiUrl(`api/progress/${encodeURIComponent(requestId)}`), {
                 cache: "no-store",
+                credentials: "include",
               });
               if (!progressResponse.ok) return;
               const progressData = await progressResponse.json();

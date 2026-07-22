@@ -33,6 +33,7 @@ The backend uses FastAPI/Uvicorn.
 | `backend/preprocessing.py` | Intervals, masks, and support files |
 | `backend/analysis.py` | Metrics, sleep scoring/windows, light analysis, and previews |
 | `backend/qc.py` | Non-fatal quality control |
+| `backend/data_quality.py` | Common gaps, non-wear, valid-day, and daily-QC processing |
 | `backend/diagnostics.py` | Stage instrumentation, memory/timing, exceptions, JSON safety |
 | `backend/progress.py` | Request-scoped live progress |
 | `backend/job_manager.py` | Bounded background executor and persistent job/result state |
@@ -49,6 +50,7 @@ Browser upload
   → activity mapping resolution
   → timestamp/data validation
   → start/stop and masking
+  → common gap/non-wear/valid-day preprocessing
   → sleep diary or AoT window detection
   → selected metrics
   → quality control
@@ -80,6 +82,8 @@ The registries define user-facing labels and analysis metadata independently fro
 
 - Metric calls are isolated so one failure does not erase unrelated results.
 - QC is non-fatal.
+- Missingness/non-wear QC is format-independent and runs before metrics.
+- Activity and sleep calculations share the final epoch-validity mask.
 - NumPy/Pandas outputs are converted to JSON-safe types before response construction.
 - A global exception handler returns structured JSON for ordinary unhandled Python errors.
 - Operating-system kills, gateway rejection, and proxy timeouts remain outside the Python error boundary.

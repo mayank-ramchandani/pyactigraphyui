@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import threading
 import time
 import traceback
@@ -41,6 +42,22 @@ _TTL_SECONDS = max(300, int(os.getenv("ANALYSIS_JOB_TTL_SECONDS", "21600")))
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def job_runtime_info() -> Dict[str, Any]:
+    """Return non-sensitive routing details for diagnosing lost job state."""
+    configured_data_dir = str(os.getenv("APP_DATA_DIR", "")).strip()
+    return {
+        "replica": (
+            os.getenv("CONTAINER_APP_REPLICA_NAME")
+            or os.getenv("HOSTNAME")
+            or socket.gethostname()
+            or "unknown"
+        ),
+        "revision": os.getenv("CONTAINER_APP_REVISION") or "unknown",
+        "persistent_data_dir_configured": bool(configured_data_dir),
+        "job_store_scope": "configured_path" if configured_data_dir else "replica_ephemeral",
+    }
 
 
 def _jobs_root() -> Path:

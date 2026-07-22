@@ -13,6 +13,18 @@ Support depends on both the file extension and the actual columns or channels av
 | Generic CSV/TSV | User-defined timestamp/activity or XYZ | Source activity when supplied | Derived mapping only from valid XYZ | Timestamp and activity columns may need manual mapping. |
 | Excel/ODS | Tabular activity or XYZ | Source activity when supplied | Conditional | Very large spreadsheets are not recommended for raw high-frequency data. |
 
+All formats enter the same downstream missingness, mask, valid-day, and
+sleep-window coverage stage once a scalar activity series is available. The
+signal basis differs by format; the validity rules do not.
+
+| Input path | Recording gaps | Automatic/mapped non-wear |
+|---|---|---|
+| Raw GT3X streaming | Missing epochs preserved | Not inferred from low activity |
+| Direct GENEActiv BIN streaming | Missing epochs preserved | Not inferred from low activity |
+| Converted BIN/CWA or Oxford time-series | Missing timestamps/values preserved | Used only when supplied by the series/reader |
+| Native pyActigraphy formats | Missing values preserved | Existing reader mask respected when available and enabled |
+| Mapped tabular input | Missing values preserved | `nonwear`/`mask`/`offwrist`: 1 means excluded; `wear`/`worn`: 1 means worn |
+
 ## Raw X/Y/Z is not a pyActigraphy activity series
 
 Most pyActigraphy metrics operate on one timestamp-indexed activity series. Three raw axes must first be converted into a scalar epoch-level signal such as processed `acc`, MAD, ENMO, vector magnitude, or validated device counts.

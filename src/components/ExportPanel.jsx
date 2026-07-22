@@ -14,6 +14,7 @@ export default function ExportPanel({
   selectedAlgorithm,
   analysisMode,
   supportFileSummary,
+  dataQuality,
   lightResults = {},
 }) {
   const enabledExports = (exportRegistry?.exports ?? []).filter((item) => item.enabled);
@@ -37,6 +38,7 @@ export default function ExportPanel({
         analysisConfig,
         qcWarnings,
         supportFileSummary,
+        dataQuality,
         lightResults,
         exportedAt: new Date().toISOString(),
       },
@@ -55,6 +57,7 @@ export default function ExportPanel({
         selectedAlgorithmLabel,
         analysisConfig,
         supportFileSummary,
+        dataQuality,
         exportedAt: new Date().toISOString(),
       },
       "actigraphy_results_export.json"

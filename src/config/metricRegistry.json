@@ -791,7 +791,7 @@
       "resultSchema": {
         "type": "number",
         "unit": null,
-        "expectedRange": [0, 100]
+        "expectedRange": [-100, 100]
       },
       "previewOverlaySupport": {
         "fullRecording": true,

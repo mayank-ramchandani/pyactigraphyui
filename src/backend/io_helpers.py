@@ -598,6 +598,7 @@ def load_custom_tabular(
         if nonwear_col not in work.columns:
             raise ValueError("Non-wear column '{}' not found.".format(nonwear_col))
         out["nonwear"] = pd.to_numeric(work[nonwear_col], errors="coerce")
+        out.attrs["nonwear_source_column"] = str(nonwear_col)
 
     out = out.dropna(how="all")
     return out
@@ -673,7 +674,16 @@ def build_baseraw_from_dataframe(
 
     if "nonwear" in work.columns:
         try:
-            raw.mask = (1 - work["nonwear"].fillna(0)).clip(lower=0, upper=1)
+            source_column = str(df.attrs.get("nonwear_source_column", "nonwear"))
+            normalized_name = source_column.strip().lower().replace("_", "").replace(" ", "")
+            values = pd.to_numeric(work["nonwear"], errors="coerce")
+            # A column named exactly wear/worn uses 1=wear.  Nonwear, mask and
+            # off-wrist columns use 1=excluded.
+            if normalized_name in {"wear", "worn", "wearstatus"}:
+                raw.mask = values.fillna(0).clip(lower=0, upper=1)
+            else:
+                raw.mask = (1 - values.fillna(0)).clip(lower=0, upper=1)
+            raw._ui_detected_nonwear_source = source_column
         except Exception:
             pass
 

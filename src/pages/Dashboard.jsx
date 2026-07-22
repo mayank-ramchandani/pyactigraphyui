@@ -228,7 +228,14 @@ export default function Dashboard() {
 
   const [supportFileSettings, setSupportFileSettings] = useState({
     startStop: { apply: true, manualIntervals: [] },
-    masking: { apply: true, manualIntervals: [], respectNonwear: true },
+    masking: {
+      apply: true,
+      manualIntervals: [],
+      respectNonwear: true,
+      minimumValidHoursPerDay: 16,
+      minimumValidDaysForRhythm: 2,
+      minimumSleepWindowCoverage: 0.8,
+    },
     sleepDiary: { apply: true, manualIntervals: [] },
   });
   const [analysisWindowSettings, setAnalysisWindowSettings] = useState({
@@ -279,6 +286,7 @@ export default function Dashboard() {
   const [qcWarnings, setQcWarnings] = useState([]);
   const [summaryResults, setSummaryResults] = useState({});
   const [supportFileSummary, setSupportFileSummary] = useState(null);
+  const [dataQuality, setDataQuality] = useState(null);
   const [multiFileResults, setMultiFileResults] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [runSaveStatus, setRunSaveStatus] = useState("");
@@ -961,6 +969,7 @@ export default function Dashboard() {
             results,
             qcWarnings: data.qcWarnings || [],
             supportFileSummary: data.supportFileSummary || null,
+            dataQuality: data.dataQuality || null,
             detectedInputType: data.detected_input_type || null,
             activityMapping: data.activity_mapping || { requested: activityMapping, resolved: activityMapping },
             diagnostics: data.diagnostics || null,
@@ -990,6 +999,7 @@ export default function Dashboard() {
             results: {},
             qcWarnings: [],
             supportFileSummary: null,
+            dataQuality: null,
             detectedInputType: null,
             activityMapping: { requested: activityMapping, resolved: activityMapping },
             diagnostics: clientFailureDiagnostics(err, sourceFile, buildApiUrl("api/analyze/basic")),
@@ -1014,6 +1024,7 @@ export default function Dashboard() {
       setSummaryResults(successful[0]?.results || {});
       setQcWarnings(batchResults.flatMap((item) => (item.qcWarnings || []).map((warning) => `${item.fileName}: ${warning}`)));
       setSupportFileSummary(successful.length === 1 ? successful[0].supportFileSummary : null);
+      setDataQuality(successful.length === 1 ? successful[0].dataQuality : null);
       setLightResults(successful.length === 1 ? successful[0].lightResults || {} : {});
       setSelectedResultMetric(Object.keys(successful[0]?.results || {})[0] || "");
       setProgressStage(
@@ -1443,6 +1454,7 @@ export default function Dashboard() {
         analysisMode={analysisMode}
         activityMapping={activityMapping}
         supportFileSummary={supportFileSummary}
+        dataQuality={dataQuality}
         lightResults={lightResults}
         selectedLightMetrics={selectedLightMetrics}
         lightMetricSettings={lightMetricSettings}
@@ -1463,6 +1475,7 @@ export default function Dashboard() {
         selectedAlgorithm={selectedAlgorithm}
         analysisMode={analysisMode}
         supportFileSummary={supportFileSummary}
+        dataQuality={dataQuality}
         lightResults={lightResults}
       />
     );

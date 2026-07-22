@@ -27,6 +27,7 @@ The web interface also contains a searchable **Documentation** section. Set `VIT
 - Allow partial results when one metric fails, while retaining structured diagnostics.
 - Do not create fallback sleep windows when Crespo or Roenneberg returns no usable window.
 - Treat a completed computation and a scientifically validated result as separate questions.
+- Review daily QC: gaps, non-wear, and manual masks are never treated as zero activity, and days below 16 analyzable hours are excluded by default.
 
 ## Version confirmation
 

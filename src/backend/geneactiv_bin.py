@@ -257,7 +257,10 @@ def _infer_frequency_seconds(index):
 
 
 def _np_is(df, binarize=False, threshold=0):
-    work = (df > float(threshold)).astype(float) if binarize else df.astype(float)
+    if binarize:
+        work = (df > float(threshold)).astype(float).where(df.notna())
+    else:
+        work = df.astype(float)
     hourly = work.resample("1h").mean().dropna(how="all")
     if hourly.empty:
         return pd.Series(dtype=float, name="IS")
@@ -269,7 +272,10 @@ def _np_is(df, binarize=False, threshold=0):
 
 
 def _np_iv(df, binarize=False, threshold=0):
-    work = (df > float(threshold)).astype(float) if binarize else df.astype(float)
+    if binarize:
+        work = (df > float(threshold)).astype(float).where(df.notna())
+    else:
+        work = df.astype(float)
     hourly = work.resample("1h").mean().dropna(how="all")
     if len(hourly) < 2:
         return pd.Series(dtype=float, name="IV")
@@ -398,11 +404,11 @@ class GeneActivRaw:
             return 10.0
 
     def _rest_score(self, threshold=None):
-        series = self._activity_series()
-        if len(series) == 0:
+        series = self.raw_data
+        if len(series) == 0 or not series.notna().any():
             return pd.Series(dtype=float, name="sleep_score")
         threshold = self._auto_rest_threshold(threshold)
-        score = (series <= threshold).astype(int)
+        score = (series <= threshold).astype(float).where(series.notna())
         score.name = "sleep_score"
         return score
 
@@ -424,9 +430,9 @@ class GeneActivRaw:
         return self._rest_score(None if threshold == "automatic" else threshold)
 
     def resampled_data(self, freq="1min", binarize=False, threshold=4):
-        series = self._activity_series().resample(freq).mean()
+        series = self.raw_data.resample(freq).mean()
         if binarize:
-            series = (series > float(threshold)).astype(int)
+            series = (series > float(threshold)).astype(float).where(series.notna())
         return series
 
     @property
@@ -479,26 +485,29 @@ class GeneActivRaw:
 
     def SleepRegularityIndex(self, algo=None, threshold=None):
         score = self._rest_score(threshold)
-        if len(score) == 0:
+        if len(score) == 0 or not score.notna().any():
             return None
         try:
-            lag_steps = max(1, int(round(pd.Timedelta("24h").total_seconds() / _infer_frequency_seconds(score.index))))
-            if len(score) <= lag_steps:
+            previous = score.copy()
+            previous.index = previous.index + pd.Timedelta("24h")
+            pairs = pd.concat([score.rename("current"), previous.rename("previous")], axis=1, join="inner").dropna()
+            if len(pairs) == 0:
                 return None
-            current = score.iloc[lag_steps:]
-            previous = score.iloc[:-lag_steps]
-            same_state = (current.to_numpy() == previous.to_numpy()).mean()
-            return float(same_state * 100.0)
+            same_state = (pairs["current"] == pairs["previous"]).mean()
+            return float(200.0 * same_state - 100.0)
         except Exception:
             return None
 
     def _transition_probability(self, from_active, to_active, threshold=4):
-        series = self._activity_series()
-        if len(series) < 2:
+        series = self.raw_data
+        if len(series) < 2 or series.notna().sum() < 2:
             return None
-        active = (series > float(threshold)).astype(bool)
-        previous = active.shift(1).dropna()
-        current = active.loc[previous.index]
+        active = (series > float(threshold)).where(series.notna())
+        pairs = pd.concat([active.shift(1).rename("previous"), active.rename("current")], axis=1).dropna()
+        if len(pairs) == 0:
+            return None
+        previous = pairs["previous"].astype(bool)
+        current = pairs["current"].astype(bool)
         denominator = (previous == bool(from_active)).sum()
         if denominator == 0:
             return None
@@ -956,4 +965,3 @@ def read_raw_geneactiv_bin(
         },
     )
     return attach_mapping_metadata(raw, activity_mapping_metadata)
-

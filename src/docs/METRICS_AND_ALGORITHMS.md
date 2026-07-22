@@ -44,12 +44,14 @@ Availability can depend on the raw-object interface and the selected activity sc
 
 | Metric | Meaning |
 |---|---|
-| SRI | Sleep Regularity Index over the available scored series. |
+| SRI | Sleep Regularity Index over valid scored epoch pairs exactly 24 h apart; unavailable below the minimum valid-day rule. |
 | TST | Total sleep time within selected windows. |
 | WASO | Wake after sleep onset within a usable rest/sleep window. |
 | Sleep efficiency | Proportion of the selected interval classified as sleep/rest. |
 
 These metrics require a scored rest/activity series and, for window-dependent summaries, usable intervals.
+The pyActigraphy SRI definition ranges from -100 to 100; 100 means every
+available 24-hour pair is in the same sleep/wake state.
 
 ## Epoch-by-epoch algorithms
 
@@ -63,6 +65,20 @@ The registry currently includes:
 - Roenneberg.
 
 The classic scoring algorithms were developed with specific devices, count scales, epochs, placements, and populations. Executing them on a generic mg series does not establish validation for that combination.
+
+### Sleep-window coverage
+
+Diary/manual and AoT-derived windows must meet the configured recorded/scored
+coverage fraction (0.80 by default). Windows below that threshold do not
+contribute to TST, WASO, or sleep efficiency. For eligible windows:
+
+- missing epochs are ignored rather than scored as wake;
+- TST is observed sleep time and is not inflated to compensate for gaps;
+- WASO counts observed wake after observed sleep onset;
+- sleep efficiency is sleep minutes divided by observed/scored window minutes;
+- scheduled window minutes are returned separately.
+
+The response includes per-window coverage details and the number excluded.
 
 ## Crespo and Roenneberg window detection
 

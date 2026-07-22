@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-22 — Resilient background-job polling
+
+- Retried transient missing-job responses instead of failing on the first 404.
+- Included credentials on cross-origin job requests for Azure session affinity.
+- Added replica/revision and job-store-scope diagnostics to job responses.
+- Added a targeted error for replica-local or lost background-job state.
+
 ## 2026-07-22 — Strict JSON for recording previews
 
 - Converted missing and non-finite preview points to JSON `null` after

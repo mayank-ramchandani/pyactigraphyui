@@ -15,7 +15,12 @@ const RESULT_INFO_OVERRIDES = {
   sleep_window_source: "Shows whether TST, WASO, and sleep efficiency used a sleep diary/user-defined window, a pyActigraphy-estimated rest window, or no available sleep window.",
   sleep_window_method: "Shows which method produced the sleep/rest window used for window-dependent sleep metrics.",
   sleep_window_count: "Number of sleep/rest windows used in the sleep metric calculations.",
-  time_in_bed_minutes: "Total minutes inside the diary-defined or estimated rest window. Sleep efficiency is calculated relative to this window.",
+  time_in_bed_minutes: "Observed/scored minutes inside eligible diary-defined or estimated rest windows. Missing epochs do not enter the sleep-efficiency denominator.",
+  sleep_window_detected_count: "Number of diary/manual or AoT-derived windows before the minimum coverage rule is applied.",
+  scheduled_time_in_bed_minutes: "Total scheduled duration of eligible diary/rest windows before missing epochs are removed from the analyzable denominator.",
+  minimum_sleep_window_coverage: "Minimum fraction of recorded/scored epochs required for a sleep window to contribute to TST, WASO, and sleep efficiency.",
+  sleep_windows_excluded_for_coverage: "Number of sleep/rest windows excluded because recorded/scored coverage was below the configured threshold.",
+  sleep_window_coverage: "Per-window expected epochs, observed epochs, coverage fraction, and eligibility decision.",
   sleep_window_estimated: "True means the sleep/rest window was estimated by the selected pyActigraphy Crespo_AoT/Roenneberg_AoT method rather than supplied by a sleep diary or manual interval.",
   sleep_window_notes: "Backend notes about how the sleep/rest window was selected, or why Crespo_AoT/Roenneberg_AoT could not produce a usable window.",
   sleep_window_details_summary: "Human-readable summary of each diary-defined or pyActigraphy-estimated sleep/rest window.",
@@ -30,6 +35,11 @@ const RESULT_LABEL_OVERRIDES = {
   sleep_window_method: "Sleep window method",
   sleep_window_count: "Sleep window count",
   time_in_bed_minutes: "Time in bed / rest window",
+  sleep_window_detected_count: "Sleep windows detected",
+  scheduled_time_in_bed_minutes: "Scheduled time in bed / rest window",
+  minimum_sleep_window_coverage: "Minimum sleep-window coverage",
+  sleep_windows_excluded_for_coverage: "Sleep windows excluded for coverage",
+  sleep_window_coverage: "Sleep-window coverage QC",
   sleep_window_estimated: "Sleep window estimated",
   sleep_window_notes: "Sleep window notes",
   sleep_window_details_summary: "Sleep window details summary",
@@ -226,6 +236,45 @@ function SleepWindowDetailsCard({ details }) {
   );
 }
 
+function DataQualityCard({ dataQuality }) {
+  if (!dataQuality || !Array.isArray(dataQuality.daily_qc)) return null;
+  const settings = dataQuality.settings || {};
+  return (
+    <div style={{ border: "1px solid #bbf7d0", borderRadius: 16, padding: 16, background: "#f0fdf4", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <div style={{ fontWeight: 800 }}>Daily Recording Quality</div>
+        <InfoBubble text="Recorded hours exclude true recording gaps. Analyzable hours additionally exclude detected/mapped non-wear and manual masks. Invalid days remain on the timeline as missing and do not contribute zero activity." />
+      </div>
+      <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}>
+        Valid days: <strong>{dataQuality.valid_days ?? 0}</strong> of {dataQuality.calendar_days ?? 0}; minimum {settings.minimum_valid_hours_per_day ?? 16} h/day. Completely unrecorded days: {dataQuality.completely_missing_days ?? 0}. Rhythm/SRI minimum: {settings.minimum_valid_days_for_rhythm ?? 2} valid days.
+      </div>
+      <div style={{ overflowX: "auto", maxHeight: 420, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+          <thead>
+            <tr>
+              {[
+                "Date", "Recorded h", "Gap h", "Detected non-wear h", "Manual mask h", "Analyzable h", "Valid day", "Reason",
+              ].map((label) => <th key={label} style={{ textAlign: label === "Date" || label === "Reason" ? "left" : "right", padding: 8, borderBottom: "1px solid #bbf7d0" }}>{label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {dataQuality.daily_qc.map((row) => (
+              <tr key={row.date}>
+                <td style={{ padding: 8, borderTop: "1px solid #dcfce7" }}>{row.date}</td>
+                {["recorded_hours", "recording_gap_hours", "detected_nonwear_hours", "manual_mask_hours", "analyzable_hours"].map((key) => (
+                  <td key={key} style={{ padding: 8, borderTop: "1px solid #dcfce7", textAlign: "right" }}>{formatSigFigNumber(row[key])}</td>
+                ))}
+                <td style={{ padding: 8, borderTop: "1px solid #dcfce7", textAlign: "right", color: row.valid_day ? "#166534" : "#991b1b", fontWeight: 700 }}>{row.valid_day ? "Yes" : "No"}</td>
+                <td style={{ padding: 8, borderTop: "1px solid #dcfce7", color: "#475569", fontSize: 13 }}>{row.exclusion_reason || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function renderLightResult(result) {
   if (!result) return null;
 
@@ -321,6 +370,7 @@ export default function ResultsPanel({
   analysisMode,
   activityMapping = "auto",
   supportFileSummary,
+  dataQuality,
   lightResults = {},
   selectedLightMetrics = [],
   lightMetricSettings = {},
@@ -333,7 +383,7 @@ export default function ResultsPanel({
   const successfulBatchResults = completedBatchResults.filter((item) => isCompletedStatus(item.status));
   const batchMetricKeys = Array.from(new Set(
     successfulBatchResults.flatMap((item) => Object.keys(item.results || {}))
-  )).filter((key) => !["analysis_windows", "sleep_window_details"].includes(key));
+  )).filter((key) => !["analysis_windows", "sleep_window_details", "sleep_window_coverage"].includes(key));
   const displayBatchMetricKeys = batchMetricKeys.slice(0, 5);
   const analysisWindows = Array.isArray(summaryResults?.analysis_windows) ? summaryResults.analysis_windows : [];
   const sleepWindowDetails = Array.isArray(summaryResults?.sleep_window_details) ? summaryResults.sleep_window_details : [];
@@ -602,7 +652,7 @@ export default function ResultsPanel({
                         <div style={{ fontWeight: 700, marginBottom: 8 }}>Summary Table</div>
                         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
                           <tbody>
-                            {Object.entries(item.results || {}).filter(([key]) => key !== "analysis_windows" && key !== "sleep_window_details").map(([key, value]) => (
+                            {Object.entries(item.results || {}).filter(([key]) => !["analysis_windows", "sleep_window_details", "sleep_window_coverage"].includes(key)).map(([key, value]) => (
                               <tr key={`${item.fileName}-${key}`}>
                                 <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "left" }}>
                                   {resultLabel(metricRegistry, key)}
@@ -617,6 +667,7 @@ export default function ResultsPanel({
                         </table>
                       </div>
                       <SleepWindowDetailsCard details={fileSleepWindowDetails} />
+                      <DataQualityCard dataQuality={item.dataQuality} />
                       {fileAnalysisWindows.length > 0 && (
                         <div style={{ border: "1px solid #c7d2fe", borderRadius: 14, padding: 12, background: "#eef2ff", marginBottom: 12 }}>
                           <div style={{ fontWeight: 700, marginBottom: 8 }}>Analysis Window Details</div>
@@ -698,7 +749,7 @@ export default function ResultsPanel({
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Summary Table</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <tbody>
-                {Object.entries(summaryResults).filter(([key]) => key !== "analysis_windows" && key !== "sleep_window_details").map(([key, value]) => {
+                {Object.entries(summaryResults).filter(([key]) => !["analysis_windows", "sleep_window_details", "sleep_window_coverage"].includes(key)).map(([key, value]) => {
                   const schema = getMetricResultSchema(metricRegistry, key);
                   return (
                     <tr key={key}>
@@ -717,6 +768,7 @@ export default function ResultsPanel({
           </div>
 
           <SleepWindowDetailsCard details={sleepWindowDetails} />
+          <DataQualityCard dataQuality={dataQuality} />
 
           {analysisWindows.length > 0 && (
             <div style={{ border: "1px solid #c7d2fe", borderRadius: 16, padding: 16, background: "#eef2ff", marginBottom: 16 }}>

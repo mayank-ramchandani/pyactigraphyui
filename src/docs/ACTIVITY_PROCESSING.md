@@ -80,9 +80,31 @@ Diagnostics should report:
 - input and output units;
 - requested and resolved mapping.
 
+## Common missing-data and valid-day stage
+
+After the reader produces its scalar epoch series and support-file intervals
+are parsed, every file follows the same sequence:
+
+1. regularize the timestamp index at the detected epoch duration;
+2. represent absent/non-finite epochs as missing;
+3. combine a reader/mapped wear mask, when requested, with manual/uploaded masks;
+4. calculate recorded, gap, detected-non-wear, manual-mask, and analyzable hours
+   for each calendar day;
+5. fully mask days below the valid-day threshold (16 h by default);
+6. activate the final mask for pyActigraphy resampling and metrics;
+7. reuse the same validity mask for sleep scoring and sleep-window coverage.
+
+This prevents an all-missing resampling bin from becoming zero activity.
+Genuine recorded zeros remain valid observations. The API returns the daily
+table under `dataQuality.daily_qc`; the Results page and JSON exports retain it.
+
 ## Use with metrics
 
 The resolved scalar activity series becomes `raw.data` for selected pyActigraphy analyses. This is appropriate computationally for RA, M10/L5, IS, IV, activity profiles, and compatible fragmentation calculations.
+
+Multi-day rhythm metrics are gated by the configured minimum number of valid
+days (two by default). Invalid days stay masked on the original time axis, so
+transitions are not created across recording gaps.
 
 Scientific comparability still depends on signal scale and preprocessing. A metric calculated from device counts is not numerically interchangeable with the same metric calculated from mg.
 

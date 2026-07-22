@@ -25,6 +25,7 @@ from .analysis import (
     manipulate_light_data,
 )
 from .qc import quick_qc
+from .data_quality import apply_data_quality_control
 from .io_helpers import (
     load_native_file,
     infer_reader_type,
@@ -164,6 +165,7 @@ def version():
             "accelerometer_acc_default": True,
             "preview_analysis_mapping_decoupled": True,
             "documentation_center": True,
+            "missingness_nonwear_valid_day_qc": True,
         },
         "runtime": job_runtime_info(),
     }
@@ -937,14 +939,10 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
             if start_ts is None or stop_ts is None or stop_ts <= start_ts:
                 summary["notes"].append(f"{source}: skipped invalid or empty interval.")
                 return
-            if hasattr(raw, "add_mask_period"):
-                raw.add_mask_period(start=start_ts, stop=stop_ts)
-                summary["mask_intervals_applied"] += 1
-            elif hasattr(raw, "mask") and hasattr(raw, "data") and raw.data is not None:
-                raw.data.loc[start_ts:stop_ts] = pd.NA
-                summary["mask_intervals_applied"] += 1
-            else:
-                summary["notes"].append(f"{source}: interval parsed but this raw object does not expose add_mask_period or editable raw.data.")
+            intervals = list(getattr(raw, "_ui_mask_intervals", None) or [])
+            intervals.append({"start": start_ts.isoformat(), "stop": stop_ts.isoformat(), "source": source})
+            raw._ui_mask_intervals = intervals
+            summary["mask_intervals_applied"] += 1
         except Exception as exc:
             summary["notes"].append(f"{source}: could not apply interval ({exc}).")
 
@@ -954,12 +952,10 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
             if start is None or stop is None or stop <= start:
                 summary["notes"].append(f"{source}: skipped invalid start/stop interval.")
                 return
-            if hasattr(raw, "data") and raw.data is not None:
-                raw.data = raw.data.loc[start:stop]
-                summary["start_stop_applied"] = True
-                summary["notes"].append(f"{source}: applied recording interval before masking and sleep scoring.")
-            else:
-                summary["notes"].append(f"{source}: parsed, but raw.data is not available.")
+            raw._ui_analysis_start = start.isoformat()
+            raw._ui_analysis_stop = stop.isoformat()
+            summary["start_stop_applied"] = True
+            summary["notes"].append(f"{source}: applied recording interval before masking and sleep scoring.")
         except Exception as exc:
             summary["notes"].append(f"{source}: data truncation failed ({exc}).")
 
@@ -1233,6 +1229,25 @@ def analyze_basic(
             update_current_stage(summary=support_file_summary)
             session.recording["after_support_files"] = raw_recording_summary(raw).get("data", {})
 
+        with session.stage("preprocessing.missingness_nonwear_valid_days", category="preprocessing"):
+            raw, data_quality = apply_data_quality_control(
+                raw,
+                support_settings=analysis_config.get("supportFileSettings", {}),
+            )
+            update_current_stage(
+                settings=data_quality.get("settings"),
+                calendar_days=data_quality.get("calendar_days"),
+                valid_days=data_quality.get("valid_days"),
+                invalid_days=data_quality.get("invalid_days"),
+                completely_missing_days=data_quality.get("completely_missing_days"),
+                detected_nonwear_hours=data_quality.get("detected_nonwear_hours"),
+                manual_mask_hours=data_quality.get("manual_mask_hours"),
+                recording_gap_hours=data_quality.get("recording_gap_hours"),
+            )
+            if data_quality.get("warnings"):
+                mark_current_stage("warning", warnings=data_quality.get("warnings"))
+            session.recording["after_data_quality"] = raw_recording_summary(raw).get("data", {})
+
         with session.stage("analysis.execute", category="analysis"):
             results = run_basic_pyactigraphy_analysis(
                 raw=raw,
@@ -1261,6 +1276,8 @@ def analyze_basic(
                     "The calculated metric results were preserved; see diagnostics for the QC exception."
                 ]
 
+            warnings = list(data_quality.get("warnings") or []) + list(warnings or [])
+
             if requested_mapping != "original" and (algorithm_request or {}).get("id"):
                 warnings.append(
                     f"{requested_mapping.upper()} was used as the activity mapping. "
@@ -1284,6 +1301,7 @@ def analyze_basic(
             "results": results,
             "qcWarnings": warnings,
             "supportFileSummary": support_file_summary,
+            "dataQuality": data_quality,
             "detected_input_type": reader_type,
             "native_reader_used": True,
             "activity_mapping": mapping_details,
