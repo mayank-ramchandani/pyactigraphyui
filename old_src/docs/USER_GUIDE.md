@@ -37,7 +37,27 @@ Check:
 
 ## 4. Preview light
 
-Review available light channels and units. Light preview is optional and does not affect activity metrics unless light metrics are explicitly selected.
+Review available light channels and units. Light preview is optional and does
+not affect activity metrics unless light metrics are explicitly selected.
+
+Large light files are processed as background jobs. Choose **Load Light
+Preview** to inspect the selected separate light file, or the selected
+actigraphy file when no separate file is supplied.
+
+- If usable light exists, the response includes the plot, channel list, units,
+  and initial multichannel/RGB sample.
+- If it does not, the page reports that inspection completed with no embedded
+  light measurements and skips light plots and metrics.
+- Activity preview and analysis continue in either case.
+
+For current-format `.gt3x`, the light-only reader scans `log.bin` for official
+type-`0x05` lux records without decoding raw acceleration. It exposes raw lux
+as `LIGHT_LUX` and `log10(lux + 1)` as `LIGHT`. A GT9X Link file without a lux
+sensor will therefore produce the expected no-light status, not a server error.
+
+Selected light metrics run together in one background job after one content
+inspection/load. Thresholds entered in lux are converted to the selected
+channel scale automatically.
 
 ## 5. Start/stop intervals
 

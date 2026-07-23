@@ -133,7 +133,7 @@ export default function DocumentationPanel({ onClose }) {
         <Card title="Per-file intervals">
           Start/stop, masking, sleep-diary, and analysis intervals are associated with a file ID. When multiple files are loaded, confirm the selected file before drawing or editing any interval. Intervals that cross midnight are represented by full timestamps and remain valid when the stop time falls on the next calendar day.
           <p style={{ marginBottom: 0 }}>
-            Missing timestamps and masked/non-wear epochs remain unavailable and are never converted to zero activity. Defaults are 16 analyzable hours per valid day, two valid days for multi-day rhythm/SRI outputs, and 80% recorded/scored coverage per sleep window. Configure these on the masking page.
+            Missing timestamps and masked/non-wear epochs remain unavailable and are never converted to zero activity. Defaults are 16 analyzable hours per valid day, two consecutive valid days for multi-day rhythm/SRI outputs, and 80% recorded/scored coverage per sleep window. The masking page keeps these standards unless the user explicitly enables custom thresholds.
           </p>
         </Card>
       </div>

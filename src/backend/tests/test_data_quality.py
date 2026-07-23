@@ -10,7 +10,7 @@ from backend.analysis import (
     _score_minutes_in_windows,
     compute_metric,
 )
-from backend.data_quality import apply_data_quality_control
+from backend.data_quality import apply_data_quality_control, resolve_data_quality_settings
 from backend.geneactiv_bin import GeneActivRaw, SimpleLightRecording
 
 
@@ -187,6 +187,48 @@ class DataQualityTests(unittest.TestCase):
         score = pd.Series(np.tile([0] * 8 + [1] * 16, 3), index=index, dtype=float)
         score.loc["2026-06-02 03:00"] = np.nan
         self.assertEqual(_missing_aware_sri(score), 100.0)
+
+
+    def test_standard_thresholds_remain_active_until_customization_is_enabled(self):
+        standard = resolve_data_quality_settings({
+            "masking": {
+                "customizeDataQualityThresholds": False,
+                "minimumValidHoursPerDay": 10,
+                "minimumValidDaysForRhythm": 5,
+                "minimumSleepWindowCoverage": 0.5,
+            }
+        })
+        self.assertEqual(standard["minimum_valid_hours_per_day"], 16.0)
+        self.assertEqual(standard["minimum_valid_days_for_rhythm"], 2)
+        self.assertEqual(standard["minimum_sleep_window_coverage"], 0.8)
+
+        custom = resolve_data_quality_settings({
+            "masking": {
+                "customizeDataQualityThresholds": True,
+                "minimumValidHoursPerDay": 10,
+                "minimumValidDaysForRhythm": 5,
+                "minimumSleepWindowCoverage": 0.5,
+            }
+        })
+        self.assertEqual(custom["minimum_valid_hours_per_day"], 10.0)
+        self.assertEqual(custom["minimum_valid_days_for_rhythm"], 5)
+        self.assertEqual(custom["minimum_sleep_window_coverage"], 0.5)
+
+    def test_nonconsecutive_valid_days_do_not_satisfy_rhythm_requirement(self):
+        index = pd.date_range("2026-08-01", periods=3 * 24, freq="1h")
+        activity = pd.Series(4.0, index=index)
+        activity.loc["2026-08-02"] = np.nan
+        cleaned, quality = apply_data_quality_control(FakeRaw(activity), {
+            "masking": {
+                "customizeDataQualityThresholds": False,
+                "respectNonwear": True,
+            }
+        })
+
+        self.assertEqual(quality["valid_days"], 2)
+        self.assertEqual(quality["longest_consecutive_valid_days"], 1)
+        self.assertIsNone(compute_metric(cleaned, "is", {"freq": "1h"}))
+        self.assertTrue(any("consecutive valid" in warning for warning in quality["warnings"]))
 
     def test_multiday_metric_is_not_called_when_valid_days_are_insufficient(self):
         raw = FakeRaw(pd.Series([1.0, 2.0], index=pd.date_range("2026-07-01", periods=2, freq="1h")))

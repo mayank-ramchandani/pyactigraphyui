@@ -61,8 +61,7 @@ The default valid-day rule is at least **16 analyzable hours per calendar day**.
 This matches the existing GGIR/CAN-BIND convention used by this project, but it
 is configurable and should be justified for each study.
 
-IS, IV, ISm, IVm, ISp, IVp, RAp, and SRI require at least two valid days by
-default. SRI uses only valid scored epoch pairs exactly 24 hours apart.
+IS, IV, ISm, IVm, ISp, IVp, RAp, and SRI require a run of at least two consecutive valid days by default. SRI additionally uses only valid scored epoch pairs exactly 24 hours apart.
 
 TST, WASO, and sleep efficiency use only sleep/rest windows meeting the
 configured recorded/scored coverage fraction (default **0.80**). Missing epochs

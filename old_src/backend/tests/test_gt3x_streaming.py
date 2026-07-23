@@ -9,7 +9,12 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 import numpy as np
 
-from backend.gt3x_loader import _StreamingCounts30, prepare_gt3x_activity_series
+from backend.gt3x_loader import (
+    _StreamingCounts30,
+    load_gt3x_light_as_raw,
+    prepare_gt3x_activity_series,
+    prepare_gt3x_light_series,
+)
 
 
 DOTNET_TO_UNIX_TICKS = 621355968000000000
@@ -62,6 +67,51 @@ def _write_gt3x(path: Path, start: int, stop: int, events: list[bytes]) -> None:
 
 
 class StreamingGT3XTests(unittest.TestCase):
+    def test_streamed_lux_records_are_detected_aggregated_and_gap_preserving(self):
+        start = 1_577_836_800
+        events = [
+            _event(start + 0, 5, struct.pack("<H", 10)),
+            _event(start + 1, 5, struct.pack("<H", 20)),
+            _event(start + 4, 5, struct.pack("<H", 100)),
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "light.gt3x"
+            _write_gt3x(path, start, start + 4, events)
+            light_lux, metadata = prepare_gt3x_light_series(str(path), epoch_period=2)
+            raw = load_gt3x_light_as_raw(str(path), epoch_period=2)
+
+        self.assertEqual(str(light_lux.index[0]), "2019-12-31 20:00:00")
+        self.assertEqual(str(light_lux.index[-1]), "2019-12-31 20:00:04")
+        np.testing.assert_allclose(
+            light_lux.to_numpy(),
+            [15.0, np.nan, 100.0],
+            equal_nan=True,
+        )
+        self.assertTrue(metadata["_gt3x_light_available"])
+        self.assertEqual(metadata["_gt3x_lux_records"], 3)
+        self.assertEqual(raw.light.get_channel_list(), ["LIGHT", "LIGHT_LUX"])
+        np.testing.assert_allclose(
+            raw.light.get_channel("LIGHT").to_numpy(),
+            np.log10(np.asarray([15.0, 100.0]) + 1.0),
+        )
+
+    def test_gt3x_without_lux_records_returns_explicit_no_light_result(self):
+        start = 1_577_836_800
+        constant = np.full(30, 282, dtype=np.int16)
+        events = [_event(start, 26, _activity2_payload(constant))]
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "no-light.gt3x"
+            _write_gt3x(path, start, start + 1, events)
+            light_lux, metadata = prepare_gt3x_light_series(str(path), epoch_period=2)
+            raw = load_gt3x_light_as_raw(str(path), epoch_period=2)
+
+        self.assertTrue(light_lux.empty)
+        self.assertFalse(metadata["_gt3x_light_available"])
+        self.assertEqual(metadata["_gt3x_lux_records"], 0)
+        self.assertEqual(raw.light.get_channel_list(), [])
+
     def test_auto_mapping_preserves_gaps_timezone_and_rejects_bad_timestamp(self):
         start = 1_577_836_800  # 2020-01-01 00:00:00 UTC
         constant = np.full(30, 282, dtype=np.int16)

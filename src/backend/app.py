@@ -1528,6 +1528,7 @@ def analyze_basic(
                 settings=data_quality.get("settings"),
                 calendar_days=data_quality.get("calendar_days"),
                 valid_days=data_quality.get("valid_days"),
+                longest_consecutive_valid_days=data_quality.get("longest_consecutive_valid_days"),
                 invalid_days=data_quality.get("invalid_days"),
                 completely_missing_days=data_quality.get("completely_missing_days"),
                 detected_nonwear_hours=data_quality.get("detected_nonwear_hours"),

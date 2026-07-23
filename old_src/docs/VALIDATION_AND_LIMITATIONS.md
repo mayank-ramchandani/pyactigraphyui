@@ -73,6 +73,19 @@ Automatic non-wear is only available when the source reader or a mapped column
 supplies it. Direct raw GT3X and GENEActiv decoding does not invent non-wear
 from low activity; use a validated non-wear source or explicit mask intervals.
 
+### Light channels
+
+GENEActiv `.bin` light is exposed as `LIGHT` (`log10(lux + 1)`) and
+`LIGHT_LUX` (lux) by the direct reader. Current-format GT3X `log.bin` record
+type `0x05` is also exposed with those two channel names after 30-second mean
+aggregation. Only checksum-valid, plausible-timestamp, two-byte lux records are
+accepted. Missing light epochs remain missing.
+
+A GT3X extension does not prove that a light sensor was present or enabled.
+The reader scans the file and returns an explicit no-light result when no usable
+records exist. Legacy `activity.bin`/`lux.bin` GT3X archives are not decoded by
+this path and require a compatible legacy converter.
+
 ### Large-file infrastructure
 
 Success depends on:

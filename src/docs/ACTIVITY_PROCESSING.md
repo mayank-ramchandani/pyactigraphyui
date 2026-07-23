@@ -103,7 +103,7 @@ table under `dataQuality.daily_qc`; the Results page and JSON exports retain it.
 The resolved scalar activity series becomes `raw.data` for selected pyActigraphy analyses. This is appropriate computationally for RA, M10/L5, IS, IV, activity profiles, and compatible fragmentation calculations.
 
 Multi-day rhythm metrics are gated by the configured minimum number of valid
-days (two by default). Invalid days stay masked on the original time axis, so
+consecutive days (a run of two by default). Invalid days stay masked on the original time axis, so
 transitions are not created across recording gaps.
 
 Scientific comparability still depends on signal scale and preprocessing. A metric calculated from device counts is not numerically interchangeable with the same metric calculated from mg.

@@ -11,7 +11,7 @@ from .accelerometer_loader import (
     load_accelerometer_csv_as_baseraw,
     looks_like_accelerometer_timeseries_file,
 )
-from .gt3x_loader import load_gt3x_as_baseraw
+from .gt3x_loader import load_gt3x_as_baseraw, load_gt3x_light_as_raw
 from .geneactiv_bin import looks_like_geneactiv_bin, read_raw_geneactiv_bin
 
 try:
@@ -285,7 +285,12 @@ def _read_gt3x_file(file_path: str):
         activity_mapping="auto",
     )
 
-def load_native_file(file_path: str, reader_type: str, activity_mapping: str = "auto"):
+def load_native_file(
+    file_path: str,
+    reader_type: str,
+    activity_mapping: str = "auto",
+    purpose: str = "activity",
+):
     requested_mapping = normalize_activity_mapping(activity_mapping)
 
     if reader_type == "raw_accelerometer_needs_conversion":
@@ -304,6 +309,8 @@ def load_native_file(file_path: str, reader_type: str, activity_mapping: str = "
         )
 
     if reader_type == "gt3x":
+        if str(purpose or "activity").strip().lower() == "light":
+            return load_gt3x_light_as_raw(file_path, epoch_period=30)
         return load_gt3x_as_baseraw(
             file_path, epoch_period=30, activity_mapping=requested_mapping
         )

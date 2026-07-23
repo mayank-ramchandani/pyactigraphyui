@@ -7,6 +7,7 @@ This directory is the long-form source of truth for the Actigraphy Dashboard. Th
 | [User guide](USER_GUIDE.md) | Analysts and researchers | End-to-end workflow and interpretation checks |
 | [File formats](FILE_FORMATS.md) | Analysts and developers | Supported signals, readers, and format-specific behaviour |
 | [Activity processing](ACTIVITY_PROCESSING.md) | Researchers and developers | Source activity, processed `acc`, MAD, ENMO, epochs, and thresholds |
+| [Preprocessing validity rules](PREPROCESSING_VALIDITY_RULES.md) | Analysts and researchers | Standard/custom valid-day, consecutive-day, sleep-window, and missingness rules |
 | [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) | Researchers | pyActigraphy metrics, sleep/rest algorithms, parameters, and outputs |
 | [Diagnostics and troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) | Analysts and operators | Stage reports, progress, transport failures, logs, and debugging |
 | [Validation and limitations](VALIDATION_AND_LIMITATIONS.md) | Researchers and reviewers | Scientific validation expectations and known limitations |
@@ -23,4 +24,4 @@ This directory is the long-form source of truth for the Actigraphy Dashboard. Th
 - **Mapping** means the scalar activity basis supplied to pyActigraphy metrics.
 - **Window** means a timestamped rest or sleep-analysis interval; no heuristic fallback window is inserted.
 
-Last consolidated: **2026-07-16**.
+Last consolidated: **2026-07-23**.

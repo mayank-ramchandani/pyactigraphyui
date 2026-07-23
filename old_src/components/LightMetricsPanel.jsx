@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import InteractiveIntervalSelector from "./InteractiveIntervalSelector";
+import { runBackgroundFileJob } from "../services/backgroundJobClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
 
@@ -272,10 +273,13 @@ export default function LightMetricsPanel({
   lightMetricSettings = {},
   setLightMetricSettings = () => {},
   previewData = null,
+  lightSourceMessage = "",
+  onLightInspection = () => {},
 }) {
   const [channels, setChannels] = useState([]);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [error, setError] = useState("");
+  const [inspectionMessage, setInspectionMessage] = useState("");
   const [expandedMetric, setExpandedMetric] = useState(null);
   const [expandedGroup, setExpandedGroup] = useState("light_exposure_group");
   const [expandedSettings, setExpandedSettings] = useState({
@@ -312,19 +316,37 @@ export default function LightMetricsPanel({
       try {
         setLoadingChannels(true);
         setError("");
+        setInspectionMessage("");
+        const previewChannels = Array.isArray(previewData?.channels) ? previewData.channels : [];
+        if (previewChannels.length > 0) {
+          setChannels(previewChannels);
+          if (!settings.channel && previewData?.default_channel) {
+            setLightMetricSettings((prev) => ({
+              ...DEFAULT_LIGHT_SETTINGS,
+              ...(prev || {}),
+              channel: previewData.default_channel,
+            }));
+          }
+          return;
+        }
 
-        const formData = new FormData();
-        formData.append("file", lightFile);
-
-        const res = await fetch(buildApiUrl("api/light/channels"), { method: "POST", body: formData });
-        const text = await res.text();
-        const data = text ? JSON.parse(text) : {};
-
-        if (!res.ok) throw new Error(data?.detail || "Failed to load light channels.");
+        const data = await runBackgroundFileJob({
+          startUrl: buildApiUrl("api/jobs/light/channels"),
+          statusBaseUrl: buildApiUrl("api/jobs"),
+          file: lightFile,
+          jobPrefix: "light-channels",
+        });
         if (cancelled) return;
 
         const nextChannels = data.channels || [];
         setChannels(nextChannels);
+        if (data?.skipped || data?.light_detection?.available === false) {
+          setInspectionMessage(
+            data?.message ||
+              "This file contains no embedded light measurements, so light metrics will be skipped."
+          );
+          onLightInspection(data);
+        }
         if (!settings.channel && data.default_channel) {
           setLightMetricSettings((prev) => ({ ...DEFAULT_LIGHT_SETTINGS, ...(prev || {}), channel: data.default_channel }));
         }
@@ -343,7 +365,7 @@ export default function LightMetricsPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lightFile]);
+  }, [lightFile, previewData?.channels, previewData?.default_channel]);
 
   const updateSetting = (name, value) => {
     setLightMetricSettings((prev) => ({ ...DEFAULT_LIGHT_SETTINGS, ...(prev || {}), [name]: value }));
@@ -376,11 +398,16 @@ export default function LightMetricsPanel({
 
       {!lightFile && (
         <div style={{ padding: 14, borderRadius: 14, border: "1px solid #fde68a", background: "#fffbeb", color: "#92400e", marginBottom: 16 }}>
-          No separate or embedded light file is selected. Light metrics can be selected, but generation will be skipped unless a light-capable file is available.
+          {lightSourceMessage || "No separate or embedded light file is selected. Light metrics can be selected, but generation will be skipped unless a light-capable file is available."}
         </div>
       )}
 
       {loadingChannels && <div style={{ marginBottom: 12 }}>Loading light channels…</div>}
+      {inspectionMessage && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 12, border: "1px solid #fde68a", background: "#fffbeb", color: "#92400e", fontSize: 14 }}>
+          {inspectionMessage}
+        </div>
+      )}
       {error && (
         <div style={{ marginBottom: 16, padding: 12, borderRadius: 12, border: "1px solid #fecaca", background: "#fef2f2", color: "#991b1b", fontSize: 14 }}>
           {error}

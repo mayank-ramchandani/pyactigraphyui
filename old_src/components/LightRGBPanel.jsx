@@ -9,6 +9,7 @@ import {
   Tooltip,
   Brush,
 } from "recharts";
+import { runBackgroundFileJob } from "../services/backgroundJobClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
 
@@ -51,7 +52,7 @@ const channelColors = {
   "UVB LIGHT": "#eab308",
 };
 
-export default function LightRGBPanel({ lightFile }) {
+export default function LightRGBPanel({ lightFile, initialPayload = null }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [payload, setPayload] = useState(null);
@@ -77,26 +78,19 @@ export default function LightRGBPanel({ lightFile }) {
         setLoading(true);
         setError("");
 
-        const formData = new FormData();
-        formData.append("file", lightFile);
-        formData.append("resampleFreq", resampleFreq);
-
-        const res = await fetch(buildApiUrl("api/light/rgb-preview"), {
-          method: "POST",
-          body: formData,
-        });
-
-        const text = await res.text();
-        let data = {};
-        try {
-          data = text ? JSON.parse(text) : {};
-        } catch {
-          throw new Error("The backend returned a non-JSON response while loading RGB light preview. The request may have timed out or the server may have rejected the file.");
-        }
-
-        if (!res.ok) {
-          throw new Error(data?.detail || "Failed to load RGB light preview.");
-        }
+        const canUseInitialPayload =
+          initialPayload &&
+          initialPayload.rgb_resample_freq === resampleFreq &&
+          Array.isArray(initialPayload.rgb_preview);
+        const data = canUseInitialPayload
+          ? initialPayload
+          : await runBackgroundFileJob({
+              startUrl: buildApiUrl("api/jobs/light/rgb-preview"),
+              statusBaseUrl: buildApiUrl("api/jobs"),
+              file: lightFile,
+              fields: { resampleFreq },
+              jobPrefix: "light-rgb",
+            });
 
         if (cancelled) return;
 
@@ -131,7 +125,7 @@ export default function LightRGBPanel({ lightFile }) {
     return () => {
       cancelled = true;
     };
-  }, [lightFile, resampleFreq]);
+  }, [lightFile, resampleFreq, initialPayload]);
 
   const chartData = payload?.rgb_preview || [];
 

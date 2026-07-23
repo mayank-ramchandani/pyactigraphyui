@@ -284,47 +284,71 @@ export default function SupportFilesStep({
         <div style={{ marginTop: 16, border: "1px solid #cbd5e1", borderRadius: 16, padding: 16, background: "#f8fafc" }}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>Missing-data and valid-day rules</div>
           <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
-            Missing epochs and excluded non-wear remain unavailable; they are never converted to zero activity. Days below the coverage threshold are kept in the QC table but excluded from activity and sleep metrics.
+            Missing epochs and excluded non-wear remain unavailable; they are never converted to zero activity. The standard rules are 16 analyzable hours per valid day, at least 2 consecutive valid days for multi-day rhythm/SRI metrics, and 80% coverage for sleep-window summaries.
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
-            <label>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Minimum valid hours per day</div>
-              <input
-                type="number"
-                min="0"
-                max="24"
-                step="0.5"
-                value={mergedSettings.minimumValidHoursPerDay ?? 16}
-                onChange={(event) => updateSettings({ minimumValidHoursPerDay: Number(event.target.value) })}
-                style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-              />
-            </label>
-            <label>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Minimum valid days for rhythm/SRI</div>
-              <input
-                type="number"
-                min="1"
-                max="31"
-                step="1"
-                value={mergedSettings.minimumValidDaysForRhythm ?? 2}
-                onChange={(event) => updateSettings({ minimumValidDaysForRhythm: Number(event.target.value) })}
-                style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-              />
-            </label>
-            <label>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Minimum sleep-window coverage</div>
-              <input
-                type="number"
-                min="0"
-                max="1"
-                step="0.05"
-                value={mergedSettings.minimumSleepWindowCoverage ?? 0.8}
-                onChange={(event) => updateSettings({ minimumSleepWindowCoverage: Number(event.target.value) })}
-                style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1" }}
-              />
-              <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>0.8 means 80%.</div>
-            </label>
-          </div>
+
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, border: "1px solid #dbeafe", background: "#eff6ff" }}>
+            <input
+              type="checkbox"
+              checked={Boolean(mergedSettings.customizeDataQualityThresholds)}
+              onChange={(event) => updateSettings({ customizeDataQualityThresholds: event.target.checked })}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              <span style={{ display: "block", fontWeight: 700, color: "#1e3a8a" }}>Modify the standard data-quality thresholds</span>
+              <span style={{ display: "block", marginTop: 3, color: "#475569", fontSize: 13 }}>
+                Leave this off for the project standard. Turn it on only when the study protocol specifies different validity rules.
+              </span>
+            </span>
+          </label>
+
+          {mergedSettings.customizeDataQualityThresholds ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 14 }}>
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Minimum valid hours per day</div>
+                <input
+                  type="number"
+                  min="1"
+                  max="24"
+                  step="0.5"
+                  value={mergedSettings.minimumValidHoursPerDay ?? 16}
+                  onChange={(event) => updateSettings({ minimumValidHoursPerDay: Number(event.target.value) })}
+                  style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                />
+                <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>Allowed range: 1–24 hours.</div>
+              </label>
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Minimum consecutive valid days for rhythm/SRI</div>
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  step="1"
+                  value={mergedSettings.minimumValidDaysForRhythm ?? 2}
+                  onChange={(event) => updateSettings({ minimumValidDaysForRhythm: Number(event.target.value) })}
+                  style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                />
+                <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>The days must form one uninterrupted calendar-day run.</div>
+              </label>
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Minimum sleep-window coverage</div>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={mergedSettings.minimumSleepWindowCoverage ?? 0.8}
+                  onChange={(event) => updateSettings({ minimumSleepWindowCoverage: Number(event.target.value) })}
+                  style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
+                />
+                <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>0.8 means 80% recorded/scored coverage.</div>
+              </label>
+            </div>
+          ) : (
+            <div style={{ marginTop: 12, color: "#166534", fontSize: 13, fontWeight: 700 }}>
+              Standard thresholds active: 16 h/day · 2 consecutive valid days · 80% sleep-window coverage
+            </div>
+          )}
         </div>
       )}
 

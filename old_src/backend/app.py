@@ -166,6 +166,10 @@ def version():
             "preview_analysis_mapping_decoupled": True,
             "documentation_center": True,
             "missingness_nonwear_valid_day_qc": True,
+            "background_light_preview_jobs": True,
+            "gt3x_light_content_detection": True,
+            "gt3x_streaming_lux_extraction": True,
+            "background_light_analysis_jobs": True,
         },
         "runtime": job_runtime_info(),
     }
@@ -338,7 +342,23 @@ def _safe_json_response(status_code: int, content):
         )
 
 
-def _load_native_supported_file(file_path: str, activity_mapping: str = "auto"):
+NO_LIGHT_MEASUREMENTS_DETAIL = (
+    "This file was inspected, but no embedded light measurements were found. "
+    "Light preview and light metrics were skipped; activity preview and analysis remain available."
+)
+
+
+def _validate_light_upload_format(upload: UploadFile) -> None:
+    """Retained for compatibility; light capability is determined from content."""
+    if upload is None:
+        raise ValueError("Select a file to inspect for embedded light measurements.")
+
+
+def _load_native_supported_file(
+    file_path: str,
+    activity_mapping: str = "auto",
+    purpose: str = "activity",
+):
     reader_type = infer_reader_type(file_path)
 
     if reader_type == "tabular":
@@ -348,8 +368,47 @@ def _load_native_supported_file(file_path: str, activity_mapping: str = "auto"):
             "or a pre-converted accelerometer *timeSeries.csv.gz file."
         )
 
-    raw = load_native_file(file_path, reader_type, activity_mapping=activity_mapping)
+    raw = load_native_file(
+        file_path,
+        reader_type,
+        activity_mapping=activity_mapping,
+        purpose=purpose,
+    )
     return raw, reader_type
+
+
+def _light_detection_payload(raw, reader_type: str) -> dict:
+    channels_payload = get_basic_light_channels(raw)
+    channels = channels_payload.get("channels") or []
+    metadata = getattr(raw, "metadata", None) or {}
+    gt3x_summary = metadata.get("gt3x_summary") if isinstance(metadata, dict) else None
+    available = bool(channels)
+    return {
+        "inspected": True,
+        "available": available,
+        "status": "available" if available else "not_present",
+        "message": (
+            f"Embedded light data were found in {len(channels)} channel(s)."
+            if available
+            else NO_LIGHT_MEASUREMENTS_DETAIL
+        ),
+        "detected_input_type": reader_type,
+        "channels": channels,
+        "default_channel": channels_payload.get("default_channel"),
+        "gt3x": (
+            {
+                "record_type": gt3x_summary.get("_gt3x_light_record_type"),
+                "source_member": gt3x_summary.get("_gt3x_light_source_member"),
+                "lux_records": gt3x_summary.get("_gt3x_lux_records"),
+                "events_read": gt3x_summary.get("_gt3x_light_events_read"),
+                "epoch_period_seconds": gt3x_summary.get("_gt3x_light_epoch_period_seconds"),
+                "serial_number": gt3x_summary.get("serial_number"),
+                "device": gt3x_summary.get("device"),
+            }
+            if isinstance(gt3x_summary, dict)
+            else None
+        ),
+    }
 
 
 @app.post("/api/accelerometer/convert-lite")
@@ -459,6 +518,7 @@ def preview_basic(
 def preview_light(
     file: UploadFile = File(...),
     resampleFreq: str = Form("1min"),
+    rgbResampleFreq: str = Form("5min"),
     csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
     csvSeparator: str = Form(","),  # accepted for frontend compatibility, ignored here
     maskingFiles: Optional[List[UploadFile]] = File(None),
@@ -467,26 +527,46 @@ def preview_light(
 ):
     tmp_path = None
     try:
+        _validate_light_upload_format(file)
         _json_or_empty(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path)
+        raw, reader_type = _load_native_supported_file(tmp_path, purpose="light")
 
         preview = build_light_preview(raw=raw, resample_freq=resampleFreq)
+        detection = _light_detection_payload(raw, reader_type)
 
         if not preview.get("light_preview_available"):
-            return JSONResponse(
-                status_code=400,
+            return _safe_json_response(
+                status_code=200,
                 content={
-                    "detail": "The native reader loaded the file, but no embedded light channel was found.",
+                    **preview,
+                    "channels": [],
+                    "default_channel": None,
+                    "rgb_preview": [],
+                    "rgb_summary": {},
+                    "rgb_resample_freq": rgbResampleFreq,
+                    "light_detection": detection,
+                    "message": detection["message"],
+                    "skipped": True,
                     "detected_input_type": reader_type,
                     "native_reader_used": True,
                 },
             )
 
-        return JSONResponse(
+        channels_payload = get_basic_light_channels(raw)
+        rgb_payload = build_light_rgb_preview(raw=raw, resample_freq=rgbResampleFreq)
+        return _safe_json_response(
+            status_code=200,
             content={
                 **preview,
+                **channels_payload,
+                "rgb_preview": rgb_payload.get("rgb_preview", []),
+                "rgb_summary": rgb_payload.get("rgb_summary", {}),
+                "rgb_resample_freq": rgbResampleFreq,
+                "light_detection": detection,
+                "message": detection["message"],
+                "skipped": False,
                 "detected_input_type": reader_type,
                 "native_reader_used": True,
             }
@@ -509,14 +589,20 @@ def preview_light_rgb(
 ):
     tmp_path = None
     try:
+        _validate_light_upload_format(file)
         tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path)
+        raw, reader_type = _load_native_supported_file(tmp_path, purpose="light")
 
         payload = build_light_rgb_preview(raw=raw, resample_freq=resampleFreq)
+        detection = _light_detection_payload(raw, reader_type)
 
-        return JSONResponse(
+        return _safe_json_response(
+            status_code=200,
             content={
                 **payload,
+                "light_detection": detection,
+                "message": detection["message"],
+                "skipped": not detection["available"],
                 "detected_input_type": reader_type,
                 "native_reader_used": True,
             }
@@ -538,14 +624,20 @@ def light_channels(
 ):
     tmp_path = None
     try:
+        _validate_light_upload_format(file)
         tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path)
+        raw, reader_type = _load_native_supported_file(tmp_path, purpose="light")
 
         payload = get_basic_light_channels(raw)
+        detection = _light_detection_payload(raw, reader_type)
 
-        return JSONResponse(
+        return _safe_json_response(
+            status_code=200,
             content={
                 **payload,
+                "light_detection": detection,
+                "message": detection["message"],
+                "skipped": not detection["available"],
                 "detected_input_type": reader_type,
                 "native_reader_used": True,
             }
@@ -586,6 +678,7 @@ def analyze_light(
     caught_exception = None
 
     try:
+        _validate_light_upload_format(file)
         with session.stage("request.parse_light_metric", category="request"):
             agg_funcs = [x.strip() for x in aggFuncs.split(",") if x.strip()] if aggFuncs else None
             update_current_stage(
@@ -616,39 +709,235 @@ def analyze_light(
                 raise ValueError("The file was detected as generic tabular data rather than a supported native/light recording.")
 
         with session.stage("input.load_recording", category="reader", details={"detected_input_type": reader_type}):
-            raw = load_native_file(tmp_path, reader_type)
+            raw = load_native_file(tmp_path, reader_type, purpose="light")
             update_current_stage(raw_class=type(raw).__name__, raw_module=type(raw).__module__)
 
         with session.stage("input.inspect_recording", category="data_validation"):
             session.recording = raw_recording_summary(raw)
             update_current_stage(**session.recording)
             if not session.recording.get("light", {}).get("available"):
-                raise ValueError("The native reader loaded the file, but no embedded light channel was found.")
+                detection = _light_detection_payload(raw, reader_type)
+                response_content = {
+                    "metric_id": metricId,
+                    "result": None,
+                    "skipped": True,
+                    "light_available": False,
+                    "light_detection": detection,
+                    "message": detection["message"],
+                    "detected_input_type": reader_type,
+                    "native_reader_used": True,
+                }
+                final_status = "completed_with_warnings"
+                mark_current_stage("warning")
+
+        if session.recording.get("light", {}).get("available"):
+            with session.stage(
+                f"metric.light.{metricId}",
+                category="light_metric",
+                details={"metric_id": metricId, "channel": channel or None},
+            ):
+                payload = run_basic_pylight_analysis(
+                    raw=raw,
+                    metric_id=metricId,
+                    channel=channel or None,
+                    threshold_lux=thresholdLux,
+                    start_time=startTime,
+                    stop_time=stopTime,
+                    bins=bins,
+                    agg=agg,
+                    agg_funcs=agg_funcs,
+                    oformat=outputFormat,
+                    lmx_length=lmxLength,
+                    lowest=str(lowest).lower() == "true",
+                    binarize=str(binarize).lower() == "true",
+                )
+                update_current_stage(result_kind=(payload.get("result") or {}).get("kind"), channel_used=payload.get("channel"))
+
+            response_content = {
+                **payload,
+                "skipped": False,
+                "light_available": True,
+                "light_detection": _light_detection_payload(raw, reader_type),
+                "detected_input_type": reader_type,
+                "native_reader_used": True,
+            }
+
+    except ValueError as exc:
+        caught_exception = exc
+        final_status = "failed"
+        status_code = 400
+        response_content = {"detail": str(exc)}
+    except Exception as exc:
+        caught_exception = exc
+        final_status = "failed"
+        status_code = 500
+        response_content = {"detail": "Server error: {}".format(str(exc))}
+    finally:
+        try:
+            with session.stage("request.cleanup_temp_files", category="cleanup"):
+                cleanup_summary = _cleanup_temp_paths(temp_paths)
+                update_current_stage(**cleanup_summary)
+                if cleanup_summary.get("errors"):
+                    mark_current_stage("warning")
+        except Exception:
+            pass
+        session.finish(final_status, caught_exception)
+        diagnostics_payload = session.payload()
+        response_content["diagnostics"] = diagnostics_payload
+        _persist_diagnostics(diagnostics_payload)
+        session.deactivate()
+
+    return _safe_json_response(status_code=status_code, content=response_content)
+
+
+@app.post("/api/light/analyze-batch")
+def analyze_light_batch(
+    file: UploadFile = File(...),
+    metricIds: str = Form("[]"),
+    channel: Optional[str] = Form(None),
+    thresholdLux: Optional[str] = Form(None),
+    startTime: Optional[str] = Form(None),
+    stopTime: Optional[str] = Form(None),
+    bins: str = Form("24h"),
+    agg: str = Form("mean"),
+    aggFuncs: str = Form(""),
+    outputFormat: str = Form("minute"),
+    lmxLength: str = Form("5h"),
+    lowest: str = Form("true"),
+    binarize: str = Form("false"),
+    requestId: Optional[str] = Form(None),
+):
+    """Inspect once and run all selected light metrics on one loaded recording."""
+    session = DiagnosticSession(
+        "/api/light/analyze-batch",
+        source_file_name=file.filename,
+        request_id=requestId,
+    ).activate()
+    temp_paths = []
+    status_code = 200
+    response_content = {}
+    final_status = "completed"
+    caught_exception = None
+
+    try:
+        with session.stage("request.parse_light_metrics", category="request"):
+            try:
+                parsed_metric_ids = json.loads(metricIds or "[]")
+            except Exception as exc:
+                raise ValueError("metricIds must be a JSON array of light metric identifiers.") from exc
+            if not isinstance(parsed_metric_ids, list):
+                raise ValueError("metricIds must be a JSON array of light metric identifiers.")
+            selected_metric_ids = list(
+                dict.fromkeys(str(item).strip() for item in parsed_metric_ids if str(item).strip())
+            )
+            if not selected_metric_ids:
+                raise ValueError("Select at least one light metric.")
+            agg_funcs = [item.strip() for item in aggFuncs.split(",") if item.strip()] or None
+            session.set_expected_stage_total(4 + len(selected_metric_ids))
+            update_current_stage(metric_ids=selected_metric_ids)
+
+        with session.stage("upload.primary_file", category="upload"):
+            tmp_path = _write_upload_to_temp(file)
+            temp_paths.append(tmp_path)
+            session.input_file = uploaded_file_summary(tmp_path, file.filename, file.content_type)
+            update_current_stage(**session.input_file)
+
+        with session.stage("input.detect_reader", category="reader"):
+            reader_type = infer_reader_type(tmp_path)
+            update_current_stage(detected_input_type=reader_type)
+            if reader_type == "tabular":
+                raise ValueError(
+                    "The file was detected as generic tabular data rather than a supported native/light recording."
+                )
 
         with session.stage(
-            f"metric.light.{metricId}",
-            category="light_metric",
-            details={"metric_id": metricId, "channel": channel or None},
+            "input.inspect_light",
+            category="reader",
+            details={"detected_input_type": reader_type},
         ):
-            payload = run_basic_pylight_analysis(
-                raw=raw,
-                metric_id=metricId,
-                channel=channel or None,
-                threshold_lux=thresholdLux,
-                start_time=startTime,
-                stop_time=stopTime,
-                bins=bins,
-                agg=agg,
-                agg_funcs=agg_funcs,
-                oformat=outputFormat,
-                lmx_length=lmxLength,
-                lowest=str(lowest).lower() == "true",
-                binarize=str(binarize).lower() == "true",
+            raw = load_native_file(tmp_path, reader_type, purpose="light")
+            session.recording = raw_recording_summary(raw)
+            detection = _light_detection_payload(raw, reader_type)
+            update_current_stage(
+                raw_class=type(raw).__name__,
+                light_available=detection["available"],
+                light_channels=detection["channels"],
             )
-            update_current_stage(result_kind=(payload.get("result") or {}).get("kind"), channel_used=payload.get("channel"))
+            if not detection["available"]:
+                mark_current_stage("warning")
+
+        results = {}
+        metric_diagnostics = {}
+        metric_errors = []
+
+        if detection["available"]:
+            for metric_id in selected_metric_ids:
+                try:
+                    with session.stage(
+                        f"metric.light.{metric_id}",
+                        category="light_metric",
+                        details={"metric_id": metric_id, "channel": channel or None},
+                    ):
+                        payload = run_basic_pylight_analysis(
+                            raw=raw,
+                            metric_id=metric_id,
+                            channel=channel or None,
+                            threshold_lux=thresholdLux,
+                            start_time=startTime,
+                            stop_time=stopTime,
+                            bins=bins,
+                            agg=agg,
+                            agg_funcs=agg_funcs,
+                            oformat=outputFormat,
+                            lmx_length=lmxLength,
+                            lowest=str(lowest).lower() == "true",
+                            binarize=str(binarize).lower() == "true",
+                        )
+                        results[metric_id] = payload
+                        metric_diagnostics[metric_id] = {
+                            "status": "completed",
+                            "metric_id": metric_id,
+                            "channel": payload.get("channel"),
+                        }
+                        update_current_stage(
+                            result_kind=(payload.get("result") or {}).get("kind"),
+                            channel_used=payload.get("channel"),
+                        )
+                except Exception as exc:
+                    metric_errors.append(f"{metric_id}: {exc}")
+                    metric_diagnostics[metric_id] = {
+                        "status": "failed",
+                        "metric_id": metric_id,
+                        "message": str(exc),
+                    }
+                    final_status = "completed_with_warnings"
+        else:
+            final_status = "completed_with_warnings"
+            metric_diagnostics = {
+                metric_id: {
+                    "status": "skipped",
+                    "metric_id": metric_id,
+                    "message": detection["message"],
+                }
+                for metric_id in selected_metric_ids
+            }
 
         response_content = {
-            **payload,
+            "results": results,
+            "metric_diagnostics": metric_diagnostics,
+            "metric_errors": metric_errors,
+            "light_available": detection["available"],
+            "light_detection": detection,
+            "skipped": not detection["available"],
+            "message": (
+                detection["message"]
+                if not detection["available"]
+                else (
+                    "Some light metrics could not be calculated."
+                    if metric_errors
+                    else "Selected light metrics completed."
+                )
+            ),
             "detected_input_type": reader_type,
             "native_reader_used": True,
         }
@@ -662,7 +951,7 @@ def analyze_light(
         caught_exception = exc
         final_status = "failed"
         status_code = 500
-        response_content = {"detail": "Server error: {}".format(str(exc))}
+        response_content = {"detail": f"Server error: {exc}"}
     finally:
         try:
             with session.stage("request.cleanup_temp_files", category="cleanup"):
@@ -697,8 +986,9 @@ def manipulate_light(
 ):
     tmp_path = None
     try:
+        _validate_light_upload_format(file)
         tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path)
+        raw, reader_type = _load_native_supported_file(tmp_path, purpose="light")
 
         selected_channels = [x.strip() for x in channels.split(",") if x.strip()] if channels else None
 
@@ -1356,6 +1646,57 @@ def _background_preview_worker(primary_spec: dict, options: dict) -> dict:
                 pass
 
 
+def _background_light_worker(primary_spec: dict, operation: str, options: dict) -> dict:
+    """Run a light read operation after the upload request has returned."""
+    uploads, opened = _uploads_from_job_specs([primary_spec])
+    try:
+        upload = uploads[0]
+        if operation == "preview":
+            response = preview_light(
+                file=upload,
+                resampleFreq=options.get("resampleFreq", "1min"),
+                rgbResampleFreq=options.get("rgbResampleFreq", "5min"),
+                csvMapping=options.get("csvMapping", "{}"),
+                csvSeparator=options.get("csvSeparator", ","),
+                maskingFiles=None,
+                sleepDiaryFiles=None,
+                startStopFiles=None,
+            )
+        elif operation == "rgb_preview":
+            response = preview_light_rgb(
+                file=upload,
+                resampleFreq=options.get("resampleFreq", "5min"),
+            )
+        elif operation == "channels":
+            response = light_channels(file=upload)
+        elif operation == "analyze":
+            response = analyze_light_batch(
+                file=upload,
+                metricIds=options.get("metricIds", "[]"),
+                channel=options.get("channel") or None,
+                thresholdLux=options.get("thresholdLux") or None,
+                startTime=options.get("startTime") or None,
+                stopTime=options.get("stopTime") or None,
+                bins=options.get("bins", "24h"),
+                agg=options.get("agg", "mean"),
+                aggFuncs=options.get("aggFuncs", ""),
+                outputFormat=options.get("outputFormat", "minute"),
+                lmxLength=options.get("lmxLength", "5h"),
+                lowest=options.get("lowest", "true"),
+                binarize=options.get("binarize", "false"),
+                requestId=options.get("requestId"),
+            )
+        else:
+            raise ValueError(f"Unsupported background light operation: {operation}")
+        return _response_outcome(response)
+    finally:
+        for handle in opened:
+            try:
+                handle.close()
+            except Exception:
+                pass
+
+
 def _background_analysis_worker(primary_spec: dict, support_specs: dict, options: dict) -> dict:
     primary_uploads, primary_opened = _uploads_from_job_specs([primary_spec])
     masking_uploads, masking_opened = _uploads_from_job_specs(support_specs.get("masking"))
@@ -1386,6 +1727,68 @@ def _background_analysis_worker(primary_spec: dict, support_specs: dict, options
                 handle.close()
             except Exception:
                 pass
+
+
+def _start_background_light_job(
+    *,
+    file: UploadFile,
+    operation: str,
+    options: dict,
+    requested_job_id: Optional[str],
+):
+    created_job_id = None
+    try:
+        # Capability is content-based. GT3X files enter the queue and use the
+        # light-only streaming reader; files without lux records finish as a
+        # successful, explicit skip rather than a crash or format rejection.
+        _validate_light_upload_format(file)
+        created_job_id, directory = create_job_record(
+            f"light_{operation}",
+            requested_job_id=requested_job_id,
+            request_id=requested_job_id,
+            source_file_name=file.filename,
+        )
+        primary_spec = _write_upload_to_job(file, directory, "light")
+        submit_job(
+            created_job_id,
+            lambda: _background_light_worker(primary_spec, operation, options),
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "ok": True,
+                "job_id": created_job_id,
+                "request_id": created_job_id,
+                "status": "queued",
+                "status_url": f"/api/jobs/{created_job_id}",
+                "operation": operation,
+                "runtime": job_runtime_info(),
+            },
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "code": "unsupported_light_source",
+                "detail": str(exc),
+            },
+        )
+    except Exception as exc:
+        if created_job_id:
+            try:
+                update_job(
+                    created_job_id,
+                    status="failed",
+                    message=str(exc),
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                )
+            except Exception:
+                pass
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "detail": f"Could not start light {operation} job: {exc}"},
+        )
 
 
 @app.get("/api/jobs/{job_id}")
@@ -1468,6 +1871,96 @@ def start_background_preview_basic(
             except Exception:
                 pass
         return JSONResponse(status_code=500, content={"ok": False, "detail": f"Could not start preview job: {exc}"})
+
+
+@app.post("/api/jobs/light/preview")
+def start_background_light_preview(
+    file: UploadFile = File(...),
+    resampleFreq: str = Form("1min"),
+    rgbResampleFreq: str = Form("5min"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
+    jobId: Optional[str] = Form(None),
+):
+    return _start_background_light_job(
+        file=file,
+        operation="preview",
+        options={
+            "resampleFreq": resampleFreq,
+            "rgbResampleFreq": rgbResampleFreq,
+            "csvMapping": csvMapping,
+            "csvSeparator": csvSeparator,
+        },
+        requested_job_id=jobId,
+    )
+
+
+@app.post("/api/jobs/light/rgb-preview")
+def start_background_light_rgb_preview(
+    file: UploadFile = File(...),
+    resampleFreq: str = Form("5min"),
+    jobId: Optional[str] = Form(None),
+):
+    return _start_background_light_job(
+        file=file,
+        operation="rgb_preview",
+        options={"resampleFreq": resampleFreq},
+        requested_job_id=jobId,
+    )
+
+
+@app.post("/api/jobs/light/channels")
+def start_background_light_channels(
+    file: UploadFile = File(...),
+    jobId: Optional[str] = Form(None),
+):
+    return _start_background_light_job(
+        file=file,
+        operation="channels",
+        options={},
+        requested_job_id=jobId,
+    )
+
+
+@app.post("/api/jobs/light/analyze")
+def start_background_light_analysis(
+    file: UploadFile = File(...),
+    metricIds: str = Form("[]"),
+    channel: Optional[str] = Form(None),
+    thresholdLux: Optional[str] = Form(None),
+    startTime: Optional[str] = Form(None),
+    stopTime: Optional[str] = Form(None),
+    bins: str = Form("24h"),
+    agg: str = Form("mean"),
+    aggFuncs: str = Form(""),
+    outputFormat: str = Form("minute"),
+    lmxLength: str = Form("5h"),
+    lowest: str = Form("true"),
+    binarize: str = Form("false"),
+    requestId: Optional[str] = Form(None),
+    jobId: Optional[str] = Form(None),
+):
+    resolved_job_id = jobId or requestId
+    return _start_background_light_job(
+        file=file,
+        operation="analyze",
+        options={
+            "metricIds": metricIds,
+            "channel": channel or "",
+            "thresholdLux": thresholdLux or "",
+            "startTime": startTime or "",
+            "stopTime": stopTime or "",
+            "bins": bins,
+            "agg": agg,
+            "aggFuncs": aggFuncs,
+            "outputFormat": outputFormat,
+            "lmxLength": lmxLength,
+            "lowest": lowest,
+            "binarize": binarize,
+            "requestId": requestId or resolved_job_id,
+        },
+        requested_job_id=resolved_job_id,
+    )
 
 
 @app.post("/api/jobs/analyze/basic")

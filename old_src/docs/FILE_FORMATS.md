@@ -4,9 +4,9 @@ Support depends on both the file extension and the actual columns or channels av
 
 | Format | Typical content | Default analysis basis | Optional mappings | Important notes |
 |---|---|---|---|---|
-| GENEActiv `.bin` | Raw X/Y/Z and possible light/temperature | Processed `acc` | MAD, custom ENMO | Large files use streamed decoding; diagnostics record the engine and sampling metadata. |
+| GENEActiv `.bin` | Raw X/Y/Z and embedded light/temperature | Processed `acc` | MAD, custom ENMO | Large files use streamed decoding. Light preview exposes `LIGHT` (`log10(lux + 1)`) and `LIGHT_LUX` (lux) when available. |
 | Axivity `.cwa` | Raw X/Y/Z | Processed `acc` through supported conversion | Mapping availability depends on output | Java and Oxford `accelerometer` dependencies may be required. |
-| ActiGraph `.gt3x` | Raw calibrated X/Y/Z | Processed `acc` | MAD, custom ENMO, 30 Hz ActiGraph-style counts | `log.bin` is streamed directly to epochs; gaps and the device timezone are preserved. Legacy archives without `log.bin` require local conversion/export. |
+| ActiGraph `.gt3x` | Raw calibrated X/Y/Z; optional timestamped lux records | Processed `acc` | MAD, custom ENMO, 30 Hz ActiGraph-style counts | `log.bin` activity is streamed directly to epochs. Official type-`0x05` lux records are inspected and streamed separately when present; no-light files skip light outputs without affecting activity. |
 | ActiGraph `.agd` | Device count/activity series | Source/device activity | Normally none | Preferred when the analysis is intended to remain on the ActiGraph count scale. |
 | Actiwatch `.awd` and other native pyActigraphy formats | Device activity | Source/device activity | Normally none | Reader and metric availability depend on the corresponding pyActigraphy class. |
 | Oxford `*timeSeries.csv(.gz)` | Epoch-level `acc` and related columns | Existing `acc` column | Existing compatible columns | Use when exact output from a chosen `accProcess` version is required. |
@@ -54,6 +54,37 @@ returns a job ID after receiving the upload, and the frontend polls for progress
 and the final result while decoding and metrics continue outside the original
 HTTP request. The browser-to-server upload itself must still complete within the
 hosting platform's ingress deadline.
+
+## Light source routing
+
+Light capability is determined from file contents and reader channels, not the
+extension alone. When no separate light file is selected, the selected
+actigraphy file is inspected:
+
+- current-format GT3X archives are scanned for checksum-valid `log.bin` record
+  type `0x05`, defined by ActiGraph as a two-byte little-endian lux value;
+- GENEActiv `.bin` and native pyActigraphy readers expose their available
+  embedded channels;
+- files without usable light return `light_detection.status = not_present`,
+  and light preview/metrics are skipped while activity processing continues.
+
+GT3X lux values are averaged into 30-second epochs by default and exposed as
+`LIGHT_LUX` (lux) and `LIGHT` (`log10(lux + 1)`). Real gaps remain missing.
+Light-only GT3X inspection never decodes X/Y/Z activity payloads.
+
+Large light preview, channel discovery, and batch light analysis use background
+jobs. One preview load returns the standard plot, available channels, and the
+initial multichannel/RGB preview. All selected light metrics are calculated
+from one loaded recording in one background job rather than one upload/decode
+per metric.
+
+Legacy GT3X archives containing `activity.bin`/`lux.bin` instead of `log.bin`
+remain outside this streaming reader.
+
+Format references:
+
+- [ActiGraph current GT3X log-record format](https://github.com/actigraph/GT3X-File-Format)
+- [ActiGraph legacy NHANES GT3X format](https://github.com/actigraph/NHANES-GT3X-File-Format)
 
 ## Exact Oxford processing
 

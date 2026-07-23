@@ -160,7 +160,7 @@ layout and requires a compatible legacy converter.
 Review the metric stage and suppressed exceptions. The metric can be unsupported for the raw-object type, require more days, require sleep windows, or have returned a non-scalar value that failed validation.
 
 Also inspect `dataQuality`: multi-day rhythm/SRI metrics are unavailable below
-the configured minimum valid-day count, and TST/WASO/sleep efficiency are
+the configured minimum consecutive-valid-day run, and TST/WASO/sleep efficiency are
 unavailable when no sleep window meets the coverage threshold.
 
 ### RA equals 1

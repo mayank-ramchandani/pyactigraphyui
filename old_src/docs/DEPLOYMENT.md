@@ -14,7 +14,11 @@ Confirm the deployed backend using `GET /api/version` after every release.
 For this revision, confirm:
 
 ```json
-"missingness_nonwear_valid_day_qc": true
+"missingness_nonwear_valid_day_qc": true,
+"background_light_preview_jobs": true,
+"gt3x_light_content_detection": true,
+"gt3x_streaming_lux_extraction": true,
+"background_light_analysis_jobs": true
 ```
 
 ## Frontend environment
@@ -80,13 +84,16 @@ GT3X_STREAM_CHUNK_SECONDS=300
 GT3X_PROGRESS_EVENT_INTERVAL=100000
 GT3X_DEDUPE_WINDOW_SECONDS=300
 GT3X_ISM_FILL_CHUNK_SECONDS=300
+GT3X_LIGHT_EPOCH_PERIOD=30
 ```
 
 The defaults keep raw GT3X buffers small. Increasing the chunk duration can
 improve throughput slightly but also increases peak memory. Multiple workers or
 simultaneous large requests multiply the per-request memory requirement.
 
-Large-file activity preview and analysis use a bounded background executor.
+Large-file activity preview, light preview, light-channel discovery,
+multichannel light preview, batch light analysis, and activity/sleep analysis
+use the bounded background executor.
 Keep the worker count at one on a 2 GiB deployment:
 
 ```text
@@ -97,13 +104,16 @@ ANALYSIS_JOB_TTL_SECONDS=21600
 Per-job input files are deleted after completion; job metadata and result JSON
 are retained until the TTL. The original synchronous endpoints remain for API
 compatibility, but the bundled frontend uses `/api/jobs/preview/basic` and
-`/api/jobs/analyze/basic`.
+`/api/jobs/analyze/basic`. It also uses `/api/jobs/light/preview`,
+`/api/jobs/light/rgb-preview`, `/api/jobs/light/channels`, and
+`/api/jobs/light/analyze` for light data.
 
 ## Request duration
 
 Azure Container Apps HTTP ingress has a fixed 240-second request timeout.
-Streaming fixes raw-decoding memory amplification; background jobs ensure GT3X
-reduction and metric execution no longer count against that HTTP deadline. The
+Streaming fixes raw-decoding memory amplification; background jobs ensure raw
+activity/light preview, activity/sleep analysis, and batch light-metric
+execution no longer count against that HTTP deadline. The
 initial browser upload still does. If the upload itself approaches 240 seconds,
 use direct/resumable Azure Blob upload rather than sending file bytes through
 the Container Apps HTTP endpoint.
@@ -152,6 +162,10 @@ Expose detailed server errors only during controlled debugging.
 5. Deploy the frontend with the correct backend URL.
 6. Run a small golden file.
 7. Confirm the daily QC table on a gapped/non-wear test file.
-8. Run a large-file diagnostic test.
-9. Download and inspect diagnostics.
-10. Update `docs/CHANGELOG.md`.
+8. Confirm a GT3X fixture with type-`0x05` records returns `LIGHT` and `LIGHT_LUX`.
+9. Confirm a no-light GT3X returns `light_detection.status = not_present` without an error.
+10. Run a large GENEActiv light preview and confirm job polling completes.
+11. Run a selected multi-metric light analysis and confirm the file is loaded once.
+12. Run a large-file activity diagnostic test.
+13. Download and inspect diagnostics.
+14. Update `docs/CHANGELOG.md`.

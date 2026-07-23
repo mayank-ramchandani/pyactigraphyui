@@ -50,21 +50,40 @@ def resolve_data_quality_settings(support_settings: Optional[dict] = None) -> Di
     support_settings = support_settings or {}
     masking = support_settings.get("masking", support_settings) or {}
 
+    customize_value = masking.get("customizeDataQualityThresholds")
+    if customize_value is None:
+        # Backward compatibility for saved/API configurations created before
+        # the explicit opt-in toggle existed.
+        customize_thresholds = any(
+            key in masking
+            for key in (
+                "minimumValidHoursPerDay",
+                "minimumValidDaysForRhythm",
+                "minimumSleepWindowCoverage",
+                "minimumSleepWindowCoveragePercent",
+            )
+        )
+    else:
+        customize_thresholds = bool(customize_value)
+
+    threshold_source = masking if customize_thresholds else {}
     min_valid_hours = _finite_number(
-        masking.get("minimumValidHoursPerDay", DEFAULT_MIN_VALID_HOURS_PER_DAY),
+        threshold_source.get("minimumValidHoursPerDay", DEFAULT_MIN_VALID_HOURS_PER_DAY),
         DEFAULT_MIN_VALID_HOURS_PER_DAY,
-        0.0,
+        1.0,
         24.0,
     )
     try:
-        min_valid_days = int(masking.get("minimumValidDaysForRhythm", DEFAULT_MIN_VALID_DAYS_FOR_RHYTHM))
+        min_valid_days = int(
+            threshold_source.get("minimumValidDaysForRhythm", DEFAULT_MIN_VALID_DAYS_FOR_RHYTHM)
+        )
     except (TypeError, ValueError, OverflowError):
         min_valid_days = DEFAULT_MIN_VALID_DAYS_FOR_RHYTHM
-    min_valid_days = min(max(min_valid_days, 1), 31)
+    min_valid_days = min(max(min_valid_days, 1), 365)
 
-    sleep_coverage_value = masking.get("minimumSleepWindowCoverage")
+    sleep_coverage_value = threshold_source.get("minimumSleepWindowCoverage")
     if sleep_coverage_value in (None, ""):
-        percent = masking.get("minimumSleepWindowCoveragePercent")
+        percent = threshold_source.get("minimumSleepWindowCoveragePercent")
         sleep_coverage_value = float(percent) / 100.0 if percent not in (None, "") else DEFAULT_MIN_SLEEP_WINDOW_COVERAGE
     min_sleep_coverage = _finite_number(
         sleep_coverage_value,
@@ -75,8 +94,12 @@ def resolve_data_quality_settings(support_settings: Optional[dict] = None) -> Di
 
     return {
         "respect_detected_nonwear": bool(masking.get("respectNonwear", True)),
+        "customize_data_quality_thresholds": customize_thresholds,
         "minimum_valid_hours_per_day": min_valid_hours,
+        # Keep the legacy key for exported-config compatibility while making
+        # the actual rule explicitly consecutive.
         "minimum_valid_days_for_rhythm": min_valid_days,
+        "minimum_consecutive_valid_days_for_rhythm": min_valid_days,
         "minimum_sleep_window_coverage": min_sleep_coverage,
     }
 
@@ -236,6 +259,20 @@ def _rounded_hours(epoch_count: int, epoch_hours: float) -> float:
     return round(float(epoch_count) * epoch_hours, 4)
 
 
+def _longest_consecutive_day_run(days: Iterable[pd.Timestamp]) -> int:
+    normalized = sorted({pd.Timestamp(day).normalize() for day in days})
+    if not normalized:
+        return 0
+    longest = current = 1
+    for previous, day in zip(normalized, normalized[1:]):
+        if day - previous == pd.Timedelta(days=1):
+            current += 1
+            longest = max(longest, current)
+        else:
+            current = 1
+    return longest
+
+
 def _daily_quality_table(
     series: pd.Series,
     native_wear: pd.Series,
@@ -387,10 +424,12 @@ def apply_data_quality_control(raw: Any, support_settings: Optional[dict] = None
         qc_warnings.append(
             f"Found {len(completely_missing_days)} completely unrecorded day(s); they remain missing and do not become zero activity."
         )
-    if len(valid_days) < settings["minimum_valid_days_for_rhythm"]:
+    longest_consecutive_valid_days = _longest_consecutive_day_run(valid_days)
+    if longest_consecutive_valid_days < settings["minimum_valid_days_for_rhythm"]:
         qc_warnings.append(
-            f"Only {len(valid_days)} valid day(s) remain; multi-day rhythm and SRI results require at least "
-            f"{settings['minimum_valid_days_for_rhythm']} valid days and will be unavailable."
+            f"The longest run is {longest_consecutive_valid_days} consecutive valid day(s); multi-day rhythm "
+            f"and SRI results require at least {settings['minimum_valid_days_for_rhythm']} consecutive valid "
+            "days and will be unavailable."
         )
 
     payload = {
@@ -400,6 +439,7 @@ def apply_data_quality_control(raw: Any, support_settings: Optional[dict] = None
         "epoch_seconds": round(frequency.total_seconds(), 6),
         "calendar_days": len(daily_rows),
         "valid_days": len(valid_days),
+        "longest_consecutive_valid_days": longest_consecutive_valid_days,
         "invalid_days": len(invalid_days),
         "completely_missing_days": len(completely_missing_days),
         "recording_gap_hours": gap_hours,
@@ -414,6 +454,7 @@ def apply_data_quality_control(raw: Any, support_settings: Optional[dict] = None
     analysis_raw._ui_analysis_valid_mask = final_mask
     analysis_raw._ui_daily_qc = daily_rows
     analysis_raw._ui_valid_day_count = len(valid_days)
+    analysis_raw._ui_longest_consecutive_valid_days = longest_consecutive_valid_days
     analysis_raw._ui_min_valid_days_for_rhythm = settings["minimum_valid_days_for_rhythm"]
     analysis_raw._ui_min_sleep_window_coverage = settings["minimum_sleep_window_coverage"]
     analysis_raw._ui_data_quality = payload
