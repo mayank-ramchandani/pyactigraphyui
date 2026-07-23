@@ -240,6 +240,23 @@ def _values_by_channel(df):
     return pd.Series(dtype=float)
 
 
+def _threshold_for_light_channel(raw, channel, threshold_lux):
+    """Express a user-entered lux threshold on the selected channel's scale."""
+    if threshold_lux is None or threshold_lux == "":
+        return None, None
+    try:
+        raw_lux = float(threshold_lux)
+    except Exception:
+        return None, None
+    if raw_lux < 0:
+        return None, None
+
+    scale_info = _describe_light_scale(raw, channel)
+    if scale_info.get("light_scale") == "lux":
+        return raw_lux, "lux"
+    return math.log10(raw_lux + 1.0), "log10(lux + 1)"
+
+
 def run_basic_pylight_analysis(raw, metric_id, channel=None, threshold_lux=None, start_time=None, stop_time=None, bins="24h", agg="mean", agg_funcs=None, oformat="minute", lmx_length="5h", lowest=True, binarize=False):
     light_obj = _get_light_recording(raw)
     if light_obj is None:
@@ -249,7 +266,7 @@ def run_basic_pylight_analysis(raw, metric_id, channel=None, threshold_lux=None,
         raise ValueError("No light channels are available on the loaded file.")
     if channel is None:
         channel = _pick_default_light_channel(channels)
-    threshold = _lux_to_log10_threshold(threshold_lux)
+    threshold, threshold_scale = _threshold_for_light_channel(raw, channel, threshold_lux)
     start_time = _normalize_light_time_arg(start_time)
     stop_time = _normalize_light_time_arg(stop_time)
     crosses_midnight = _clock_window_crosses_midnight(start_time, stop_time)
@@ -328,7 +345,9 @@ def run_basic_pylight_analysis(raw, metric_id, channel=None, threshold_lux=None,
         "channel": channel,
         "available_channels": channels,
         "threshold_lux": _serialize_scalar(threshold_lux),
-        "threshold_log10": _serialize_scalar(threshold),
+        "threshold_log10": _serialize_scalar(_lux_to_log10_threshold(threshold_lux)),
+        "threshold_channel_value": _serialize_scalar(threshold),
+        "threshold_channel_scale": threshold_scale,
         "start_time": start_time,
         "stop_time": stop_time,
         "time_window_crossed_midnight": bool(crosses_midnight),

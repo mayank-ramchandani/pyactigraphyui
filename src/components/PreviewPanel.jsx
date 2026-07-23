@@ -53,6 +53,8 @@ export default function PreviewPanel({
   lightFiles = [],
   selectedLightPreviewFile = "",
   setSelectedLightPreviewFile = () => {},
+  lightSourceAvailable = null,
+  lightSourceMessage = "",
   activityMapping = "auto",
   setActivityMapping = () => {},
   onPreview,
@@ -108,7 +110,9 @@ export default function PreviewPanel({
   const canLoad =
     mode === "activity"
       ? Boolean(selectedPreviewFile)
-      : Boolean(selectedLightPreviewFile || selectedPreviewFile);
+      : lightSourceAvailable == null
+        ? Boolean(selectedLightPreviewFile || selectedPreviewFile)
+        : Boolean(lightSourceAvailable);
 
   return (
     <div
@@ -122,9 +126,26 @@ export default function PreviewPanel({
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
         {mode === "light"
-          ? "Load light preview from a separate light file, or fall back to the selected actigraphy file if it already contains light."
+          ? "Load light preview from a separate light file, or use the selected actigraphy file when that reader exposes an embedded light channel."
           : "Load a full-recording activity preview from the selected actigraphy file."}
       </p>
+
+      {mode === "light" && lightSourceMessage && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid #fde68a",
+            background: "#fffbeb",
+            color: "#92400e",
+            fontSize: 14,
+            lineHeight: 1.5,
+          }}
+        >
+          {lightSourceMessage}
+        </div>
+      )}
 
       <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
         <input
@@ -178,7 +199,9 @@ export default function PreviewPanel({
                   background: "white",
                 }}
               >
-                <option value="">Use selected actigraphy file</option>
+                <option value="">
+                  {lightSourceMessage ? "Select a supported separate light file" : "Use selected actigraphy file"}
+                </option>
                 {filteredLightFiles.map((file, idx) => (
                   <option key={`${file.name}-${idx}`} value={file.name}>
                     {file.name}
@@ -213,9 +236,11 @@ export default function PreviewPanel({
             }}
           >
             {previewLoading
-              ? "Loading Preview..."
+              ? mode === "light"
+                ? "Inspecting Light Data..."
+                : "Loading Preview..."
               : mode === "light"
-              ? "Load Light Preview"
+              ? "Inspect & Load Light Preview"
               : "Load Activity Preview"}
           </button>
           {previewLoaded && previewData && (
@@ -327,7 +352,7 @@ export default function PreviewPanel({
                 {mode === "light"
                   ? hasLight
                     ? "Light preview is available."
-                    : "No light preview was returned for the selected file."
+                    : previewData?.message || "No embedded light measurements were found."
                   : "Activity preview is available."}
               </div>
               <div
@@ -359,7 +384,7 @@ export default function PreviewPanel({
                 color: "#475569",
               }}
             >
-              No light values were returned for this selection.
+              {previewData?.message || "No embedded light measurements were found for this selection."}
             </div>
           ) : (
             <>

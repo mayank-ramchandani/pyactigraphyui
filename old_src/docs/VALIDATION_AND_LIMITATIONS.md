@@ -46,7 +46,32 @@ Classic sleep algorithms and AoT procedures may execute on a generic activity se
 
 ### Missingness and non-wear
 
-Masked or missing intervals should not be interpreted as zero activity. Long gaps can alter daily profiles, transition probabilities, sleep windows, and rhythm metrics.
+The analysis applies one common missingness/non-wear stage to GT3X, direct
+GENEActiv BIN, converted BIN/CWA, Oxford time-series, and native pyActigraphy
+activity files:
+
+- absent timestamps and non-finite activity values are recording gaps;
+- a mapped/native wear mask is applied when **Respect detected non-wear** is on;
+- uploaded and manually drawn mask intervals are combined with that mask;
+- missing and excluded epochs remain `NaN`, never zero;
+- days below the configured analyzable-hours threshold remain in the daily QC
+  table but are fully excluded from metrics.
+
+The default valid-day rule is at least **16 analyzable hours per calendar day**.
+This matches the existing GGIR/CAN-BIND convention used by this project, but it
+is configurable and should be justified for each study.
+
+IS, IV, ISm, IVm, ISp, IVp, RAp, and SRI require at least two valid days by
+default. SRI uses only valid scored epoch pairs exactly 24 hours apart.
+
+TST, WASO, and sleep efficiency use only sleep/rest windows meeting the
+configured recorded/scored coverage fraction (default **0.80**). Missing epochs
+are neither sleep nor wake. Sleep efficiency uses observed/scored minutes as
+its denominator; scheduled diary/rest-window duration is reported separately.
+
+Automatic non-wear is only available when the source reader or a mapped column
+supplies it. Direct raw GT3X and GENEActiv decoding does not invent non-wear
+from low activity; use a validated non-wear source or explicit mask intervals.
 
 ### Large-file infrastructure
 
@@ -79,4 +104,6 @@ Before promoting a build:
 - test upload/progress reporting;
 - test diagnostic JSON download;
 - test a file near the production upload-size limit;
+- test completely missing days, partial days, mapped non-wear, and manual masks;
+- confirm daily QC and sleep-window coverage exclusions;
 - review methods and change-log documentation.

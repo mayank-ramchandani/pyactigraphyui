@@ -1,5 +1,36 @@
 # Change log
 
+## 2026-07-23 — Content-aware GT3X light processing
+
+- Replaced extension-based GT3X light rejection with complete `log.bin`
+  inspection for official type-`0x05` lux records.
+- Added bounded-memory lux aggregation with checksum, timestamp, and payload
+  validation; real gaps remain missing.
+- Exposed GT3X light as `LIGHT` (`log10(lux + 1)`) and `LIGHT_LUX` (lux).
+- Added explicit successful no-light responses so activity continues while
+  light preview and metrics are skipped.
+- Added one background batch job for all selected light metrics, avoiding one
+  upload and file scan per metric.
+- Made lux thresholds follow the selected channel's raw-lux or log scale.
+- Updated the UI, API feature flags, deployment guidance, in-app documentation,
+  and regression suite.
+- Added five focused tests; the complete 26-test backend suite passes.
+
+## 2026-07-23 — Safe large-file light previews
+
+- Stopped `.gt3x` activity files from being used as implicit light sources.
+- Added a clear GT3X-light limitation message while preserving GT3X activity
+  preview and analysis.
+- Rejected direct GT3X light requests before temporary-file copying or decoding.
+- Added background jobs for standard light preview, multichannel/RGB preview,
+  and light-channel discovery.
+- Returned standard preview, channels, and the initial multichannel sample from
+  one raw-file decode to avoid redundant GENEActiv processing.
+- Added frontend affinity-aware polling for background light jobs.
+- Added four regression tests for early GT3X rejection, supported light-job
+  lifecycle, and single-decode preview composition; the complete 21-test
+  backend suite passes.
+
 ## 2026-07-22 — Missing days, non-wear, and valid-day QC
 
 - Added one format-independent missingness/non-wear stage for GT3X, direct BIN,

@@ -319,7 +319,19 @@ def raw_recording_summary(raw: Any) -> Dict[str, Any]:
     metadata = getattr(raw, "metadata", None)
     if isinstance(metadata, dict):
         safe_meta = {}
-        for key in ["pages_decoded", "samples_decoded", "resample_freq", "direct_geneactiv_reader", "light_channels", "activity_mapping", "available_activity_mappings"]:
+        for key in [
+            "pages_decoded",
+            "samples_decoded",
+            "resample_freq",
+            "direct_geneactiv_reader",
+            "direct_gt3x_light_reader",
+            "light_inspected",
+            "light_available",
+            "light_channels",
+            "gt3x_summary",
+            "activity_mapping",
+            "available_activity_mappings",
+        ]:
             if key in metadata:
                 safe_meta[key] = metadata[key]
         payload["reader_metadata"] = safe_meta

@@ -300,11 +300,24 @@ export default function Dashboard() {
     actigraphyFiles[0] ||
     null;
 
-  const lightFile =
+  const requestedLightFile =
     lightFiles.find((file) => file.name === selectedLightPreviewFile) ||
     lightFiles[0] ||
     actigraphyFile ||
     null;
+  const lightFile = requestedLightFile;
+  const lightInspectionMatchesSelection =
+    Boolean(lightFile) &&
+    lightPreviewData?.light_preview_file_name === lightFile.name &&
+    Boolean(lightPreviewData?.light_detection?.inspected);
+  const selectedFileHasNoLight =
+    lightInspectionMatchesSelection &&
+    lightPreviewData?.light_detection?.available === false;
+  const lightSourceMessage = selectedFileHasNoLight
+    ? lightPreviewData?.message ||
+      "This file contains no embedded light measurements. Light preview and metrics will be skipped."
+    : "";
+  const lightMetricFile = selectedFileHasNoLight ? null : lightFile;
 
   const selectedAnalysisFiles = useMemo(() => {
     if (!actigraphyFiles.length) return [];
@@ -719,7 +732,12 @@ export default function Dashboard() {
   };
 
   const onLightPreview = async () => {
-    if (!lightFile) return;
+    if (!lightFile) {
+      setPreviewError(lightSourceMessage || "Select a supported light file before loading the light preview.");
+      setLightPreviewLoaded(false);
+      setLightPreviewData(null);
+      return;
+    }
 
     try {
       setPreviewLoading(true);
@@ -730,22 +748,23 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append("file", lightFile);
       formData.append("resampleFreq", "1min");
+      formData.append("rgbResampleFreq", "5min");
       formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
       formData.append("csvSeparator", csvSeparator);
-
-      const res = await fetch(buildApiUrl("api/light/preview"), {
-        method: "POST",
-        body: formData,
+      const lightPreviewJobId = createRequestId();
+      const data = await runBackgroundFormJob({
+        path: "api/jobs/light/preview",
+        formData,
+        jobId: lightPreviewJobId,
       });
 
-      const data = await parseJsonResponse(res);
-      if (!res.ok) {
-        throw new Error(data?.detail || "Failed to load light preview.");
-      }
-
-      setLightPreviewData(data);
+      const labeledData = {
+        ...data,
+        light_preview_file_name: lightFile.name,
+      };
+      setLightPreviewData(labeledData);
       setLightPreviewLoaded(true);
-      unlockStep("5");
+      unlockStep(data?.light_preview_available ? "5" : "6");
     } catch (err) {
       setPreviewError(err.message || "Failed to load light preview.");
       setLightPreviewLoaded(false);
@@ -755,64 +774,131 @@ export default function Dashboard() {
   };
 
   const runSelectedLightMetrics = async (targetFile = lightFile, startingStep = 1, totalSteps = 1, fileLabel = "") => {
-    if (!targetFile || selectedLightMetrics.length === 0) {
+    if (selectedLightMetrics.length === 0) {
       return { results: {}, diagnostics: {} };
     }
-
-    const nextLightResults = {};
-    const nextLightDiagnostics = {};
-    const errors = [];
-
-    for (let index = 0; index < selectedLightMetrics.length; index += 1) {
-      const metricId = selectedLightMetrics[index];
-      const metricNumber = index + 1;
+    const targetAlreadyInspectedWithoutLight =
+      Boolean(targetFile) &&
+      lightPreviewData?.light_preview_file_name === targetFile.name &&
+      lightPreviewData?.light_detection?.inspected === true &&
+      lightPreviewData?.light_detection?.available === false;
+    if (targetAlreadyInspectedWithoutLight) {
+      const message =
+        lightPreviewData?.message ||
+        "This file contains no embedded light measurements, so light metrics were skipped.";
+      const diagnostics = Object.fromEntries(
+        selectedLightMetrics.map((metricId) => [
+          metricId,
+          { status: "skipped", metric_id: metricId, message },
+        ])
+      );
+      setLightResults({});
+      setLightAnalysisError(message);
       setProgressStage(
-        `${fileLabel ? `${fileLabel}: ` : ""}Running light metric ${metricNumber} of ${selectedLightMetrics.length}: ${metricId}`,
-        startingStep + index,
+        `${fileLabel ? `${fileLabel}: ` : ""}No light data found; light metrics skipped`,
+        startingStep + selectedLightMetrics.length,
         totalSteps
       );
-
-      try {
-        const formData = new FormData();
-        formData.append("file", targetFile);
-        formData.append("metricId", metricId);
-        formData.append("channel", lightMetricSettings.channel || "");
-        formData.append("thresholdLux", lightMetricSettings.thresholdLux || "");
-        formData.append("startTime", lightMetricSettings.startTime || "");
-        formData.append("stopTime", lightMetricSettings.stopTime || "");
-        formData.append("bins", lightMetricSettings.bins || "24h");
-        formData.append("agg", lightMetricSettings.agg || "mean");
-        formData.append("aggFuncs", lightMetricSettings.aggFuncs || "mean,median,sum,std,min,max");
-        formData.append("outputFormat", lightMetricSettings.outputFormat || "minute");
-        formData.append("lmxLength", lightMetricSettings.lmxLength || "5h");
-        formData.append("lowest", String(lightMetricSettings.lowest !== false));
-        formData.append("binarize", String(Boolean(lightMetricSettings.binarizeMetric)));
-
-        const res = await fetch(buildApiUrl("api/light/analyze"), { method: "POST", body: formData });
-        const data = await parseJsonResponse(res);
-
-        if (!res.ok) {
-          throw createApiError(data?.detail || `Failed to run ${metricId}.`, res, data);
-        }
-
-        const { diagnostics: lightDiagnosticPayload, ...lightResultPayload } = data || {};
-        nextLightResults[metricId] = lightResultPayload;
-        nextLightDiagnostics[metricId] = lightDiagnosticPayload || null;
-      } catch (err) {
-        errors.push(`${metricId}: ${err.message || "failed"}`);
-        nextLightDiagnostics[metricId] = clientFailureDiagnostics(err, targetFile, buildApiUrl("api/light/analyze"));
-      } finally {
-        setProgressStage(
-          `${fileLabel ? `${fileLabel}: ` : ""}Finished light metric ${metricNumber} of ${selectedLightMetrics.length}`,
-          startingStep + metricNumber,
-          totalSteps
-        );
-      }
+      return {
+        results: {},
+        diagnostics,
+        detection: lightPreviewData.light_detection,
+        skipped: true,
+      };
+    }
+    if (!targetFile) {
+      const message =
+        lightSourceMessage ||
+        "No supported light source is available, so the selected light metrics were skipped.";
+      setLightAnalysisError(message);
+      return {
+        results: {},
+        diagnostics: {
+          light_source: {
+            status: "skipped",
+            message,
+          },
+        },
+      };
     }
 
-    setLightResults(nextLightResults);
-    setLightAnalysisError(errors.length ? errors.join(" | ") : "");
-    return { results: nextLightResults, diagnostics: nextLightDiagnostics };
+    setProgressStage(
+      `${fileLabel ? `${fileLabel}: ` : ""}Inspecting light data and running ${selectedLightMetrics.length} selected light metric(s)`,
+      startingStep,
+      totalSteps
+    );
+
+    try {
+      const formData = new FormData();
+      formData.append("file", targetFile);
+      formData.append("metricIds", JSON.stringify(selectedLightMetrics));
+      formData.append("channel", lightMetricSettings.channel || "");
+      formData.append("thresholdLux", lightMetricSettings.thresholdLux || "");
+      formData.append("startTime", lightMetricSettings.startTime || "");
+      formData.append("stopTime", lightMetricSettings.stopTime || "");
+      formData.append("bins", lightMetricSettings.bins || "24h");
+      formData.append("agg", lightMetricSettings.agg || "mean");
+      formData.append("aggFuncs", lightMetricSettings.aggFuncs || "mean,median,sum,std,min,max");
+      formData.append("outputFormat", lightMetricSettings.outputFormat || "minute");
+      formData.append("lmxLength", lightMetricSettings.lmxLength || "5h");
+      formData.append("lowest", String(lightMetricSettings.lowest !== false));
+      formData.append("binarize", String(Boolean(lightMetricSettings.binarizeMetric)));
+
+      const lightAnalysisJobId = createRequestId();
+      formData.append("requestId", lightAnalysisJobId);
+      const data = await runBackgroundFormJob({
+        path: "api/jobs/light/analyze",
+        formData,
+        jobId: lightAnalysisJobId,
+        onUpdate: (jobData) => {
+          const progressData = jobData?.progress;
+          if (!progressData) return;
+          setAnalysisProgress((previous) => ({
+            ...previous,
+            phase: `${fileLabel ? `${fileLabel}: ` : ""}${progressData.message || "Inspecting and analyzing light data"}`,
+            detail: progressData.stage_label || "",
+          }));
+        },
+      });
+
+      const nextLightResults = data?.results || {};
+      const nextLightDiagnostics = data?.metric_diagnostics || {};
+      if (data?.diagnostics && selectedLightMetrics.length > 0) {
+        const firstMetric = selectedLightMetrics[0];
+        nextLightDiagnostics[firstMetric] = {
+          ...(nextLightDiagnostics[firstMetric] || {}),
+          pipeline_diagnostics: data.diagnostics,
+        };
+      }
+
+      const errors = Array.isArray(data?.metric_errors) ? data.metric_errors : [];
+      const message = data?.skipped ? data?.message || "No embedded light data were found." : "";
+      setLightResults(nextLightResults);
+      setLightAnalysisError(errors.length ? errors.join(" | ") : message);
+      setProgressStage(
+        `${fileLabel ? `${fileLabel}: ` : ""}${
+          data?.skipped ? "No light data found; light metrics skipped" : "Light metrics complete"
+        }`,
+        startingStep + selectedLightMetrics.length,
+        totalSteps
+      );
+      return {
+        results: nextLightResults,
+        diagnostics: nextLightDiagnostics,
+        detection: data?.light_detection || null,
+        skipped: Boolean(data?.skipped),
+      };
+    } catch (err) {
+      const endpoint = buildApiUrl("api/jobs/light/analyze");
+      const diagnostics = Object.fromEntries(
+        selectedLightMetrics.map((metricId) => [
+          metricId,
+          clientFailureDiagnostics(err, targetFile, endpoint),
+        ])
+      );
+      setLightAnalysisError(err.message || "Light analysis failed.");
+      return { results: {}, diagnostics };
+    }
   };
 
   const handleGenerateResults = async () => {
@@ -942,7 +1028,10 @@ export default function Dashboard() {
           setProgressStage(`Activity/sleep metrics complete for ${fileLabel}`, completedSteps, totalSteps);
 
           const results = data.results || {};
-          const lightTargetFile = lightFiles.length > 0 ? lightFile : sourceFile;
+          const lightTargetFile =
+            lightFiles.length > 0
+              ? lightFile
+              : sourceFile;
           const generatedLightRun = await runSelectedLightMetrics(
             lightTargetFile,
             completedSteps,
@@ -1206,7 +1295,10 @@ export default function Dashboard() {
       return;
     }
 
-    if (currentStep === "4" && !lightPreviewLoaded) {
+    if (
+      currentStep === "4" &&
+      (!lightPreviewLoaded || !lightPreviewData?.light_preview_available)
+    ) {
       unlockAndGoToStep("6");
       return;
     }
@@ -1314,10 +1406,14 @@ export default function Dashboard() {
           lightFiles={lightFiles}
           selectedLightPreviewFile={selectedLightPreviewFile}
           setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+          lightSourceAvailable={Boolean(lightFile)}
+          lightSourceMessage={lightSourceMessage}
           onPreview={onLightPreview}
         />
 
-        {lightFile && <LightRGBPanel lightFile={lightFile} />}
+        {lightFile && lightPreviewLoaded && lightPreviewData?.light_preview_available && (
+          <LightRGBPanel lightFile={lightFile} initialPayload={lightPreviewData} />
+        )}
       </div>
     );
   } else if (currentStep === "6") {
@@ -1420,12 +1516,21 @@ export default function Dashboard() {
           setAnalysisWindowSettings={setAnalysisWindowSettings}
         />
         <LightMetricsPanel
-          lightFile={lightFile}
+          lightFile={lightMetricFile}
           selectedLightMetrics={selectedLightMetrics}
           setSelectedLightMetrics={setSelectedLightMetrics}
           lightMetricSettings={lightMetricSettings}
           setLightMetricSettings={setLightMetricSettings}
           previewData={lightPreviewData || previewData}
+          lightSourceMessage={lightSourceMessage}
+          onLightInspection={(data) => {
+            if (!lightFile || data?.light_detection?.available !== false) return;
+            setLightPreviewData({
+              ...data,
+              light_preview_file_name: lightFile.name,
+            });
+            setLightPreviewLoaded(true);
+          }}
         />
       </div>
     );

@@ -48,8 +48,8 @@ def quick_qc(metrics: dict):
     warnings = []
 
     sri = metrics.get("sri")
-    if sri is not None and _outside_range(sri, 0, 100):
-        warnings.append("SRI is outside the expected 0-100 range.")
+    if sri is not None and _outside_range(sri, -100, 100):
+        warnings.append("SRI is outside pyActigraphy's expected -100 to 100 range.")
 
     ra = metrics.get("ra")
     if ra is not None and _outside_range(ra, 0, 1):

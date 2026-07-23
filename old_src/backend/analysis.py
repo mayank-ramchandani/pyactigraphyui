@@ -694,15 +694,90 @@ def _epoch_minutes(index):
 def _coerce_score_series(score):
     if score is None:
         return None
-    numeric = _coerce_series_to_numeric(score)
-    return numeric if numeric is not None and len(numeric) else None
+    if isinstance(score, pd.DataFrame):
+        numeric_columns = score.select_dtypes(include="number").columns.tolist()
+        if not numeric_columns:
+            return None
+        score = score[numeric_columns[0]]
+    if not isinstance(score, pd.Series):
+        try:
+            score = pd.Series(score)
+        except Exception:
+            return None
+    numeric = pd.to_numeric(score, errors="coerce").sort_index()
+    return numeric if len(numeric) and numeric.notna().any() else None
 
 
 def _score_rest_minutes(score):
     series = _coerce_score_series(score)
     if series is None:
         return None
-    return float((series > 0).sum()) * _epoch_minutes(series.index)
+    valid = series.dropna()
+    if len(valid) == 0:
+        return None
+    return float((valid > 0).sum()) * _epoch_minutes(series.index)
+
+
+def _valid_day_count(raw):
+    try:
+        return int(getattr(raw, "_ui_valid_day_count"))
+    except Exception:
+        series = _get_activity_series(raw)
+        if series is None or len(series) == 0 or not isinstance(series.index, pd.DatetimeIndex):
+            return 0
+        return int(series.index.normalize().nunique())
+
+
+def _minimum_valid_days_for_rhythm(raw):
+    try:
+        return max(1, int(getattr(raw, "_ui_min_valid_days_for_rhythm")))
+    except Exception:
+        return 2
+
+
+def _activity_validity_at_score_frequency(raw, score_index):
+    mask = getattr(raw, "_ui_analysis_valid_mask", None)
+    if not isinstance(mask, pd.Series) or not isinstance(mask.index, pd.DatetimeIndex):
+        return None
+    mask = mask.astype(bool).sort_index()
+    if not isinstance(score_index, pd.DatetimeIndex) or len(score_index) == 0:
+        return None
+    try:
+        score_minutes = _epoch_minutes(score_index)
+        score_frequency = pd.Timedelta(minutes=score_minutes)
+        mask_frequency = pd.Timedelta(getattr(mask.index, "freq", None) or pd.infer_freq(mask.index))
+        if score_frequency > mask_frequency:
+            # A scored bin is valid only when every underlying activity epoch is
+            # valid; this prevents partial missing bins from becoming wake.
+            mask = mask.resample(score_frequency, origin="start").min().astype(bool)
+    except Exception:
+        pass
+    return mask.reindex(score_index).fillna(False).astype(bool)
+
+
+def _mask_sleep_score_with_activity(raw, score):
+    series = _coerce_score_series(score)
+    if series is None:
+        return None
+    validity = _activity_validity_at_score_frequency(raw, series.index)
+    return series.where(validity) if validity is not None else series
+
+
+def _missing_aware_sri(score):
+    """Calculate pyActigraphy's SRI definition using only valid 24 h pairs."""
+
+    series = _coerce_score_series(score)
+    if series is None or not isinstance(series.index, pd.DatetimeIndex):
+        return None
+    current = series.rename("current")
+    previous = series.copy()
+    previous.index = previous.index + pd.Timedelta("24h")
+    previous = previous.rename("previous")
+    pairs = pd.concat([current, previous], axis=1, join="inner").dropna()
+    if len(pairs) == 0:
+        return None
+    same_state_probability = float((pairs["current"] == pairs["previous"]).mean())
+    return 200.0 * same_state_probability - 100.0
 
 
 def _normalize_sleep_window(window, default_source="sleep_diary"):
@@ -1001,61 +1076,100 @@ def _resolve_sleep_windows(raw, sleep_window_settings=None):
     return detected_windows, metadata
 
 
-def _score_minutes_in_windows(score, windows):
+def _window_score_quality(score, windows, minimum_coverage=0.80):
+    series = _coerce_score_series(score)
+    if series is None or not windows:
+        return []
+    epoch_minutes = _epoch_minutes(series.index)
+    details = []
+    for index, window in enumerate(windows, start=1):
+        start = pd.Timestamp(window["start"])
+        stop = pd.Timestamp(window["stop"])
+        duration_minutes = max(0.0, (stop - start).total_seconds() / 60.0)
+        # Sleep/rest windows are half-open [start, stop), so adjacent nights do
+        # not double-count the stop epoch.
+        window_series = series.loc[(series.index >= start) & (series.index < stop)]
+        observed = window_series.dropna()
+        expected_epochs = max(1, int(round(duration_minutes / max(epoch_minutes, 1e-12))))
+        observed_epochs = int(len(observed))
+        coverage = min(1.0, observed_epochs / expected_epochs)
+        eligible = bool(observed_epochs > 0 and coverage + 1e-12 >= minimum_coverage)
+        details.append({
+            "index": index,
+            "start": start.isoformat(),
+            "stop": stop.isoformat(),
+            "duration_minutes": duration_minutes,
+            "expected_epochs": expected_epochs,
+            "observed_epochs": observed_epochs,
+            "observed_minutes": observed_epochs * epoch_minutes,
+            "coverage_fraction": coverage,
+            "minimum_coverage_fraction": minimum_coverage,
+            "eligible": eligible,
+            "exclusion_reason": None if eligible else (
+                f"recorded/scored coverage {coverage:.1%} is below the required {minimum_coverage:.1%}"
+            ),
+            "score": observed,
+        })
+    return details
+
+
+def _score_minutes_in_windows(score, windows, minimum_coverage=0.80):
     series = _coerce_score_series(score)
     if series is None:
-        return None
+        return None, []
     if not windows:
-        return _score_rest_minutes(series)
+        # TST is window-dependent here. Do not turn the full recording into an
+        # implicit fallback sleep window when Crespo/Roenneberg or the diary
+        # did not produce a usable interval.
+        return None, []
+    quality = _window_score_quality(series, windows, minimum_coverage=minimum_coverage)
+    usable = [item for item in quality if item["eligible"]]
+    if not usable:
+        return None, quality
+    total_sleep_minutes = sum(
+        float((item["score"] > 0).sum()) * _epoch_minutes(series.index)
+        for item in usable
+    )
+    return total_sleep_minutes, quality
 
-    epoch_minutes = _epoch_minutes(series.index)
-    total_sleep_minutes = 0.0
-    usable_windows = 0
-    for window in windows:
-        window_series = series.loc[window["start"]:window["stop"]].dropna()
-        if len(window_series) == 0:
-            continue
-        usable_windows += 1
-        total_sleep_minutes += float((window_series > 0).sum()) * epoch_minutes
-    if usable_windows == 0:
-        return None
-    return total_sleep_minutes
 
-
-def _compute_waso_and_efficiency(score, windows):
+def _compute_waso_and_efficiency(score, windows, window_quality=None, minimum_coverage=0.80):
     series = _coerce_score_series(score)
     if series is None or not windows:
         return {
             "waso": None,
             "sleep_efficiency": None,
             "time_in_bed_minutes": None,
+            "scheduled_time_in_bed_minutes": None,
             "sleep_window_count": 0,
+            "sleep_windows_excluded_for_coverage": 0,
         }
 
     epoch_minutes = _epoch_minutes(series.index)
     total_sleep_minutes = 0.0
     total_waso_minutes = 0.0
     total_time_in_bed_minutes = 0.0
+    total_scheduled_time_in_bed_minutes = 0.0
     usable_windows = 0
 
-    for window in windows:
-        start = window["start"]
-        stop = window["stop"]
-        if stop <= start:
+    quality = window_quality or _window_score_quality(series, windows, minimum_coverage=minimum_coverage)
+    for item in quality:
+        if not item["eligible"]:
             continue
-        window_series = series.loc[start:stop].dropna()
+        window_series = item["score"]
         if len(window_series) == 0:
             continue
 
         sleep_mask = window_series > 0
+        usable_windows += 1
+        total_scheduled_time_in_bed_minutes += float(item["duration_minutes"])
+        # Only observed/scored epochs enter the denominator.  Missing epochs
+        # are neither sleep nor wake.
+        total_time_in_bed_minutes += float(item["observed_minutes"])
         if not bool(sleep_mask.any()):
             # The diary window exists, but the chosen algorithm found no sleep in it.
-            usable_windows += 1
-            total_time_in_bed_minutes += (stop - start).total_seconds() / 60.0
             continue
 
-        usable_windows += 1
-        total_time_in_bed_minutes += (stop - start).total_seconds() / 60.0
         total_sleep_minutes += float(sleep_mask.sum()) * epoch_minutes
 
         first_sleep_pos = sleep_mask.to_numpy().nonzero()[0][0]
@@ -1067,19 +1181,27 @@ def _compute_waso_and_efficiency(score, windows):
             "waso": None,
             "sleep_efficiency": None,
             "time_in_bed_minutes": None,
+            "scheduled_time_in_bed_minutes": None,
             "sleep_window_count": 0,
+            "sleep_windows_excluded_for_coverage": len([item for item in quality if not item["eligible"]]),
         }
 
     return {
         "waso": total_waso_minutes,
         "sleep_efficiency": (total_sleep_minutes / total_time_in_bed_minutes) * 100.0,
         "time_in_bed_minutes": total_time_in_bed_minutes,
+        "scheduled_time_in_bed_minutes": total_scheduled_time_in_bed_minutes,
         "sleep_window_count": usable_windows,
+        "sleep_windows_excluded_for_coverage": len([item for item in quality if not item["eligible"]]),
     }
 
 
 def compute_metric(raw, metric_id, params=None):
     params = params or {}
+
+    if metric_id in {"is", "iv", "ism", "ivm", "isp", "ivp", "rap"}:
+        if _valid_day_count(raw) < _minimum_valid_days_for_rhythm(raw):
+            return None
 
     if metric_id == "ra":
         return _safe_call(raw.RA, binarize=params.get("binarize", True), threshold=params.get("threshold", 4))
@@ -1130,6 +1252,7 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
         details={"algorithm": algorithm, "parameters": algorithm_request.get("params", {})},
     ) as stage:
         scorer = _score_algorithm(raw, algorithm, algorithm_params=algorithm_params)
+        scorer = _mask_sleep_score_with_activity(raw, scorer)
         summary = result_summary(scorer)
         update_current_stage(result=summary)
         if scorer is None:
@@ -1162,8 +1285,18 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
         elif not sleep_windows:
             update_current_stage(outcome="sleep_window_not_required_for_selected_metrics")
 
-    rest_minutes = _score_minutes_in_windows(scorer, sleep_windows)
-    sleep_window_summary = _compute_waso_and_efficiency(scorer, sleep_windows)
+    minimum_window_coverage = float(getattr(raw, "_ui_min_sleep_window_coverage", 0.80))
+    rest_minutes, sleep_window_quality = _score_minutes_in_windows(
+        scorer,
+        sleep_windows,
+        minimum_coverage=minimum_window_coverage,
+    )
+    sleep_window_summary = _compute_waso_and_efficiency(
+        scorer,
+        sleep_windows,
+        window_quality=sleep_window_quality,
+        minimum_coverage=minimum_window_coverage,
+    )
 
     if "sri" in selected_metrics:
         try:
@@ -1173,8 +1306,15 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
                 details={"metric_id": "sri", "algorithm": algorithm},
             ) as stage:
                 algo_key = ALGO_TO_SRI_KEY.get(algorithm)
-                sri_method = getattr(raw, "SleepRegularityIndex", None)
-                if algo_key is None or not callable(sri_method):
+                if _valid_day_count(raw) < _minimum_valid_days_for_rhythm(raw):
+                    results["sri"] = None
+                    mark_current_stage(
+                        "warning",
+                        outcome="insufficient_valid_days",
+                        valid_days=_valid_day_count(raw),
+                        minimum_valid_days=_minimum_valid_days_for_rhythm(raw),
+                    )
+                elif algo_key is None or scorer is None:
                     results["sri"] = None
                     mark_current_stage(
                         "warning",
@@ -1182,7 +1322,7 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
                         raw_class=type(raw).__name__,
                     )
                 else:
-                    results["sri"] = _safe_call(sri_method, algo=algo_key)
+                    results["sri"] = _missing_aware_sri(scorer)
                     update_current_stage(result=result_summary(results["sri"]))
                     if results["sri"] is None:
                         mark_current_stage(
@@ -1231,8 +1371,17 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
     if any(metric in selected_metrics for metric in ["tst", "waso", "sleep_efficiency"]):
         results["sleep_window_source"] = window_metadata.get("source") or "none"
         results["sleep_window_method"] = window_metadata.get("method") or "none"
-        results["sleep_window_count"] = int(window_metadata.get("count") or sleep_window_summary.get("sleep_window_count") or 0)
+        results["sleep_window_count"] = int(sleep_window_summary.get("sleep_window_count") or 0)
+        results["sleep_window_detected_count"] = int(window_metadata.get("count") or 0)
         results["time_in_bed_minutes"] = round(sleep_window_summary.get("time_in_bed_minutes"), 2) if sleep_window_summary.get("time_in_bed_minutes") is not None else None
+        results["scheduled_time_in_bed_minutes"] = round(sleep_window_summary.get("scheduled_time_in_bed_minutes"), 2) if sleep_window_summary.get("scheduled_time_in_bed_minutes") is not None else None
+        results["minimum_sleep_window_coverage"] = round(minimum_window_coverage, 4)
+        results["sleep_windows_excluded_for_coverage"] = int(sleep_window_summary.get("sleep_windows_excluded_for_coverage") or 0)
+        if sleep_window_quality:
+            results["sleep_window_coverage"] = [
+                {key: _json_ready_metric_value(value) for key, value in item.items() if key != "score"}
+                for item in sleep_window_quality
+            ]
         results["sleep_window_estimated"] = bool(window_metadata.get("estimated"))
         details = window_metadata.get("details") or _sleep_window_detail_payload(sleep_windows, window_metadata)
         if details:
@@ -1489,7 +1638,21 @@ def _slice_raw_to_window(raw, start, stop):
     try:
         window_raw.data = window_data.copy()
     except Exception:
-        window_raw.data = window_data
+        # pyActigraphy BaseRaw.data is read-only; scope a shallow copy through
+        # its writable start_time/period properties instead.
+        window_raw.start_time = window_data.index[0]
+        window_raw.period = window_data.index[-1] - window_data.index[0]
+
+    try:
+        validity = getattr(raw, "_ui_analysis_valid_mask", None)
+        if isinstance(validity, pd.Series):
+            scoped_validity = validity.loc[start:stop]
+            window_raw._ui_analysis_valid_mask = scoped_validity
+            window_raw._ui_valid_day_count = int(
+                scoped_validity.loc[scoped_validity].index.normalize().nunique()
+            )
+    except Exception:
+        pass
 
     # Keep only sleep diary/rest windows that overlap this selected analysis interval.
     try:

@@ -49,6 +49,16 @@ Intervals use full timestamps. An interval beginning at 23:00 and ending at 02:0
 
 Mask invalid periods, confirmed non-wear, device artefacts, or other intervals that should not contribute to analysis. Do not silently replace missing or masked data with zero activity.
 
+The same page controls the shared data-quality rules:
+
+- **Respect detected non-wear** uses a source/native/mapped mask when available;
+- **Minimum valid hours per day** defaults to 16 h;
+- **Minimum valid days for rhythm/SRI** defaults to 2 days;
+- **Minimum sleep-window coverage** defaults to 0.80 (80%).
+
+These rules run independently for every selected file. Uploaded and manual
+intervals remain associated with their file ID.
+
 ## 7. Sleep diary
 
 Diary windows can supply reported bedtimes, wake times, naps, or in-bed intervals. If diary windows are unavailable, Crespo or Roenneberg can be selected to estimate rest windows. The application does not generate a fallback window when detection fails.
@@ -77,6 +87,8 @@ Review:
 
 - results by file ID;
 - QC warnings;
+- per-file daily recording quality;
+- sleep-window coverage and exclusion decisions;
 - M10/L5 components for RA;
 - detected sleep-window count;
 - activity mapping and units;
@@ -94,4 +106,5 @@ Exports should retain the source filename, requested and resolved activity mappi
 3. Run the same file locally, inside the deployed container, and through the public endpoint.
 4. Add medium and large recordings.
 5. Retain diagnostic JSON reports and exact build identifiers.
-6. Only then run a research batch.
+6. Confirm valid/invalid/completely missing days and sleep-window coverage.
+7. Only then run a research batch.

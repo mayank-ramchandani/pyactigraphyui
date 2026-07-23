@@ -280,6 +280,54 @@ export default function SupportFilesStep({
         </div>
       )}
 
+      {type === "masking" && (
+        <div style={{ marginTop: 16, border: "1px solid #cbd5e1", borderRadius: 16, padding: 16, background: "#f8fafc" }}>
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>Missing-data and valid-day rules</div>
+          <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
+            Missing epochs and excluded non-wear remain unavailable; they are never converted to zero activity. Days below the coverage threshold are kept in the QC table but excluded from activity and sleep metrics.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+            <label>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Minimum valid hours per day</div>
+              <input
+                type="number"
+                min="0"
+                max="24"
+                step="0.5"
+                value={mergedSettings.minimumValidHoursPerDay ?? 16}
+                onChange={(event) => updateSettings({ minimumValidHoursPerDay: Number(event.target.value) })}
+                style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1" }}
+              />
+            </label>
+            <label>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Minimum valid days for rhythm/SRI</div>
+              <input
+                type="number"
+                min="1"
+                max="31"
+                step="1"
+                value={mergedSettings.minimumValidDaysForRhythm ?? 2}
+                onChange={(event) => updateSettings({ minimumValidDaysForRhythm: Number(event.target.value) })}
+                style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1" }}
+              />
+            </label>
+            <label>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Minimum sleep-window coverage</div>
+              <input
+                type="number"
+                min="0"
+                max="1"
+                step="0.05"
+                value={mergedSettings.minimumSleepWindowCoverage ?? 0.8}
+                onChange={(event) => updateSettings({ minimumSleepWindowCoverage: Number(event.target.value) })}
+                style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1" }}
+              />
+              <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>0.8 means 80%.</div>
+            </label>
+          </div>
+        </div>
+      )}
+
       <div style={{ marginTop: 16, border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#ffffff" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap" }}>
           <div style={{ minWidth: 260, flex: 1 }}>

@@ -1,5 +1,21 @@
 # Change log
 
+## 2026-07-22 — Missing days, non-wear, and valid-day QC
+
+- Added one format-independent missingness/non-wear stage for GT3X, direct BIN,
+  converted BIN/CWA, Oxford time-series, and native pyActigraphy files.
+- Kept absent and excluded epochs as missing rather than zero activity.
+- Connected **Respect detected non-wear** to backend reader/mapped masks.
+- Added configurable defaults of 16 valid hours/day, two valid days for
+  multi-day rhythm/SRI metrics, and 80% sleep-window coverage.
+- Added daily QC with recorded, gap, detected-non-wear, manual-mask, and
+  analyzable hours.
+- Made SRI use valid 24-hour pairs and prevented direct-BIN transitions across
+  missing gaps.
+- Excluded low-coverage sleep windows and used observed/scored minutes as the
+  sleep-efficiency denominator.
+- Added ten focused data-quality tests; the complete 17-test suite passes.
+
 ## 2026-07-22 — Resilient background-job polling
 
 - Retried transient missing-job responses instead of failing on the first 404.

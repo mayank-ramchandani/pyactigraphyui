@@ -28,6 +28,10 @@ The web interface also contains a searchable **Documentation** section. Set `VIT
 - Do not create fallback sleep windows when Crespo or Roenneberg returns no usable window.
 - Treat a completed computation and a scientifically validated result as separate questions.
 - Review daily QC: gaps, non-wear, and manual masks are never treated as zero activity, and days below 16 analyzable hours are excluded by default.
+- Inspect light capability from file content rather than extension alone.
+  GT3X `log.bin` lux records, GENEActiv light, and native reader channels use
+  background preview/analysis jobs; files without light finish as an explicit
+  skip while activity processing remains available.
 
 ## Version confirmation
 

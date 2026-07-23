@@ -118,7 +118,7 @@ export default function DocumentationPanel({ onClose }) {
         </Card>
         <Card title="Documentation sources">
           <p style={{ marginTop: 0 }}>This in-app guide is the concise user reference. The repository <Code>docs/</Code> directory contains expanded methods, deployment, architecture, troubleshooting, validation, and change-history documentation.</p>
-          <p style={{ marginBottom: 0 }}>Documentation version: <strong>2026-07-16</strong>.</p>
+          <p style={{ marginBottom: 0 }}>Documentation version: <strong>2026-07-22</strong>.</p>
         </Card>
       </div>
     ),
@@ -132,6 +132,9 @@ export default function DocumentationPanel({ onClose }) {
         </Card>
         <Card title="Per-file intervals">
           Start/stop, masking, sleep-diary, and analysis intervals are associated with a file ID. When multiple files are loaded, confirm the selected file before drawing or editing any interval. Intervals that cross midnight are represented by full timestamps and remain valid when the stop time falls on the next calendar day.
+          <p style={{ marginBottom: 0 }}>
+            Missing timestamps and masked/non-wear epochs remain unavailable and are never converted to zero activity. Defaults are 16 analyzable hours per valid day, two valid days for multi-day rhythm/SRI outputs, and 80% recorded/scored coverage per sleep window. Configure these on the masking page.
+          </p>
         </Card>
       </div>
     ),
@@ -218,6 +221,9 @@ export default function DocumentationPanel({ onClose }) {
         </Card>
         <Card title="Downloadable reports">
           Each file produces a JSON diagnostic report containing the request ID, reader, recording summary, activity mapping, stage timings, memory, suppressed exceptions, QC warnings, and cleanup status. Use checksums or exact filenames to compare repeated runs.
+          <p style={{ marginBottom: 0 }}>
+            The Daily Recording Quality table separates gaps, detected/mapped non-wear, manual masks, and analyzable time. Invalid and completely unrecorded days stay missing. Sleep-window QC similarly reports coverage and excludes windows below the configured threshold.
+          </p>
         </Card>
       </div>
     ),

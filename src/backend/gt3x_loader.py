@@ -13,6 +13,7 @@ of output epochs rather than the number of raw samples.
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import dataclass
 import json
 import logging
 import os
@@ -31,6 +32,7 @@ except Exception:  # pragma: no cover - deployment dependency
     butter = lfilter = lfilter_zi = sosfilt = sosfilt_zi = None
 
 from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
+from .geneactiv_bin import SimpleLightRecording
 
 try:
     from .diagnostics import update_current_stage
@@ -56,12 +58,34 @@ GT3X_DEDUPE_WINDOW_SECONDS = max(0, int(os.environ.get("GT3X_DEDUPE_WINDOW_SECON
 GT3X_ISM_FILL_CHUNK_SECONDS = max(1, int(os.environ.get("GT3X_ISM_FILL_CHUNK_SECONDS", "300")))
 GT3X_STREAM_CHUNK_SECONDS = max(1, int(os.environ.get("GT3X_STREAM_CHUNK_SECONDS", "300")))
 GT3X_PREVIEW_RAW_ROWS = max(1, int(os.environ.get("GT3X_PREVIEW_RAW_ROWS", "5")))
+DEFAULT_GT3X_LIGHT_EPOCH_PERIOD = max(
+    1, int(os.environ.get("GT3X_LIGHT_EPOCH_PERIOD", str(DEFAULT_GT3X_EPOCH_PERIOD)))
+)
 
 _DOTNET_TO_UNIX_TICKS = 621355968000000000
 
 
 class GT3XProcessingError(ValueError):
     """Raised when GT3X loading or bounded-memory conversion fails."""
+
+
+@dataclass
+class GT3XLightRaw:
+    """Light-only raw object used by preview and pyLight-compatible metrics."""
+
+    light: SimpleLightRecording
+    metadata: Dict[str, Any]
+    data: pd.Series
+    format: str = "ActiGraph GT3X (streaming lux)"
+    name: str = "ActiGraph GT3X"
+
+    @property
+    def white_light(self):
+        return self.light.get_channel("LIGHT")
+
+    @property
+    def amb_light(self):
+        return self.light.get_channel("LIGHT")
 
 
 def _require_pygt3x():
@@ -435,6 +459,199 @@ def _resolve_mode(
         )
         return "accelerometer", "accelerometer", reason
     return "counts", "original", None
+
+
+def _stream_gt3x_light(
+    file_path: str,
+    epoch_period: int = DEFAULT_GT3X_LIGHT_EPOCH_PERIOD,
+) -> Tuple[pd.Series, Dict[str, Any]]:
+    """Inspect ``log.bin`` and aggregate genuine type-0x05 lux records.
+
+    Activity payloads are never decoded on this path.  This makes a negative
+    light-capability check much cheaper than loading the full accelerometer
+    recording, while still scanning the complete log so that a file is not
+    labelled "no light" merely because its first records contain none.
+    """
+    api = _require_pygt3x()
+    source = Path(file_path)
+    if not source.exists():
+        raise GT3XProcessingError(f"GT3X input file does not exist: {source}")
+    if int(epoch_period) <= 0:
+        raise GT3XProcessingError("GT3X light epoch period must be greater than zero seconds.")
+
+    try:
+        zip_file = ZipFile(source)
+    except (BadZipFile, OSError) as exc:
+        raise GT3XProcessingError(
+            "Could not open this GT3X archive. Confirm the upload is complete and not corrupted."
+        ) from exc
+
+    with zip_file:
+        names = set(zip_file.namelist())
+        if "log.bin" not in names:
+            legacy_detail = (
+                " A legacy lux.bin member was found, but this release only decodes the "
+                "timestamped log.bin light-record format."
+                if "lux.bin" in names
+                else ""
+            )
+            raise GT3XProcessingError(
+                "This GT3X archive does not contain log.bin, so its embedded light records "
+                f"cannot be inspected by the streaming reader.{legacy_detail}"
+            )
+        try:
+            info = api["Info"].read_zip(zip_file)
+        except Exception as exc:
+            raise GT3XProcessingError(f"Could not parse GT3X info.txt metadata: {exc}") from exc
+
+        metadata = _metadata_from_info(info, file_path)
+        timezone_offset = int(metadata["timezone_offset_seconds"])
+        recording_start_unix = _dotnet_ticks_to_unix_seconds(getattr(info, "start_date", 0))
+        recording_end_unix = _dotnet_ticks_to_unix_seconds(getattr(info, "last_sample_time", 0))
+        timestamp_tolerance = max(float(epoch_period), 300.0)
+        accumulator = _EpochMeanAccumulator(int(epoch_period), "LIGHT_LUX")
+
+        def timestamp_is_plausible(value: int) -> bool:
+            if recording_start_unix is not None and value < recording_start_unix - timestamp_tolerance:
+                return False
+            if recording_end_unix is not None and value > recording_end_unix + timestamp_tolerance:
+                return False
+            return True
+
+        event_count = 0
+        lux_records = 0
+        checksum_failures = 0
+        malformed_lux_records = 0
+        invalid_timestamp_lux_records = 0
+        log_info = zip_file.getinfo("log.bin")
+
+        with zip_file.open("log.bin", "r") as log_handle:
+            reader = api["LogReader"](log_handle)
+            while True:
+                event = reader.read_event()
+                if event is None:
+                    break
+                event_count += 1
+
+                if event_count % GT3X_PROGRESS_EVENT_INTERVAL == 0:
+                    update_current_stage(
+                        gt3x_light_inspection=True,
+                        gt3x_light_events_read=event_count,
+                        gt3x_lux_records_found=lux_records,
+                        gt3x_light_scan_progress_percent=round(
+                            min(100.0, 100.0 * float(log_handle.tell()) / max(1, log_info.file_size)),
+                            1,
+                        ),
+                    )
+
+                # The official GT3X format assigns event type 0x05 to a
+                # two-byte little-endian unsigned lux value.  Check the raw
+                # type before Enum conversion so inspection remains tolerant
+                # of other undocumented event types.
+                if int(event.header.event_type) != 0x05:
+                    continue
+                if not event.is_checksum_valid:
+                    checksum_failures += 1
+                    continue
+
+                event_timestamp = int(event.header.timestamp)
+                if not timestamp_is_plausible(event_timestamp):
+                    invalid_timestamp_lux_records += 1
+                    continue
+                if int(event.header.payload_size) != 2 or len(event.payload) != 2:
+                    malformed_lux_records += 1
+                    continue
+
+                lux_value = float(np.frombuffer(event.payload, dtype="<u2", count=1)[0])
+                accumulator.add(
+                    np.asarray([lux_value], dtype=np.float64),
+                    float(event_timestamp + timezone_offset),
+                    sample_rate=1.0,
+                )
+                lux_records += 1
+
+    light_lux = accumulator.series().astype(float).sort_index()
+    light_available = bool(light_lux.notna().any())
+    metadata.update(
+        {
+            "_processing_engine": "pygt3x_streaming_lux_inspection",
+            "_gt3x_light_inspected": True,
+            "_gt3x_light_available": light_available,
+            "_gt3x_light_record_type": "0x05",
+            "_gt3x_light_source_member": "log.bin",
+            "_gt3x_light_epoch_period_seconds": int(epoch_period),
+            "_gt3x_light_events_read": int(event_count),
+            "_gt3x_lux_records": int(lux_records),
+            "_gt3x_lux_checksum_failures": int(checksum_failures),
+            "_gt3x_malformed_lux_records": int(malformed_lux_records),
+            "_gt3x_invalid_timestamp_lux_records": int(invalid_timestamp_lux_records),
+            "_gt3x_light_missing_epoch_rows": int(light_lux.isna().sum()),
+            "_light_channels": (
+                {"LIGHT": "log10(lux + 1)", "LIGHT_LUX": "lux"}
+                if light_available
+                else {}
+            ),
+        }
+    )
+    update_current_stage(
+        gt3x_light_inspection=True,
+        gt3x_light_events_read=event_count,
+        gt3x_lux_records_found=lux_records,
+        gt3x_light_available=light_available,
+        gt3x_light_scan_progress_percent=100.0,
+    )
+    return light_lux, metadata
+
+
+def prepare_gt3x_light_series(
+    file_path: str,
+    epoch_period: int = DEFAULT_GT3X_LIGHT_EPOCH_PERIOD,
+) -> Tuple[pd.Series, Dict[str, Any]]:
+    """Return streamed GT3X lux epochs and inspection metadata."""
+    try:
+        return _stream_gt3x_light(file_path, epoch_period=int(epoch_period))
+    except GT3XProcessingError:
+        raise
+    except Exception as exc:
+        raise GT3XProcessingError(
+            "Could not inspect this .gt3x file for embedded light measurements. "
+            f"Original error: {exc}"
+        ) from exc
+
+
+def load_gt3x_light_as_raw(
+    file_path: str,
+    epoch_period: int = DEFAULT_GT3X_LIGHT_EPOCH_PERIOD,
+) -> GT3XLightRaw:
+    """Load only GT3X lux records without decoding raw acceleration."""
+    light_lux, summary = prepare_gt3x_light_series(file_path, epoch_period=epoch_period)
+    valid_lux = light_lux.dropna().rename("LIGHT_LUX")
+    channels: Dict[str, pd.Series] = {}
+    if len(valid_lux):
+        channels = {
+            "LIGHT": np.log10(valid_lux + 1.0).rename("LIGHT"),
+            "LIGHT_LUX": valid_lux,
+        }
+    metadata = {
+        "direct_gt3x_light_reader": True,
+        "light_inspected": True,
+        "light_available": bool(channels),
+        "light_channels": summary.get("_light_channels", {}),
+        "gt3x_summary": summary,
+    }
+    placeholder_index = light_lux.index
+    placeholder = pd.Series(
+        np.nan,
+        index=placeholder_index,
+        name="activity_unavailable",
+        dtype=float,
+    )
+    return GT3XLightRaw(
+        light=SimpleLightRecording(channels),
+        metadata=metadata,
+        data=placeholder,
+        name=Path(file_path).stem,
+    )
 
 
 def _stream_gt3x_activity(

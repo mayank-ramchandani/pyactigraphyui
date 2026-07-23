@@ -15,6 +15,7 @@ Captured information includes:
 - suppressed exceptions and tracebacks;
 - converter command, return code, and stdout/stderr tails;
 - QC warnings and cleanup results.
+- `dataQuality` settings and per-day recorded, gap, non-wear, mask, and analyzable hours.
 
 ## Status meanings
 
@@ -132,6 +133,10 @@ resumable Blob upload for that case.
 ### Metric returns `null`
 
 Review the metric stage and suppressed exceptions. The metric can be unsupported for the raw-object type, require more days, require sleep windows, or have returned a non-scalar value that failed validation.
+
+Also inspect `dataQuality`: multi-day rhythm/SRI metrics are unavailable below
+the configured minimum valid-day count, and TST/WASO/sleep efficiency are
+unavailable when no sleep window meets the coverage threshold.
 
 ### RA equals 1
 

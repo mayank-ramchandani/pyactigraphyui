@@ -48,7 +48,8 @@ Progress can include:
 
 The percentage represents pipeline completion, not estimated time remaining. A long raw-decoding stage can dominate elapsed time.
 
-Large activity preview and analysis requests first return a job ID and then poll:
+Large activity preview, light preview, and analysis requests first return a job
+ID and then poll:
 
 ```text
 GET /api/jobs/{job_id}
@@ -129,6 +130,30 @@ deployed `/api/version` response includes
 `/api/jobs/...` endpoints. A 504 on the job-start request means the upload itself
 did not finish within the ingress window; use a faster connection or direct
 resumable Blob upload for that case.
+
+For light preview, also confirm `/api/version` includes
+`background_light_preview_jobs: true` and the frontend calls
+`/api/jobs/light/preview`. The synchronous `/api/light/preview` compatibility
+route can still exceed the ingress deadline for a large supported raw file.
+Selected light metrics should call `/api/jobs/light/analyze`, which uploads and
+loads the recording once for the complete metric selection.
+
+### GT3X reports no embedded light measurements
+
+This is a successful content inspection, not an activity-reader failure. The
+light-only reader scanned the complete `log.bin` and found no checksum-valid,
+plausible type-`0x05` lux records. Light preview and metrics are skipped;
+activity preview and analysis remain available.
+
+When light is expected, inspect the response's `light_detection.gt3x` fields:
+
+- `lux_records` should be greater than zero;
+- `events_read` confirms the log was scanned;
+- `record_type` should be `0x05`;
+- `serial_number` and `device` should match the intended recording.
+
+If the archive contains `lux.bin` instead of `log.bin`, it uses the legacy GT3X
+layout and requires a compatible legacy converter.
 
 ### Metric returns `null`
 

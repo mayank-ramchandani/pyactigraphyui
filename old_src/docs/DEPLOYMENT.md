@@ -11,6 +11,11 @@ VITE_APP_VERSION=<frontend-release>
 ```
 
 Confirm the deployed backend using `GET /api/version` after every release.
+For this revision, confirm:
+
+```json
+"missingness_nonwear_valid_day_qc": true
+```
 
 ## Frontend environment
 
@@ -146,6 +151,7 @@ Expose detailed server errors only during controlled debugging.
 4. Confirm `/api/version` and feature flags.
 5. Deploy the frontend with the correct backend URL.
 6. Run a small golden file.
-7. Run a large-file diagnostic test.
-8. Download and inspect diagnostics.
-9. Update `docs/CHANGELOG.md`.
+7. Confirm the daily QC table on a gapped/non-wear test file.
+8. Run a large-file diagnostic test.
+9. Download and inspect diagnostics.
+10. Update `docs/CHANGELOG.md`.

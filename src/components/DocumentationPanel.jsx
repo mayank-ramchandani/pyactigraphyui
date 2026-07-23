@@ -9,7 +9,7 @@ import { ACTIVITY_MAPPING_OPTIONS } from "./ActivityMappingPanel";
 const SECTIONS = [
   { id: "overview", label: "Overview", keywords: "overview purpose capabilities quick start" },
   { id: "workflow", label: "Workflow", keywords: "steps upload preview cleaning diary analysis export" },
-  { id: "files", label: "File formats", keywords: "bin cwa gt3x agd awd csv xlsx input support" },
+  { id: "files", label: "File formats", keywords: "bin cwa gt3x agd awd csv xlsx input support light lux background" },
   { id: "activity", label: "Activity processing", keywords: "acc enmo mad mapping raw xyz counts calibration filter epoch" },
   { id: "metrics", label: "Metrics", keywords: "ra is iv m10 l5 fragmentation sleep metrics" },
   { id: "sleep", label: "Sleep algorithms", keywords: "cole kripke sadeh oakley scripps crespo roenneberg windows" },
@@ -19,9 +19,9 @@ const SECTIONS = [
 ];
 
 const FILE_ROWS = [
-  ["GENEActiv .bin", "Raw tri-axial acceleration", "Processed acc, MAD, custom ENMO", "Large files use streamed decoding; exact Oxford output can be uploaded as timeSeries.csv.gz."],
+  ["GENEActiv .bin", "Raw tri-axial acceleration and embedded light", "Processed acc, MAD, custom ENMO; LIGHT and LIGHT_LUX", "Large activity and light previews use streamed/background processing."],
   ["Axivity .cwa", "Raw tri-axial acceleration", "Processed acc when conversion is available", "Server conversion depends on the accelerometer/Java environment."],
-  ["ActiGraph .gt3x", "Raw tri-axial acceleration", "Processed acc, MAD, custom ENMO", "Calibration and sample-rate metadata are recorded in diagnostics."],
+  ["ActiGraph .gt3x", "Raw tri-axial acceleration; optional type-0x05 lux records", "Processed acc, MAD, custom ENMO; LIGHT and LIGHT_LUX when present", "Activity and light use separate bounded readers; files without lux skip only the light workflow."],
   ["ActiGraph .agd", "Device activity/counts", "Source/device activity", "Preferred when analysis should remain on ActiGraph count scale."],
   ["Actiwatch .awd and native formats", "Device activity", "Source/device activity", "Availability depends on the matching pyActigraphy reader."],
   ["Oxford timeSeries.csv(.gz)", "Epoch-level acc output", "Existing acc column", "Best choice when exact accProcess output is required."],
@@ -118,7 +118,7 @@ export default function DocumentationPanel({ onClose }) {
         </Card>
         <Card title="Documentation sources">
           <p style={{ marginTop: 0 }}>This in-app guide is the concise user reference. The repository <Code>docs/</Code> directory contains expanded methods, deployment, architecture, troubleshooting, validation, and change-history documentation.</p>
-          <p style={{ marginBottom: 0 }}>Documentation version: <strong>2026-07-22</strong>.</p>
+          <p style={{ marginBottom: 0 }}>Documentation version: <strong>2026-07-23</strong>.</p>
         </Card>
       </div>
     ),
@@ -145,6 +145,12 @@ export default function DocumentationPanel({ onClose }) {
         </Card>
         <Card title="Raw versus processed data">
           Raw X/Y/Z samples are retained as three axes and cannot be passed unchanged to metrics that expect one epoch-level activity series. Raw recordings therefore require a scalar activity mapping such as processed <Code>acc</Code>, MAD, or custom ENMO. Count-based files should normally retain their supplied device activity.
+        </Card>
+        <Card title="Light-source routing">
+          Large light files use background jobs. One successful light-preview load returns the standard plot, available channels, and initial multichannel/RGB sample. Selected light metrics run together after one file inspection/load.
+          <p style={{ marginBottom: 0 }}>
+            Light capability is inspected from file contents. Current-format GT3X files are scanned for official <Code>log.bin</Code> type-<Code>0x05</Code> lux records without decoding X/Y/Z. When present, values are exposed as <Code>LIGHT</Code> (log10(lux + 1)) and <Code>LIGHT_LUX</Code> (lux); when absent, light outputs are skipped and activity remains available.
+          </p>
         </Card>
       </div>
     ),
@@ -215,6 +221,7 @@ export default function DocumentationPanel({ onClose }) {
             <li><strong>Plain 500:</strong> inspect backend/container logs; structured JSON should be returned for ordinary Python exceptions.</li>
             <li><strong>Exit 137/restart:</strong> commonly indicates memory pressure or container termination.</li>
             <li><strong>504 stream timeout:</strong> Azure ended a synchronous request at 240 seconds; confirm the background-job feature and <Code>/api/jobs/...</Code> endpoints are deployed.</li>
+            <li><strong>No GT3X light measurements:</strong> the file was inspected but contained no usable type-<Code>0x05</Code> lux records. Light outputs are skipped; activity remains available.</li>
             <li><strong>Background job not found:</strong> upload and polling reached different replica state; use one active revision/replica or shared persistent <Code>APP_DATA_DIR</Code> storage.</li>
             <li><strong>HTML instead of JSON:</strong> usually a gateway, timeout, or platform error page.</li>
           </ul>
@@ -256,6 +263,9 @@ export default function DocumentationPanel({ onClose }) {
               ["GET /api/progress/{request_id}", "Live progress for an active analysis request."],
               ["GET /api/jobs/{job_id}", "Poll background status and retrieve a completed result."],
               ["POST /api/jobs/preview/basic", "Upload and start an activity-preview job."],
+              ["POST /api/jobs/light/preview", "Start light preview and return channels plus the initial multichannel sample."],
+              ["POST /api/jobs/light/rgb-preview", "Start a resampled multichannel/RGB light-preview job."],
+              ["POST /api/jobs/light/channels", "Discover embedded light channels through the background queue."],
               ["POST /api/jobs/analyze/basic", "Upload and start preprocessing, metrics, sleep analysis, QC, and diagnostics."],
               ["POST /api/feedback", "Store user feedback in APP_DATA_DIR."],
             ]}
