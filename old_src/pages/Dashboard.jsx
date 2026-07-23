@@ -232,6 +232,7 @@ export default function Dashboard() {
       apply: true,
       manualIntervals: [],
       respectNonwear: true,
+      customizeDataQualityThresholds: false,
       minimumValidHoursPerDay: 16,
       minimumValidDaysForRhythm: 2,
       minimumSleepWindowCoverage: 0.8,

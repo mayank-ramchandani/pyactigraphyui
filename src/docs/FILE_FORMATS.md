@@ -1,6 +1,7 @@
 # File formats and signal availability
 
-Support depends on both the file extension and the actual columns or channels available in the file.
+Page 1 imports **actigraphy files only**. Optional start/stop and masking files are added on page 5, sleep diaries on page 6, and separate light or future temperature/other-sensor files on page 7. Support depends on both the extension and the actual columns or channels available in the file.
+
 
 | Format | Typical content | Default analysis basis | Optional mappings | Important notes |
 |---|---|---|---|---|

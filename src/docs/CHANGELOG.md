@@ -1,5 +1,17 @@
 # Change log
 
+## 2026-07-23 — Ten-page workflow and full-content documentation
+
+- Reorganized the interface into the requested ten-page process from actigraphy import through export.
+- Made sidebar pages 2–9 directly clickable after file import; Export unlocks only after successful result generation.
+- Moved valid-day, consecutive-day, sleep-window coverage, and non-wear choices to the Pre-processing page.
+- Limited the activity-estimation page to four options: recommended/automatic, processed acceleration, MAD, and ENMO.
+- Separated cleaning/masking, sleep-wake classification, other sensors, metric setup, result generation, and export into dedicated pages.
+- Added an information explanation for minimum sleep-window coverage.
+- Expanded in-app search to index complete narrative, workflow, format, metric, algorithm, family, diagnostic, limitation, and developer content.
+- Made the GitHub documentation link persistently visible with an exact `VITE_GITHUB_DOCS_URL` override and repository fallback.
+- Updated the in-app guide, GitHub Markdown documentation, environment example, and validation guidance.
+
 ## 2026-07-23 — Optional preprocessing validity thresholds
 
 - Kept the project standards active by default: 16 analyzable hours per valid day, two consecutive valid days for multi-day rhythm/SRI metrics, and 80% sleep-window coverage.

@@ -246,7 +246,7 @@ function DataQualityCard({ dataQuality }) {
         <InfoBubble text="Recorded hours exclude true recording gaps. Analyzable hours additionally exclude detected/mapped non-wear and manual masks. Invalid days remain on the timeline as missing and do not contribute zero activity." />
       </div>
       <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}>
-        Valid days: <strong>{dataQuality.valid_days ?? 0}</strong> of {dataQuality.calendar_days ?? 0}; minimum {settings.minimum_valid_hours_per_day ?? 16} h/day. Completely unrecorded days: {dataQuality.completely_missing_days ?? 0}. Rhythm/SRI minimum: {settings.minimum_valid_days_for_rhythm ?? 2} valid days.
+        Valid days: <strong>{dataQuality.valid_days ?? 0}</strong> of {dataQuality.calendar_days ?? 0}; minimum {settings.minimum_valid_hours_per_day ?? 16} h/day. Longest consecutive run: <strong>{dataQuality.longest_consecutive_valid_days ?? dataQuality.valid_days ?? 0}</strong> day(s). Completely unrecorded days: {dataQuality.completely_missing_days ?? 0}. Rhythm/SRI minimum: {settings.minimum_consecutive_valid_days_for_rhythm ?? settings.minimum_valid_days_for_rhythm ?? 2} consecutive valid days.
       </div>
       <div style={{ overflowX: "auto", maxHeight: 420, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>

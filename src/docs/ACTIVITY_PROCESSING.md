@@ -1,120 +1,97 @@
 # Activity processing and mapping
 
+Activity mapping is configured on **page 3: Estimating Activity Metric / Magnitude of Acceleration**. The selected mapping becomes the initial setting for **page 4: Activity Preview** and the basis supplied to selected rest/activity metrics.
+
 ## Terminology
 
 ### Source/device activity
 
-An existing one-dimensional activity or count series supplied by the recording format. Examples include `.agd` activity counts and native Actiwatch activity.
+An existing one-dimensional activity or count series supplied by the recording format, such as ActiGraph `.agd` counts or native Actiwatch activity.
 
 ### Raw XYZ acceleration
 
-High-frequency X/Y/Z samples, usually expressed in gravitational units after calibration. These axes cannot be supplied unchanged to metrics expecting one activity value per epoch.
+High-frequency X/Y/Z samples, usually expressed in gravitational units after calibration. The three axes cannot be supplied unchanged to metrics that require one activity value per epoch.
 
 ### Processed `acc`
 
-The recommended raw-acceleration basis. Uploaded Oxford time-series files use their existing `acc` column. Direct memory-safe processing follows this sequence where supported:
+The recommended raw-acceleration basis. Uploaded Oxford time-series files use their existing `acc` column. The compatible direct pathway follows this sequence where supported:
 
 1. obtain calibrated X/Y/Z samples;
-2. compute vector magnitude;
+2. calculate vector magnitude;
 3. apply a fourth-order 20 Hz low-pass filter;
 4. subtract 1 g;
 5. truncate negative values to zero;
 6. average into the selected epochs;
 7. express the result in milligravity.
 
-Diagnostics identify the exact engine used, such as:
-
-- `accelerometer_timeseries`;
-- `streaming_calibrated_filtered_vm_acc`;
-- `pygt3x_low_level_streaming_epoch_aggregation`.
-
-### GT3X bounded-memory processing
-
-GT3X `log.bin` activity events are decoded in bounded chunks. Calibrated X/Y/Z
-samples are immediately reduced into the requested epoch-level processed `acc`,
-MAD, ENMO, or supported ActiGraph-count basis, then released. The loader never
-calls `FileReader.to_pandas()` for the complete recording.
-
-Event timestamps are converted to the fixed timezone recorded in `info.txt`.
-Real recording gaps remain missing epochs; they are not compressed out of the
-timeline or treated as zero activity. Checksum failures and timestamps outside
-the metadata-defined recording period are skipped and counted in diagnostics.
-
-Streaming ActiGraph-style counts are supported for 30 Hz GT3X recordings. If a
-different sampling rate is requested with the source/count mapping, the loader
-records the reason and resolves to processed acceleration rather than using a
-boundary-inaccurate count approximation.
+Diagnostics identify the exact engine, for example `accelerometer_timeseries`, `streaming_calibrated_filtered_vm_acc`, or `pygt3x_low_level_streaming_epoch_aggregation`.
 
 ### MAD
 
-Mean amplitude deviation of vector magnitude within each epoch. It summarizes within-epoch movement variability and is expressed in mg in the application.
+Mean amplitude deviation of vector magnitude within each epoch. It represents within-epoch movement variability and is expressed in mg in this application.
 
 ### Custom ENMO
 
 A legacy direct calculation based on positive vector magnitude above 1 g. It is retained for comparison but is not the recommended default when processed `acc` is available.
 
-## Default mapping rules
+## Four user-facing options
 
-```text
-Does the file provide a source/device activity series?
-  Yes → use source/device activity.
-  No  → does it provide supported raw XYZ?
-          Yes → use processed acc.
-          No  → activity analysis is unavailable until a valid activity column is mapped.
-```
+| Option | Resolution behaviour |
+|---|---|
+| Recommended source / processed `acc` | Uses source/device activity when it exists; raw `.bin`, `.cwa`, and `.gt3x` use epoch-level processed `acc`. |
+| Processed acceleration (`acc`) | Explicitly requests Oxford `acc` or the compatible memory-safe processed-acceleration path. |
+| MAD | Uses or derives mean amplitude deviation when valid XYZ or a MAD column is available. |
+| Custom ENMO (legacy) | Uses or derives the legacy ENMO mapping for comparison. |
 
-Preview mapping and analysis mapping are independent.
+The backend may record a requested and resolved mapping when a requested signal is unavailable and a documented compatible fallback is required.
+
+## GT3X bounded-memory processing
+
+GT3X `log.bin` activity events are decoded in bounded chunks. Calibrated X/Y/Z samples are immediately reduced into the requested epoch-level processed `acc`, MAD, ENMO, or supported count basis, then released. The loader does not call `FileReader.to_pandas()` for the full recording.
+
+Event timestamps use the fixed timezone recorded in `info.txt`. Real gaps remain missing epochs; they are not compressed or converted to zero. Checksum failures and timestamps outside the metadata-defined range are skipped and counted in diagnostics.
+
+Streaming ActiGraph-style counts are supported for compatible 30 Hz recordings. When an exact count pathway is not supported, the reason and resolved mapping are reported.
 
 ## Epoch processing
 
-Chunked raw processing must preserve filter and epoch state between chunks. An unfinished epoch at the end of one chunk must be continued with samples from the next chunk. Gaps should remain missing rather than being interpreted as inactivity.
-
-Diagnostics should report:
+Chunked processing must preserve filter and epoch state between chunks. An unfinished epoch at a chunk boundary continues with the next samples. Diagnostics should report:
 
 - raw sample rate;
 - output epoch duration;
 - expected samples per epoch;
 - incomplete epochs;
-- missing samples or gaps;
+- gaps or missing samples;
 - calibration status;
 - input and output units;
 - requested and resolved mapping.
 
 ## Common missing-data and valid-day stage
 
-After the reader produces its scalar epoch series and support-file intervals
-are parsed, every file follows the same sequence:
+After a scalar epoch series is produced and page-5 support intervals are parsed, every file follows the same sequence:
 
 1. regularize the timestamp index at the detected epoch duration;
-2. represent absent/non-finite epochs as missing;
-3. combine a reader/mapped wear mask, when requested, with manual/uploaded masks;
-4. calculate recorded, gap, detected-non-wear, manual-mask, and analyzable hours
-   for each calendar day;
-5. fully mask days below the valid-day threshold (16 h by default);
-6. activate the final mask for pyActigraphy resampling and metrics;
-7. reuse the same validity mask for sleep scoring and sleep-window coverage.
+2. represent absent or non-finite epochs as missing;
+3. apply start/stop limits;
+4. combine reader/mapped non-wear with manual or uploaded masks when requested;
+5. calculate recorded, gap, non-wear, manual-mask, and analyzable hours for each calendar day;
+6. mask days below the page-2 valid-day threshold;
+7. activate the final mask for metrics and sleep scoring;
+8. reuse the same validity state for sleep-window coverage.
 
-This prevents an all-missing resampling bin from becoming zero activity.
-Genuine recorded zeros remain valid observations. The API returns the daily
-table under `dataQuality.daily_qc`; the Results page and JSON exports retain it.
+This prevents an all-missing resampling bin from becoming zero activity. Genuine recorded zeros remain valid observations.
 
-## Use with metrics
+## Multi-day eligibility
 
-The resolved scalar activity series becomes `raw.data` for selected pyActigraphy analyses. This is appropriate computationally for RA, M10/L5, IS, IV, activity profiles, and compatible fragmentation calculations.
-
-Multi-day rhythm metrics are gated by the configured minimum number of valid
-consecutive days (a run of two by default). Invalid days stay masked on the original time axis, so
-transitions are not created across recording gaps.
-
-Scientific comparability still depends on signal scale and preprocessing. A metric calculated from device counts is not numerically interchangeable with the same metric calculated from mg.
+IS, IV, ISm, IVm, ISp, IVp, RAp, and SRI are gated by the configured longest consecutive valid-day run, two days by default. Invalid or missing days stay on the time axis so artificial transitions are not created across gaps.
 
 ## Binarization and thresholds
 
-The default pyActigraphy threshold of 4 is a count-scale convention and should not automatically be applied as 4 mg. For processed `acc`, MAD, and ENMO:
+A pyActigraphy threshold such as 4 may be a count-scale convention and must not automatically be interpreted as 4 mg. For processed `acc`, MAD, and ENMO:
 
-- start with binarization disabled;
-- report the continuous units;
-- define any threshold explicitly and justify it;
-- retain the threshold in exports and methods text.
+- begin with binarization disabled unless a validated protocol specifies otherwise;
+- report continuous units;
+- define and justify any threshold;
+- retain threshold and binarization settings in exports.
 
-A binarized L5 of zero can produce RA = 1 even when the continuous activity profile has nonzero night-time movement.
+A binarized L5 of zero can produce RA = 1 even when the continuous profile contains nonzero night-time movement.

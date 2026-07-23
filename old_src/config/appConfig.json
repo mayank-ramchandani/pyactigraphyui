@@ -81,8 +81,8 @@
     {
       "id": "7",
       "key": "cleaning",
-      "title": "Cleaning & Masking",
-      "description": "Exclude invalid or non-wear periods before analysis."
+      "title": "Pre-processing: Cleaning & Masking",
+      "description": "Apply non-wear, masking, missing-data, and valid-day rules before analysis."
     },
     {
       "id": "8",
@@ -128,7 +128,7 @@
     },
     "cleaning": {
       "enabled": true,
-      "title": "7. Cleaning & Masking"
+      "title": "7. Pre-processing: Cleaning & Masking"
     },
     "sleepDiary": {
       "enabled": true,

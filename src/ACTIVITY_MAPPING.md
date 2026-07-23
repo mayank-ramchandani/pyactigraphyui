@@ -1,25 +1,14 @@
-# Activity basis and ENMO/MAD alternatives
+# Activity metric / acceleration-magnitude selection
 
-The web tool accepts an `activityMapping` value of:
+This top-level file is retained for compatibility with older repository links. The current detailed documentation is [docs/ACTIVITY_PROCESSING.md](docs/ACTIVITY_PROCESSING.md).
 
-- `auto` — recommended. Use source/device activity when it exists; otherwise use processed epoch-level acceleration (`acc`) for raw X/Y/Z files.
-- `accelerometer` — explicitly require the processed `acc` basis in mg.
-- `original` — prefer the file's source/device activity series.
-- `mad` — calculate or select mean amplitude deviation in mg.
-- `enmo` — retain the direct/custom ENMO mapping for backwards-compatible comparisons.
+The setting appears on **page 3: Estimating Activity Metric / Magnitude of Acceleration** and has four public choices:
 
-## Supported inputs
+1. `auto` — recommended/automatic. Preserve a suitable source/device activity series when present; otherwise resolve an appropriate processed acceleration basis for compatible raw X/Y/Z files.
+2. `accelerometer` — explicitly request processed epoch-level acceleration (`acc`), typically reported in mg.
+3. `mad` — mean amplitude deviation, reported in mg when derived from calibrated acceleration.
+4. `enmo` — Euclidean Norm Minus One, using the application's documented custom ENMO implementation/available source column.
 
-| Input | Recommended `auto` | Processed `acc` | Source activity | MAD | Custom ENMO |
-|---|---|---|---|---|---|
-| Raw GENEActiv `.bin` | Processed `acc` | Yes | No native count channel | Yes | Yes |
-| Raw Axivity `.cwa` | Oxford `accProcess` `acc` | Yes | No native count channel | Only if supplied | Only if supplied |
-| Raw ActiGraph `.gt3x` | Processed `acc` | Yes | ActiGraph-style counts when available | Yes | Yes |
-| Oxford `*timeSeries.csv(.gz)` | `acc` column | Yes | If supplied | If supplied | If supplied |
-| Counts-only pyActigraphy formats | Source activity | No | Yes | No | No |
+There is no separate `original` button in the current UI. Source/device activity remains reachable through `auto` for compatible count-based or native files. The requested and resolved basis, engine, source column, units, and epoch are recorded in preview/results diagnostics.
 
-For large GENEActiv and GT3X files, direct readers stream calibrated raw data into epochs without building a whole-recording X/Y/Z DataFrame. GT3X device-local timestamps and real gaps are preserved. To reproduce a particular Oxford `accProcess` release exactly, upload that release's generated `*timeSeries.csv.gz`; the app uses its `acc` column directly.
-
-Preview mapping and analysis mapping are independent. The resolved mapping, source/engine, units, and epoch are returned in previews, results, and diagnostics.
-
-Count thresholds are not automatically equivalent to mg thresholds. Continuous non-binarized analysis should be considered when processed acceleration, MAD, or custom ENMO is used.
+Page 4 previews activity using the selected initial basis, while page 8 controls metric selection and page 9 runs the analysis. Thresholds defined on a count scale must not be assumed equivalent to mg-scale processed acceleration, MAD, or ENMO.

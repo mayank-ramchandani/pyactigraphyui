@@ -137,11 +137,15 @@ export default function MetricsPanel({
   previewData = null,
   analysisWindowSettings = {},
   setAnalysisWindowSettings = () => {},
+  mode = "all",
 }) {
   const [detailsAlgorithmId, setDetailsAlgorithmId] = useState(null);
   const [expandedMetric, setExpandedMetric] = useState(null);
   const [expandedMetricGroup, setExpandedMetricGroup] = useState("rest_activity_group");
   const [showSleepWindowAdvanced, setShowSleepWindowAdvanced] = useState(false);
+  const showSleepSections = mode === "all" || mode === "sleep";
+  const showMetricSections = mode === "all" || mode === "metrics";
+  const showAnalysisWindowSection = mode === "all";
 
   const resolvedInputType = inputType || "csv";
   const detectedInputLabel = INPUT_TYPE_LABELS[resolvedInputType] || resolvedInputType;
@@ -439,7 +443,11 @@ export default function MetricsPanel({
     >
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        Choose the sleep/rest algorithm first, then select either family-level analysis or metric-level analysis.
+        {mode === "sleep"
+          ? "Choose the sleep/rest classification algorithm and the source of sleep windows."
+          : mode === "metrics"
+          ? "Choose analysis families or individual metrics. Results are generated only on the next page."
+          : "Choose the sleep/rest algorithm first, then select either family-level analysis or metric-level analysis."}
       </p>
 
       <div
@@ -457,6 +465,8 @@ export default function MetricsPanel({
         Detected input type: <strong>{detectedInputLabel}</strong>.
       </div>
 
+      {showSleepSections && (
+        <>
       <div style={{ marginTop: 8, marginBottom: 24 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Sleep / rest-detection algorithms</div>
         <div
@@ -674,7 +684,10 @@ export default function MetricsPanel({
           </div>
         )}
       </div>
+        </>
+      )}
 
+      {showAnalysisWindowSection && (
       <div
         style={{
           border: "1px solid #e0e7ff",
@@ -842,7 +855,10 @@ export default function MetricsPanel({
           </div>
         )}
       </div>
+      )}
 
+      {showMetricSections && (
+        <>
       {analysisMode !== "standard" && (
         <div
           style={{
@@ -1145,7 +1161,10 @@ export default function MetricsPanel({
         </div>
       )}
 
-      {detailsAlgorithm && (
+        </>
+      )}
+
+      {showSleepSections && detailsAlgorithm && (
         <div
           role="presentation"
           onClick={() => setDetailsAlgorithmId(null)}

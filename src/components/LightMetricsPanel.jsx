@@ -393,7 +393,7 @@ export default function LightMetricsPanel({
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>Light Analysis Setup</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        Select light metrics in the same grouped workflow as activity and sleep metrics. Optional settings stay collapsed until the user opens them.
+        Select light metrics for the Other Sensors page. Optional settings stay collapsed until the user opens them; selected light metrics run with the main analysis on page 9.
       </p>
 
       {!lightFile && (

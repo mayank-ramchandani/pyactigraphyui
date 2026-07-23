@@ -1,17 +1,17 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "appName": "Actigraphy Dashboard",
   "layout": {
     "sidebarEnabled": true,
     "sidebarPosition": "left",
     "panelOrder": [
       "fileSelection",
-      "csvMapping",
+      "preprocessing",
+      "activityMapping",
       "preview",
-      "lightPreview",
-      "startStop",
       "cleaning",
-      "sleepDiary",
+      "sleepWake",
+      "otherSensors",
       "metrics",
       "results",
       "export"
@@ -44,117 +44,134 @@
     },
     "documentationCenter": {
       "enabled": true,
-      "description": "In-app user, methods, diagnostics, limitations, and developer documentation."
+      "description": "In-app user, methods, diagnostics, limitations, and developer documentation with full-content search."
     }
   },
   "workflow": [
     {
       "id": "1",
       "key": "fileSelection",
-      "title": "Select Files",
-      "description": "Upload actigraphy and optional supporting files."
+      "title": "Importing Actigraphy Files",
+      "description": "Upload one or more actigraphy recordings. Optional support and sensor files are added in their relevant later steps."
     },
     {
       "id": "2",
-      "key": "csvMapping",
-      "title": "Map CSV Columns",
-      "description": "Assign timestamp, activity, light, temperature, and non-wear columns for CSV uploads."
+      "key": "preprocessing",
+      "title": "Pre-processing",
+      "description": "Review or customize valid-day hours, consecutive-day requirements, sleep-window coverage, and non-wear handling."
     },
     {
       "id": "3",
-      "key": "preview",
-      "title": "Preview Activity",
-      "description": "Inspect the loaded activity recording before cleaning and analysis."
+      "key": "activityMapping",
+      "title": "Estimating Activity Metric",
+      "description": "Choose how raw acceleration or device activity is converted into the epoch-level activity series used for analysis."
     },
     {
       "id": "4",
-      "key": "lightPreview",
-      "title": "Preview Light",
-      "description": "Inspect light data if present in the recording or separate light file."
+      "key": "preview",
+      "title": "Activity Preview",
+      "description": "Inspect the selected activity basis, dates, gaps, and recording structure before defining intervals."
+    },
+    {
+      "id": "5",
+      "key": "cleaning",
+      "title": "Cleaning and Masking",
+      "description": "Apply per-file start/stop limits, uploaded masks, detected non-wear, and custom plot-selected exclusions."
     },
     {
       "id": "6",
-      "key": "startStop",
-      "title": "Start / Stop",
-      "description": "Attach files or define intervals for the true effective recording interval."
+      "key": "sleepWake",
+      "title": "Sleep-wake Classification",
+      "description": "Add sleep diaries or custom sleep windows and select the sleep/rest classification algorithm."
     },
     {
       "id": "7",
-      "key": "cleaning",
-      "title": "Pre-processing: Cleaning & Masking",
-      "description": "Apply non-wear, masking, missing-data, and valid-day rules before analysis."
+      "key": "otherSensors",
+      "title": "Other Sensors",
+      "description": "Preview and configure light analysis; attach temperature or other sensor files for future support."
     },
     {
       "id": "8",
-      "key": "sleepDiary",
-      "title": "Sleep Diary",
-      "description": "Attach reported sleep timing and naps if available."
+      "key": "metrics",
+      "title": "Analysis Set-up",
+      "description": "Choose analysis families or individual metrics and configure their parameters."
     },
     {
       "id": "9",
-      "key": "metrics",
-      "title": "Algorithms & Analysis Setup",
-      "description": "Choose algorithms first, then family-level or metric-level analysis."
+      "key": "results",
+      "title": "Generate Results",
+      "description": "Run the selected analyses and view results, plots, quality-control messages, CSV-ready tables, and JSON diagnostics."
     },
     {
       "id": "10",
-      "key": "results",
-      "title": "Generate Results",
-      "description": "Create summaries and output tables."
-    },
-    {
-      "id": "11",
       "key": "export",
       "title": "Export Outputs",
-      "description": "Save tables and report-ready outputs."
+      "description": "Download tables, plots, configuration, quality-control information, and diagnostic outputs."
     }
   ],
   "panels": {
     "fileSelection": {
       "enabled": true,
-      "title": "1. File Selection"
+      "title": "1. Importing Actigraphy Files"
     },
-    "csvMapping": {
+    "preprocessing": {
       "enabled": true,
-      "title": "2. CSV Column Mapping"
+      "title": "2. Pre-processing"
+    },
+    "activityMapping": {
+      "enabled": true,
+      "title": "3. Estimating Activity Metric / Magnitude of Acceleration"
     },
     "preview": {
       "enabled": true,
-      "title": "3. Activity Preview"
-    },
-    "lightPreview": {
-      "enabled": true,
-      "title": "4. Light Preview"
+      "title": "4. Activity Preview"
     },
     "cleaning": {
       "enabled": true,
-      "title": "7. Pre-processing: Cleaning & Masking"
-    },
-    "sleepDiary": {
-      "enabled": true,
-      "title": "8. Sleep Diary"
+      "title": "5. Cleaning and Masking"
     },
     "startStop": {
       "enabled": true,
-      "title": "6. Start / Stop"
+      "title": "Recording Start / Stop"
+    },
+    "masking": {
+      "enabled": true,
+      "title": "Masking and Non-wear"
+    },
+    "sleepWake": {
+      "enabled": true,
+      "title": "6. Sleep-wake Classification"
+    },
+    "sleepDiary": {
+      "enabled": true,
+      "title": "Sleep Diary and Custom Sleep Windows"
+    },
+    "otherSensors": {
+      "enabled": true,
+      "title": "7. Other Sensors"
+    },
+    "lightPreview": {
+      "enabled": true,
+      "title": "Light Data Preview"
     },
     "metrics": {
       "enabled": true,
-      "title": "9. Algorithms, Analysis Setup, and Light Analysis"
+      "title": "8. Analysis Set-up"
     },
     "results": {
       "enabled": true,
-      "title": "10. Generate Results"
+      "title": "9. Generate and View Results"
     },
     "export": {
       "enabled": true,
-      "title": "11. Export Outputs"
+      "title": "10. Export Outputs"
     }
   },
   "uiText": {
     "maskingHelp": "Masking excludes invalid or non-wear periods so they do not influence analysis.",
     "diaryHelp": "Sleep diary files contain reported sleep timing, naps, or in-bed intervals.",
-    "sstHelp": "Start/Stop files define the actual effective recording interval, such as when the device was really worn.",
-    "algorithmHelp": "All scoring algorithms return a binary rest/activity time series and should be selected before sleep-family metrics."
+    "sstHelp": "Start/stop files define the actual effective recording interval, such as when the device was really worn.",
+    "algorithmHelp": "Sleep/rest algorithms classify the selected activity series and should be chosen before generating sleep-family metrics.",
+    "sleepCoverageHelp": "Minimum sleep-window coverage is the proportion of expected epochs inside a sleep window that remain recorded and scorable after gaps, non-wear, and masks. Windows below the threshold are excluded from sleep summaries."
   }
 }

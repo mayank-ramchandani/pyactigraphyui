@@ -754,6 +754,34 @@ def _minimum_valid_days_for_rhythm(raw):
         return 2
 
 
+def _longest_consecutive_days(days):
+    normalized = sorted({pd.Timestamp(day).normalize() for day in days})
+    if not normalized:
+        return 0
+    longest = current = 1
+    for previous, day in zip(normalized, normalized[1:]):
+        if day - previous == pd.Timedelta(days=1):
+            current += 1
+            longest = max(longest, current)
+        else:
+            current = 1
+    return longest
+
+
+def _consecutive_valid_day_count(raw):
+    try:
+        return int(getattr(raw, "_ui_longest_consecutive_valid_days"))
+    except Exception:
+        mask = getattr(raw, "_ui_analysis_valid_mask", None)
+        if isinstance(mask, pd.Series) and isinstance(mask.index, pd.DatetimeIndex):
+            valid_dates = mask.loc[mask.astype(bool)].index.normalize().unique()
+            return _longest_consecutive_days(valid_dates)
+        series = _get_activity_series(raw)
+        if series is None or len(series) == 0 or not isinstance(series.index, pd.DatetimeIndex):
+            return 0
+        return _longest_consecutive_days(series.dropna().index.normalize().unique())
+
+
 def _activity_validity_at_score_frequency(raw, score_index):
     mask = getattr(raw, "_ui_analysis_valid_mask", None)
     if not isinstance(mask, pd.Series) or not isinstance(mask.index, pd.DatetimeIndex):
@@ -1219,7 +1247,7 @@ def compute_metric(raw, metric_id, params=None):
     params = params or {}
 
     if metric_id in {"is", "iv", "ism", "ivm", "isp", "ivp", "rap"}:
-        if _valid_day_count(raw) < _minimum_valid_days_for_rhythm(raw):
+        if _consecutive_valid_day_count(raw) < _minimum_valid_days_for_rhythm(raw):
             return None
 
     if metric_id == "ra":
@@ -1325,13 +1353,14 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
                 details={"metric_id": "sri", "algorithm": algorithm},
             ) as stage:
                 algo_key = ALGO_TO_SRI_KEY.get(algorithm)
-                if _valid_day_count(raw) < _minimum_valid_days_for_rhythm(raw):
+                if _consecutive_valid_day_count(raw) < _minimum_valid_days_for_rhythm(raw):
                     results["sri"] = None
                     mark_current_stage(
                         "warning",
-                        outcome="insufficient_valid_days",
+                        outcome="insufficient_consecutive_valid_days",
                         valid_days=_valid_day_count(raw),
-                        minimum_valid_days=_minimum_valid_days_for_rhythm(raw),
+                        longest_consecutive_valid_days=_consecutive_valid_day_count(raw),
+                        minimum_consecutive_valid_days=_minimum_valid_days_for_rhythm(raw),
                     )
                 elif algo_key is None or scorer is None:
                     results["sri"] = None
@@ -1667,9 +1696,9 @@ def _slice_raw_to_window(raw, start, stop):
         if isinstance(validity, pd.Series):
             scoped_validity = validity.loc[start:stop]
             window_raw._ui_analysis_valid_mask = scoped_validity
-            window_raw._ui_valid_day_count = int(
-                scoped_validity.loc[scoped_validity].index.normalize().nunique()
-            )
+            scoped_valid_dates = scoped_validity.loc[scoped_validity].index.normalize().unique()
+            window_raw._ui_valid_day_count = int(len(scoped_valid_dates))
+            window_raw._ui_longest_consecutive_valid_days = _longest_consecutive_days(scoped_valid_dates)
     except Exception:
         pass
 

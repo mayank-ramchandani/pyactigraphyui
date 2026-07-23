@@ -69,11 +69,11 @@ Intervals use full timestamps. An interval beginning at 23:00 and ending at 02:0
 
 Mask invalid periods, confirmed non-wear, device artefacts, or other intervals that should not contribute to analysis. Do not silently replace missing or masked data with zero activity.
 
-The same page controls the shared data-quality rules:
+The same page controls the shared data-quality rules. The project standards remain active unless **Modify the standard data-quality thresholds** is enabled:
 
 - **Respect detected non-wear** uses a source/native/mapped mask when available;
 - **Minimum valid hours per day** defaults to 16 h;
-- **Minimum valid days for rhythm/SRI** defaults to 2 days;
+- **Minimum consecutive valid days for rhythm/SRI** defaults to 2 days;
 - **Minimum sleep-window coverage** defaults to 0.80 (80%).
 
 These rules run independently for every selected file. Uploaded and manual

@@ -57,14 +57,11 @@ activity files:
 - days below the configured analyzable-hours threshold remain in the daily QC
   table but are fully excluded from metrics.
 
-The default valid-day rule is at least **16 analyzable hours per calendar day**.
-This matches the existing GGIR/CAN-BIND convention used by this project, but it
-is configurable and should be justified for each study.
+The default valid-day rule is at least **16 analyzable hours per calendar day**. It is shown on page 2 and remains active unless the user explicitly enables custom preprocessing thresholds. This matches the existing GGIR/CAN-BIND convention used by this project, but any change should be justified and reported for the study.
 
-IS, IV, ISm, IVm, ISp, IVp, RAp, and SRI require a run of at least two consecutive valid days by default. SRI additionally uses only valid scored epoch pairs exactly 24 hours apart.
+IS, IV, ISm, IVm, ISp, IVp, RAp, and SRI require a run of at least two consecutive valid days by default. The backend uses the longest uninterrupted calendar-day run, not merely the total count of valid days. SRI additionally uses only valid scored epoch pairs exactly 24 hours apart.
 
-TST, WASO, and sleep efficiency use only sleep/rest windows meeting the
-configured recorded/scored coverage fraction (default **0.80**). Missing epochs
+TST, WASO, and sleep efficiency use only sleep/rest windows meeting the page-2 configured recorded/scored coverage fraction (default **0.80**). Missing epochs
 are neither sleep nor wake. Sleep efficiency uses observed/scored minutes as
 its denominator; scheduled diary/rest-window duration is reported separately.
 
@@ -109,6 +106,9 @@ Before promoting a build:
 - confirm `/api/version` and commit ID;
 - compile all Python modules;
 - bundle the frontend;
+- verify all ten sidebar steps and direct access to pages 2–9 after file import;
+- verify page 10 remains locked until a successful page-9 result run;
+- verify full-content documentation search and the clickable GitHub docs link;
 - run golden-file tests;
 - test partial metric failure;
 - test a vector-returning metric (`ISp`, `IVp`, or `RAp`);

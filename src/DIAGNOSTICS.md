@@ -1,5 +1,9 @@
 # Structured analysis diagnostics
 
+## Workflow location
+
+Diagnostics, daily recording quality, and sleep-window coverage decisions are displayed with generated results on page 9. Page 10 provides configured downloads after a successful run. The preprocessing settings referenced by diagnostics come from page 2, cleaning/masks from page 5, and sleep-window/algorithm settings from page 6.
+
 The activity/sleep and light-analysis endpoints now return a `diagnostics` object with every success or backend-generated failure response.
 
 ## What is captured

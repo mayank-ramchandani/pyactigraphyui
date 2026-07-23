@@ -14,12 +14,6 @@ export const ACTIVITY_MAPPING_OPTIONS = [
     description: "Uses the Oxford accelerometer `acc` column when available; large raw files use the compatible memory-safe processed-acceleration path recorded in diagnostics.",
   },
   {
-    id: "original",
-    label: "Source / device activity",
-    units: "",
-    description: "Uses activity counts or another activity series already supplied by the file. Raw files without a native activity channel may resolve to processed acceleration instead.",
-  },
-  {
     id: "mad",
     label: "MAD",
     units: "mg",
@@ -43,6 +37,7 @@ export default function ActivityMappingPanel({
   onChange = () => {},
   compact = false,
   context = "analysis",
+  title = "",
 }) {
   const selected = ACTIVITY_MAPPING_OPTIONS.find((item) => item.id === value) || ACTIVITY_MAPPING_OPTIONS[0];
   const isPreview = context === "preview";
@@ -56,13 +51,14 @@ export default function ActivityMappingPanel({
         background: "#eff6ff",
       }}
     >
+      {title && !compact && <h2 style={{ marginTop: 0, marginBottom: 10 }}>{title}</h2>}
       <div style={{ fontWeight: 800, marginBottom: 6 }}>
-        {isPreview ? "Preview activity signal" : "Analysis activity basis"}
+        {isPreview ? "Preview activity signal" : "Activity metric / magnitude of acceleration"}
       </div>
       <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
         {isPreview
           ? "This only controls the plotted preview. It does not change the activity basis selected later for analysis."
-          : "The selected activity series becomes the basis for all chosen rest/activity metrics. Preview settings are independent."}
+          : "Choose one of four supported activity-basis options. The selected epoch-level series becomes the basis for all chosen rest/activity metrics and is also used as the initial Activity Preview setting."}
       </div>
       <select
         value={value}

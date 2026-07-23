@@ -1,6 +1,12 @@
 # Metrics and algorithms
 
-The metric and algorithm registries are the machine-readable source for labels, descriptions, default parameters, and backend method names:
+The current workflow separates sleep-wake classification from metric selection:
+
+- **page 6** selects sleep diaries/custom windows, automatic window estimation, and the sleep/rest algorithm;
+- **page 8** selects analysis families or individual metrics and their parameters;
+- **page 9** runs the analysis and displays results.
+
+The machine-readable registries are:
 
 - `config/metricRegistry.json`
 - `config/algorithmRegistry.json`
@@ -15,7 +21,7 @@ The metric and algorithm registries are the machine-readable source for labels, 
 | IS | Interdaily stability, describing consistency of the 24-hour pattern across days. |
 | IV | Intradaily variability, describing fragmentation or transitions within the day. |
 | ISm / IVm | Mean forms returned by the corresponding pyActigraphy methods. |
-| ISp / IVp / RAp | Period-specific outputs that may be vectors rather than scalar values. |
+| ISp / IVp / RAp | Period-specific outputs that may be vectors rather than scalars. |
 
 ### Relative amplitude
 
@@ -23,13 +29,7 @@ The metric and algorithm registries are the machine-readable source for labels, 
 RA = (M10 - L5) / (M10 + L5)
 ```
 
-An RA of exactly 1 is mathematically possible when L5 is zero and M10 is positive. Interpretation requires reviewing:
-
-- M10 and L5 values;
-- M10/L5 start times;
-- activity basis and units;
-- binarization and threshold;
-- missing-data and masking decisions.
+RA can equal 1 when L5 is zero and M10 is positive. Review M10/L5 values and start times, activity mapping, units, binarization, thresholds, gaps, non-wear, and masks before interpretation.
 
 ## Fragmentation metrics
 
@@ -38,80 +38,64 @@ An RA of exactly 1 is mathematically possible when L5 is zero and M10 is positiv
 | kRA | Transition probability from rest to activity under the selected threshold/scoring setup. |
 | kAR | Transition probability from activity to rest under the selected threshold/scoring setup. |
 
-Availability can depend on the raw-object interface and the selected activity scale.
+Availability depends on the raw-object interface and selected activity scale.
 
 ## Sleep metrics
 
 | Metric | Meaning |
 |---|---|
-| SRI | Sleep Regularity Index over valid scored epoch pairs exactly 24 h apart; unavailable below the minimum valid-day rule. |
-| TST | Total sleep time within selected windows. |
-| WASO | Wake after sleep onset within a usable rest/sleep window. |
-| Sleep efficiency | Proportion of the selected interval classified as sleep/rest. |
+| SRI | Sleep Regularity Index over valid scored epoch pairs exactly 24 hours apart. |
+| TST | Observed sleep time within an eligible selected window. |
+| WASO | Observed wake after observed sleep onset within an eligible window. |
+| Sleep efficiency | Sleep minutes divided by observed/scored window minutes. |
 
-These metrics require a scored rest/activity series and, for window-dependent summaries, usable intervals.
-The pyActigraphy SRI definition ranges from -100 to 100; 100 means every
-available 24-hour pair is in the same sleep/wake state.
+The pyActigraphy SRI definition ranges from -100 to 100; 100 means every available 24-hour pair has the same sleep/wake state. SRI is unavailable below the configured consecutive-valid-day requirement and may remain unavailable when no valid 24-hour pairs remain.
 
-## Epoch-by-epoch algorithms
+## Sleep/rest algorithms
 
-The registry currently includes:
+The algorithm registry currently exposes Cole-Kripke, Sadeh, Oakley, Scripps, Crespo, and Roenneberg entries. Classic scoring algorithms were developed for specific devices, count scales, epochs, placements, and populations. Execution on a generic mg series does not establish validation for that combination.
 
-- Cole-Kripke;
-- Sadeh;
-- Oakley;
-- Scripps;
-- Crespo;
-- Roenneberg.
+## Diary/custom and automatic sleep windows
 
-The classic scoring algorithms were developed with specific devices, count scales, epochs, placements, and populations. Executing them on a generic mg series does not establish validation for that combination.
+Page 6 accepts uploaded diaries and per-file custom plot-selected windows. When no diary window is available, `Crespo_AoT` or `Roenneberg_AoT` may estimate onset/offset windows through the Raw-like adapter.
 
-### Sleep-window coverage
+The application:
 
-Diary/manual and AoT-derived windows must meet the configured recorded/scored
-coverage fraction (0.80 by default). Windows below that threshold do not
-contribute to TST, WASO, or sleep efficiency. For eligible windows:
+- validates onset/offset pairs;
+- filters by configured minimum and maximum duration;
+- records method and parameters;
+- applies the page-2 sleep-window coverage threshold;
+- does not insert a fallback window.
 
+A recording may return no usable window because of insufficient day/night contrast, gaps, non-wear, short duration, constant activity, unsuitable scale or threshold, resampling choices, or detector parameters. Roenneberg should generally be evaluated with 10-minute resampling as an initial configuration.
+
+## Sleep-window coverage
+
+At the default coverage threshold of 0.80:
+
+- at least 80% of expected epochs in each sleep window must remain recorded and scorable;
 - missing epochs are ignored rather than scored as wake;
 - TST is observed sleep time and is not inflated to compensate for gaps;
 - WASO counts observed wake after observed sleep onset;
-- sleep efficiency is sleep minutes divided by observed/scored window minutes;
-- scheduled window minutes are returned separately.
+- sleep efficiency uses observed/scored minutes as the denominator;
+- scheduled window duration is returned separately;
+- excluded windows retain an explicit QC reason.
 
-The response includes per-window coverage details and the number excluded.
+## Analysis Set-up
 
-## Crespo and Roenneberg window detection
-
-Crespo and Roenneberg estimate rest/activity structure and return onset/offset arrays. The application:
-
-- calls the actual pyActigraphy methods through a Raw-like adapter;
-- validates onset/offset pairs;
-- filters windows using configured minimum and maximum durations;
-- records method, parameters, count, notes, and exceptions;
-- does not insert a fallback window.
-
-A valid recording can return no usable windows because of:
-
-- insufficient day/night contrast;
-- long gaps or non-wear;
-- a short recording;
-- constant or near-zero activity;
-- inappropriate activity scale or thresholds;
-- resampling or parameter choices;
-- windows outside the configured duration range.
-
-Roenneberg should generally be evaluated with 10-minute resampling as the starting configuration.
+Page 8 supports standard/default selection or custom family-level/metric-level selection. Shared parameters and metric-specific overrides are resolved into the analysis payload. Page 8 does not generate results.
 
 ## Reporting requirements
 
-Every reported result should include:
+Every result should include:
 
 - file ID and source filename;
 - device/file format;
-- requested and resolved activity basis;
+- requested and resolved activity mapping;
 - units and epoch duration;
-- mask and analysis intervals;
+- preprocessing thresholds and intervals;
+- sleep-window source;
 - algorithm and parameters;
-- binarization and threshold;
+- binarization and thresholds;
 - application and dependency versions;
 - QC and diagnostic warnings.

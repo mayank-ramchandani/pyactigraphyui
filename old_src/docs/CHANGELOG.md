@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-23 — Optional preprocessing validity thresholds
+
+- Kept the project standards active by default: 16 analyzable hours per valid day, two consecutive valid days for multi-day rhythm/SRI metrics, and 80% sleep-window coverage.
+- Added an explicit preprocessing opt-in before custom thresholds are applied.
+- Changed rhythm/SRI eligibility from total valid-day count to the longest consecutive valid-day run.
+- Added the consecutive-day run to results, diagnostics, documentation, and regression tests.
+
 ## 2026-07-23 — Content-aware GT3X light processing
 
 - Replaced extension-based GT3X light rejection with complete `log.bin`
@@ -37,8 +44,8 @@
   converted BIN/CWA, Oxford time-series, and native pyActigraphy files.
 - Kept absent and excluded epochs as missing rather than zero activity.
 - Connected **Respect detected non-wear** to backend reader/mapped masks.
-- Added configurable defaults of 16 valid hours/day, two valid days for
-  multi-day rhythm/SRI metrics, and 80% sleep-window coverage.
+- Added configurable defaults of 16 valid hours/day, two consecutive valid
+  days for rhythm/SRI eligibility, and 80% sleep-window coverage.
 - Added daily QC with recorded, gap, detected-non-wear, manual-mask, and
   analyzable hours.
 - Made SRI use valid 24-hour pairs and prevented direct-BIN transitions across
