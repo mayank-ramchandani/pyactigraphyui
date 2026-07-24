@@ -42,14 +42,16 @@ A threshold of `0.8` means at least 80% of expected epochs must remain. A window
 
 ## 3. Estimating Activity Metric / Magnitude of Acceleration
 
-Choose one of four activity-basis options:
+Choose one of six activity-basis options:
 
-1. **Recommended source / processed `acc`**: source/device activity for count-based files and epoch-level processed acceleration for raw `.bin`, `.cwa`, and `.gt3x` files.
-2. **Processed acceleration (`acc`)**: Oxford `acc` when available, or the documented compatible memory-safe path.
-3. **MAD**: mean amplitude deviation of vector magnitude within each epoch.
-4. **Custom ENMO (legacy)**: retained for comparison with earlier analyses.
+1. **Recommended source / processed `acc`**: source/device activity for files that supply it and epoch-level processed acceleration for raw `.bin`, `.cwa`, and `.gt3x` files. For `.cwa`, the server Oxford conversion currently supplies `acc`; other mappings require matching columns in an uploaded converted time-series.
+2. **Processed acceleration (`acc`)**: an existing Oxford `acc` column or the bounded-memory filtered vector-magnitude pathway.
+3. **ENMO**: epoch mean of positive Euclidean Norm Minus One.
+4. **MAD**: mean absolute deviation of vector magnitude within each epoch.
+5. **PIM**: integral of absolute dynamic vector magnitude within each epoch.
+6. **ZCM**: dead-band zero-crossing count of dynamic vector magnitude within each epoch.
 
-The selected series becomes the basis for rest/activity metrics. Counts, processed mg, MAD, and ENMO are not interchangeable; report the selected mapping and units.
+The selected series becomes the basis for pyActigraphy rest/activity metrics. The result and diagnostics retain the requested/resolved mapping, units, epoch duration, and raw-processing details.
 
 ## 4. Activity Preview
 
@@ -113,9 +115,9 @@ Temperature and other sensor files can be attached for future workflow developme
 
 ## 8. Analysis Set-up
 
-Choose analysis families or individual metrics and configure shared or metric-specific parameters. This page only configures the analysis; it does not run it.
+Choose family-level or metric-level processing in either Standard or Custom mode, then configure shared or metric-specific parameters. Core families expand to their registered pyActigraphy metrics, and the Cosinor family runs a fixed 24-hour `pyActigraphy.analysis.Cosinor` model. This page only configures the analysis; it does not run it.
 
-For processed `acc`, MAD, or ENMO, begin with continuous non-binarized RA, IS, and IV unless the study protocol specifies a validated threshold for that signal and unit.
+For processed `acc`, ENMO, MAD, PIM, or ZCM, choose continuous or binarized processing explicitly. Threshold values remain tied to the selected signal and units and are retained in the analysis configuration.
 
 Use **Next** or click **Generate Results** in the left workflow to continue to page 9.
 
@@ -152,12 +154,15 @@ Download configured outputs such as result summaries, CSV-compatible tables, JSO
 - result values and warnings;
 - application/build version.
 
-## Recommended validation workflow
+## Reproducible processing check
 
-1. Run one known-good small recording.
-2. Compare it with an independent reference workflow.
-3. Confirm valid/invalid days, gaps, non-wear, masks, and sleep-window coverage.
-4. Test a medium and large file through the deployed endpoint.
-5. Test an embedded-light file and a no-light file.
-6. Retain diagnostic JSON and exact build identifiers.
-7. Only then run a research batch.
+1. Confirm the detected reader, timestamp range, epoch duration, and resolved activity mapping in the preview.
+2. Review daily gaps, non-wear, masks, valid-day decisions, and sleep-window coverage.
+3. Confirm that selected files, family/metric settings, and algorithm parameters appear in the analysis configuration.
+4. Retain result tables, QC warnings, structured diagnostics, application version, and Git commit with each batch.
+5. Use the same stored configuration when processing additional files in the same analysis.
+
+
+## Reviewing submitted feedback (administrators)
+
+Configure `FEEDBACK_ADMIN_TOKEN` and open `/?feedback-admin=1` on the deployed frontend. The protected review screen supports full-text search, category filtering, complete report inspection, and CSV/JSONL download. Feedback remains stored in `${APP_DATA_DIR}/feedback.jsonl`; use persistent mounted storage in deployment.

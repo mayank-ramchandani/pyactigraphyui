@@ -29,7 +29,7 @@ Start with the [documentation index](docs/README.md).
 - [Activity processing](docs/ACTIVITY_PROCESSING.md)
 - [Metrics and algorithms](docs/METRICS_AND_ALGORITHMS.md)
 - [Diagnostics and troubleshooting](docs/DIAGNOSTICS_AND_TROUBLESHOOTING.md)
-- [Validation and limitations](docs/VALIDATION_AND_LIMITATIONS.md)
+- [Preprocessing and provenance](docs/PREPROCESSING_AND_PROVENANCE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Documentation maintenance](docs/DOCUMENTATION_MAINTENANCE.md)
@@ -46,7 +46,7 @@ VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/src/docs
 
 - Preserve file-level provenance and resolved settings in every analysis output.
 - Keep activity-basis estimation explicit and show the resolved signal, engine, units, and epoch.
-- Offer four activity choices: recommended/automatic, processed acceleration, MAD, and ENMO.
+- Offer six activity choices: recommended/automatic, processed acceleration, ENMO, MAD, PIM, and ZCM.
 - Keep missing data, excluded non-wear, and manual masks as missing rather than zero activity.
 - Report total valid days and the longest uninterrupted valid-day run.
 - Exclude sleep windows below the configured coverage threshold rather than silently treating missing epochs as sleep or wake.
@@ -54,7 +54,7 @@ VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/src/docs
 - Do not create fallback sleep windows when Crespo or Roenneberg returns no usable window.
 - Inspect light capability from file content rather than extension alone; no-light files remain valid for activity analysis.
 - Label temperature and generic sensor analysis as future functionality until calculations are implemented.
-- Treat a completed computation and a scientifically validated result as separate questions.
+- Use pyActigraphy as the computational basis and retain complete preprocessing and provenance with each result.
 
 ## Version confirmation
 

@@ -1,5 +1,16 @@
 # Change log
 
+## 2026-07-24 — Centred interface and resilient CSV/RPX loading
+
+- Updated the persistent documentation link to `https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs`.
+- Centre-aligned workflow pages, documentation pages, cards, tables, inputs, and navigation/action buttons, with responsive single-column layouts on smaller screens.
+- Added encoding detection for UTF-8, UTF-8 BOM, Windows-1252, UTF-16, and Latin-1-compatible CSV/text files.
+- Added a multilingual Philips Actiware/RPX epoch-table parser for English, French, and German exports, bypassing the pyActigraphy `data_offset` failure for localized CSVs.
+- Preserved white/RGB light channels and supported valid no-light RPX files without blocking activity analysis.
+- Enabled automatic and manual generic CSV mapping in preview, analysis, and light workflows, and added the missing `/api/tabular/columns` inspection route.
+- Added NHANES `PAXHR_H` detection with participant/timestamp preparation guidance instead of a generic unsupported-file message.
+- Added five localized/generic tabular regression tests and updated the in-app and GitHub documentation.
+
 ## 2026-07-23 — Ten-page workflow and full-content documentation
 
 - Reorganized the interface into the requested ten-page process from actigraphy import through export.

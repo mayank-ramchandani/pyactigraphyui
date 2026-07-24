@@ -70,7 +70,8 @@ Browser actigraphy upload
   → per-job input file
   → HTTP 202 with job ID
   → bounded background worker
-  → reader detection and native/raw loading
+  → reader detection and native/raw or mapped-tabular loading
+  → localized text decoding and semantic RPX header detection when applicable
   → activity-basis resolution
   → timestamp/data validation
   → start/stop and manual masks
@@ -102,7 +103,7 @@ The registries define user-facing labels, defaults, availability, and analysis m
 - complete algorithm, metric, and analysis-family registry content;
 - diagnostics, limitations, deployment, and developer guidance.
 
-The panel always renders a GitHub documentation link. `VITE_GITHUB_DOCS_URL` can point to an exact docs branch/path; otherwise the link falls back to `${VITE_GITHUB_REPOSITORY_URL}/tree/main/docs`, and then to the project default repository.
+The panel always renders a GitHub documentation link. `VITE_GITHUB_DOCS_URL` can point to an exact docs branch/path; otherwise the link falls back to `${VITE_GITHUB_REPOSITORY_URL}/tree/main/src/docs`, and then to the project default repository.
 
 ## API endpoints
 
@@ -117,6 +118,7 @@ The panel always renders a GitHub documentation link. `VITE_GITHUB_DOCS_URL` can
 | `POST /api/jobs/light/channels` | Discover light channels through the background queue |
 | `POST /api/jobs/light/analyze` | Inspect once and run all selected light metrics in one background job |
 | `POST /api/jobs/analyze/basic` | Start a main-analysis job; returns HTTP 202 |
+| `POST /api/tabular/columns` | Inspect CSV/text/spreadsheet columns, encoding, suggested mapping, and format-specific guidance |
 | `POST /api/preview/basic` | Synchronous activity-preview compatibility route |
 | `POST /api/analyze/basic` | Synchronous main-analysis compatibility route |
 | `POST /api/feedback` | Feedback persistence |

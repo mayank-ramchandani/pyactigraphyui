@@ -108,3 +108,10 @@ ${APP_DATA_DIR:-/tmp/actigraphy-ui-data}/progress/<request_id>.json
 ```
 
 Set `ANALYSIS_PROGRESS_TTL_SECONDS` to change retention. In a multi-replica Azure deployment, `APP_DATA_DIR` must be a shared mounted path for polling to work reliably across replicas; otherwise use one backend replica or sticky routing.
+
+## Localized CSV and RPX troubleshooting
+
+- UTF-8 decode errors on Actiware CSVs are handled by encoding detection with Windows-1252 support.
+- French/German Actiware CSVs bypass pyActigraphy's fixed `data_offset` reader and locate the epoch table by localized date/time/activity headers.
+- Generic CSVs can be inspected through `/api/tabular/columns` and mapped manually on page 1.
+- NHANES `PAXHR_H` requires one-participant filtering, `PAXFDAY`/`PAXFTIME` from `PAXHD_H`, and a documented participant-relative time index built from `PAXSSNHP`; the app returns specific preparation guidance.

@@ -42,6 +42,13 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
         app_version: context.appVersion || null,
         backend_url: context.backendUrl || null,
         browser_info: window.navigator.userAgent,
+        client_url: window.location.href,
+        client_timestamp: new Date().toISOString(),
+        request_id: context.requestId || null,
+        configuration: context.configuration || null,
+        selected_files: context.selectedFiles || null,
+        progress: context.progress || null,
+        recent_errors: context.recentErrors || null,
       };
 
       const res = await fetch(buildApiUrl("api/feedback"), {
@@ -118,7 +125,7 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
               <div>
                 <h2 style={{ margin: 0, color: "#0f172a" }}>Send feedback</h2>
                 <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14, lineHeight: 1.5 }}>
-                  Report upload, preview, analysis, or deployment issues. Raw files are not sent through this form.
+                  Report upload, preview, analysis, or deployment issues. Raw files are not sent; the form includes filenames, selected settings, progress, and current errors to help diagnose the report.
                 </p>
               </div>
               <button

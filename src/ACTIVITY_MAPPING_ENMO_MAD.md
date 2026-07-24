@@ -1,12 +1,10 @@
-# ENMO and MAD activity options
+# ENMO, MAD, PIM, and ZCM activity options
 
-This compatibility document reflects the current four-option page-3 interface. See [docs/ACTIVITY_PROCESSING.md](docs/ACTIVITY_PROCESSING.md) for the maintained methods description.
+This compatibility document points to [docs/ACTIVITY_PROCESSING.md](docs/ACTIVITY_PROCESSING.md) for the maintained preprocessing description.
 
-- **Recommended / automatic (`auto`)** resolves source/device activity for compatible count-based inputs and processed acceleration for compatible raw acceleration files.
-- **Processed acceleration (`accelerometer`)** uses the supported epoch-level `acc` basis.
-- **MAD (`mad`)** uses mean amplitude deviation.
-- **ENMO (`enmo`)** uses Euclidean Norm Minus One.
+- **ENMO (`enmo`)**: epoch mean of positive Euclidean Norm Minus One.
+- **MAD (`mad`)**: mean absolute deviation of vector magnitude within the epoch.
+- **PIM (`pim`)**: integral of absolute dynamic vector magnitude within the epoch.
+- **ZCM (`zcm`)**: dead-band zero-crossing count of dynamic vector magnitude within the epoch.
 
-Raw GENEActiv `.bin` and current-format ActiGraph `.gt3x` files can be reduced in bounded memory to supported epoch-level activity outputs. Axivity `.cwa` support can depend on the Oxford converter path. A pre-generated Oxford `*timeSeries.csv.gz` can be uploaded when exact release-specific converter output is required.
-
-The old `original` selection is no longer displayed. Automatic mode retains source/device activity when that is the appropriate basis. Always report the resolved basis and units, and do not transfer thresholds across counts, mg, MAD, and ENMO without validation.
+Raw GENEActiv `.bin` and ActiGraph `.gt3x` recordings use bounded-memory streaming reducers. Preprocessed time-series files can supply existing ENMO, MAD, PIM, or ZCM columns directly. Actiwatch ATR PIM/ZCM selections are passed to pyActigraphy's native reader modes.

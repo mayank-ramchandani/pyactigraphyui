@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
+from .activity_metrics import EpochPIMAccumulator, EpochZCMAccumulator
 from .diagnostics import record_diagnostic_event, update_current_stage
 import numpy as np
 
@@ -627,8 +628,8 @@ def read_raw_geneactiv_bin(
     previewed/analyzed without hitting the Oxford accProcess size gate.
     """
     requested_mapping = normalize_activity_mapping(activity_mapping)
-    if requested_mapping == "mad" and not resample_freq:
-        raise ValueError("MAD requires an epoch/resample frequency so within-epoch deviation can be calculated.")
+    if requested_mapping in {"mad", "pim", "zcm"} and not resample_freq:
+        raise ValueError(f"{requested_mapping.upper()} requires an epoch/resample frequency so within-epoch aggregation can be calculated.")
 
     header: Dict[str, str] = {}
     calibration = {
@@ -655,6 +656,9 @@ def read_raw_geneactiv_bin(
     file_size_bytes = os.path.getsize(file_path)
     bytes_consumed = 0
     resample_ns = _parse_resample_freq_ns(resample_freq)
+    epoch_seconds = max(1, int(round(resample_ns / 1_000_000_000))) if resample_ns else None
+    pim_accumulator = EpochPIMAccumulator(epoch_seconds) if requested_mapping == "pim" and epoch_seconds else None
+    zcm_accumulator = EpochZCMAccumulator(epoch_seconds) if requested_mapping == "zcm" and epoch_seconds else None
 
     acc_filter_sos = None
     acc_filter_zi = None
@@ -696,7 +700,7 @@ def read_raw_geneactiv_bin(
             active_mad_bucket_ns = bucket_ns
         active_mad_parts.append(np.asarray(vm_values, dtype=np.float64))
 
-    def processed_acc_values(vm_values: np.ndarray, freq: float, page_ns: int, ns_per_sample: int) -> np.ndarray:
+    def processed_dynamic_values(vm_values: np.ndarray, freq: float, page_ns: int, ns_per_sample: int) -> np.ndarray:
         nonlocal acc_filter_sos, acc_filter_zi, acc_filter_freq
         nonlocal acc_filter_expected_next_ns, acc_filter_applied
 
@@ -723,7 +727,7 @@ def read_raw_geneactiv_bin(
             filtered = values
 
         acc_filter_expected_next_ns = int(page_ns) + len(values) * int(ns_per_sample)
-        return np.maximum(filtered - 1.0, 0.0) * 1000.0
+        return (filtered - 1.0) * 1000.0
 
 
     def consume_page(page: Dict[str, str], page_hex: str) -> None:
@@ -747,11 +751,16 @@ def read_raw_geneactiv_bin(
         if enmo_values is None or vm_values is None or light_lux_values is None or len(enmo_values) == 0:
             return
         use_processed_acc = requested_mapping not in {"mad", "enmo"}
-        acc_values = (
-            processed_acc_values(vm_values, float(freq), page_ns, ns_per_sample)
+        dynamic_values = (
+            processed_dynamic_values(vm_values, float(freq), page_ns, ns_per_sample)
             if use_processed_acc
-            else enmo_values
+            else (np.asarray(vm_values, dtype=np.float64) - 1.0) * 1000.0
         )
+        acc_values = np.maximum(dynamic_values, 0.0) if use_processed_acc else enmo_values
+        if pim_accumulator is not None:
+            pim_accumulator.add(dynamic_values, page_ns / 1_000_000_000.0, float(freq))
+        if zcm_accumulator is not None:
+            zcm_accumulator.add(dynamic_values, page_ns / 1_000_000_000.0, float(freq))
 
         n = len(enmo_values)
         if resample_ns:
@@ -891,18 +900,29 @@ def read_raw_geneactiv_bin(
     elif requested_mapping == "enmo":
         resolved_mapping = "enmo"
         activity = df["enmo"].astype(float).rename("ENMO_mg")
+    elif requested_mapping == "pim":
+        resolved_mapping = "pim"
+        activity = pim_accumulator.series().dropna() if pim_accumulator is not None else pd.Series(dtype=float)
+        if len(activity) < 2:
+            raise ValueError("PIM mapping did not produce enough valid GENEActiv epochs.")
+    elif requested_mapping == "zcm":
+        resolved_mapping = "zcm"
+        activity = zcm_accumulator.series().dropna() if zcm_accumulator is not None else pd.Series(dtype=float)
+        if len(activity) < 2:
+            raise ValueError("ZCM mapping did not produce enough valid GENEActiv epochs.")
     else:
         resolved_mapping = "accelerometer"
         activity = df["acc"].astype(float).rename("ACC_mg")
 
-    is_processed_acc = resolved_mapping == "accelerometer"
+    is_processed_acc = resolved_mapping in {"accelerometer", "pim", "zcm"}
     activity_mapping_metadata = mapping_metadata(
         requested_mapping,
         resolved_mapping,
         source="direct_geneactiv_streaming_acc",
         processing_engine=(
-            "streaming_calibrated_filtered_vm_acc"
-            if is_processed_acc
+            "streaming_calibrated_filtered_vm_acc" if resolved_mapping == "accelerometer"
+            else "streaming_calibrated_filtered_vm_pim" if resolved_mapping == "pim"
+            else "streaming_calibrated_filtered_vm_zcm" if resolved_mapping == "zcm"
             else f"streaming_custom_{resolved_mapping}"
         ),
         epoch=str(resample_freq),
@@ -910,14 +930,16 @@ def read_raw_geneactiv_bin(
         vector_magnitude_lowpass_hz=20 if is_processed_acc and acc_filter_applied else None,
         vector_magnitude_filter_order=4 if is_processed_acc and acc_filter_applied else None,
         raw_resampled_to_100_hz=False if is_processed_acc else None,
-        available_mappings=["auto", "accelerometer", "mad", "enmo"],
+        pim_definition="integral_abs_dynamic_vm_mg_seconds_per_epoch" if resolved_mapping == "pim" else None,
+        zcm_definition="deadband_sign_changes_dynamic_vm_per_epoch" if resolved_mapping == "zcm" else None,
+        zcm_threshold_mg=zcm_accumulator.threshold_mg if zcm_accumulator is not None else None,
+        available_mappings=["auto", "accelerometer", "mad", "enmo", "pim", "zcm"],
         note=(
-            "Large GENEActiv files use a chunked streaming implementation of the epoch-level `acc` basis, "
-            "including fourth-order 20 Hz vector-magnitude filtering when the sample rate permits, "
-            "to avoid the memory cost of a full raw-data DataFrame. Upload an Oxford accelerometer "
-            "*timeSeries.csv.gz file when byte-for-byte accProcess output is required."
+            "Large GENEActiv files use chunked calibrated vector-magnitude processing with fourth-order "
+            "20 Hz filtering when the sample rate permits, followed by streaming epoch aggregation for "
+            f"the resolved {resolved_mapping.upper()} activity basis."
             if is_processed_acc
-            else "This is an optional custom mapping calculated directly from the calibrated raw samples."
+            else "This mapping is calculated directly from calibrated raw samples using streaming epoch aggregation."
         ),
     )
     light_lux = df["light_lux"].astype(float).rename("LIGHT_LUX")
@@ -961,7 +983,7 @@ def read_raw_geneactiv_bin(
             },
             "direct_geneactiv_reader": True,
             "activity_mapping": activity_mapping_metadata,
-            "available_activity_mappings": ["auto", "accelerometer", "mad", "enmo"],
+            "available_activity_mappings": ["auto", "accelerometer", "mad", "enmo", "pim", "zcm"],
         },
     )
     return attach_mapping_metadata(raw, activity_mapping_metadata)

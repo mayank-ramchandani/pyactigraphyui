@@ -859,8 +859,7 @@ export default function MetricsPanel({
 
       {showMetricSections && (
         <>
-      {analysisMode !== "standard" && (
-        <div
+      <div
           style={{
             border: "1px solid #e2e8f0",
             borderRadius: 16,
@@ -896,7 +895,6 @@ export default function MetricsPanel({
             })}
           </div>
         </div>
-      )}
 
       {analysisScope === "family" && (
         <div style={{ marginBottom: 24 }}>

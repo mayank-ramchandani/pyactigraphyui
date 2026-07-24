@@ -164,6 +164,32 @@ class StreamingGT3XTests(unittest.TestCase):
         self.assertEqual(metadata["_gt3x_activity_mode"], "mad")
         self.assertEqual(metadata["_activity_mapping"]["resolved"], "mad")
 
+    def test_pim_and_zcm_are_streamed_from_raw_axes(self):
+        start = 1_577_836_800
+        alternating = np.tile(np.asarray([230, 282], dtype=np.int16), 15)
+        events = [
+            _event(start + second, 26, _activity2_payload(alternating))
+            for second in range(4)
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pim-zcm.gt3x"
+            _write_gt3x(path, start, start + 3, events)
+            pim, pim_meta, _ = prepare_gt3x_activity_series(
+                str(path), epoch_period=2, activity_mapping="pim"
+            )
+            zcm, zcm_meta, _ = prepare_gt3x_activity_series(
+                str(path), epoch_period=2, activity_mapping="zcm"
+            )
+
+        dynamic = (alternating.astype(float) / 256.0 - 1.0) * 1000.0
+        expected_pim = float(2 * np.abs(dynamic).sum() / 30.0)
+        np.testing.assert_allclose(pim.dropna().to_numpy(), [expected_pim, expected_pim], rtol=1e-6)
+        np.testing.assert_allclose(zcm.dropna().to_numpy(), [59.0, 59.0], rtol=0, atol=0)
+        self.assertEqual(pim_meta["_activity_mapping"]["resolved"], "pim")
+        self.assertEqual(zcm_meta["_activity_mapping"]["resolved"], "zcm")
+        self.assertEqual(zcm_meta["_zcm_threshold_mg"], 4.0)
+
     def test_streaming_counts_keeps_filter_and_group_state_across_chunks(self):
         from scipy.signal import lfilter, lfilter_zi
 

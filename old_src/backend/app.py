@@ -27,8 +27,15 @@ from .analysis import (
 from .qc import quick_qc
 from .data_quality import apply_data_quality_control
 from .io_helpers import (
-    load_native_file,
+    build_baseraw_from_dataframe,
+    detect_csv_mapping,
+    detect_text_encoding,
     infer_reader_type,
+    load_auto_tabular,
+    load_custom_tabular,
+    load_native_file,
+    read_tabular_file,
+    tabular_guidance,
 )
 
 from .accelerometer_loader import (
@@ -165,6 +172,9 @@ def version():
             "accelerometer_acc_default": True,
             "preview_analysis_mapping_decoupled": True,
             "documentation_center": True,
+            "generic_csv_mapping": True,
+            "localized_rpx_csv": True,
+            "tabular_column_inspection": True,
             "missingness_nonwear_valid_day_qc": True,
             "background_light_preview_jobs": True,
             "gt3x_light_content_detection": True,
@@ -354,19 +364,79 @@ def _validate_light_upload_format(upload: UploadFile) -> None:
         raise ValueError("Select a file to inspect for embedded light measurements.")
 
 
+def _clean_csv_mapping(value) -> dict:
+    # FastAPI Form defaults remain Param objects when route functions are called
+    # directly in unit tests/background helpers rather than through dependency
+    # injection. Resolve their declared default before parsing.
+    if not isinstance(value, (str, dict)) and hasattr(value, "default"):
+        value = value.default
+    mapping = _json_or_empty(value) if isinstance(value, str) else (value or {})
+    if not isinstance(mapping, dict):
+        raise ValueError("csvMapping must be a JSON object.")
+    allowed = {
+        "timestamp_col", "time_col", "activity_col", "light_col",
+        "temperature_col", "nonwear_col",
+    }
+    return {
+        key: str(mapping.get(key) or "").strip()
+        for key in allowed
+        if str(mapping.get(key) or "").strip()
+    }
+
+
 def _load_native_supported_file(
     file_path: str,
     activity_mapping: str = "auto",
     purpose: str = "activity",
+    csv_mapping=None,
+    csv_separator: str = ",",
 ):
+    """Load native recordings and mapped tabular files through one path."""
+    if not isinstance(csv_separator, str) and hasattr(csv_separator, "default"):
+        csv_separator = csv_separator.default
+    csv_separator = str(csv_separator or ",")
     reader_type = infer_reader_type(file_path)
 
     if reader_type == "tabular":
-        raise ValueError(
-            "This file is currently being detected as a generic tabular file, not a native "
-            "pyActigraphy-supported format. Upload a native actigraphy file, raw .gt3x/.bin/.cwa, "
-            "or a pre-converted accelerometer *timeSeries.csv.gz file."
+        requested_mapping = normalize_activity_mapping(activity_mapping)
+        if requested_mapping not in {"auto", "original"}:
+            raise ValueError(
+                f"{requested_mapping.upper()} cannot be calculated from a generic mapped activity column. "
+                "Choose Recommended/Source activity, or upload raw tri-axial .bin/.cwa/.gt3x data."
+            )
+
+        mapping = _clean_csv_mapping(csv_mapping)
+        require_activity = str(purpose or "activity").strip().lower() != "light"
+        if mapping.get("timestamp_col"):
+            dataframe = load_custom_tabular(
+                file_path=file_path,
+                timestamp_col=mapping["timestamp_col"],
+                time_col=mapping.get("time_col"),
+                activity_col=mapping.get("activity_col"),
+                light_col=mapping.get("light_col"),
+                temperature_col=mapping.get("temperature_col"),
+                nonwear_col=mapping.get("nonwear_col"),
+                sep=csv_separator or ",",
+                require_activity=require_activity,
+            )
+        else:
+            dataframe, mapping = load_auto_tabular(
+                file_path,
+                sep=csv_separator or ",",
+                require_activity=require_activity,
+            )
+
+        raw = build_baseraw_from_dataframe(
+            dataframe,
+            name=Path(file_path).name,
+            uuid=f"mapped-{Path(file_path).stem}",
+            require_activity=require_activity,
         )
+        raw.metadata = {
+            **(getattr(raw, "metadata", None) or {}),
+            "detected_mapping": mapping,
+        }
+        return raw, "tabular_mapped"
 
     raw = load_native_file(
         file_path,
@@ -466,25 +536,70 @@ def convert_accelerometer_lite(
         _cleanup_temp_paths([tmp_path])
 
 
+@app.post("/api/tabular/columns")
+def inspect_tabular_columns(
+    file: UploadFile = File(...),
+    csvSeparator: str = Form(","),
+):
+    """Inspect a CSV/text/spreadsheet upload for optional manual mapping."""
+    tmp_path = None
+    try:
+        tmp_path = _write_upload_to_temp(file)
+        reader_type = infer_reader_type(tmp_path)
+        if reader_type not in {"tabular", "rpx", "tal", "mesa", "atr"}:
+            raise ValueError(
+                "Manual column mapping is intended for CSV, text, or spreadsheet uploads."
+            )
+
+        dataframe = read_tabular_file(tmp_path, sep=csvSeparator or ",")
+        mapping = detect_csv_mapping(dataframe)
+        guidance = tabular_guidance(dataframe)
+        return _safe_json_response(
+            status_code=200,
+            content={
+                "ok": True,
+                "columns": [str(column) for column in dataframe.columns],
+                "detected_mapping": mapping,
+                "detected_input_type": reader_type,
+                "source_encoding": (
+                    dataframe.attrs.get("source_encoding")
+                    or (detect_text_encoding(tmp_path) if Path(tmp_path).suffix.lower() in {".csv", ".txt", ".gz"} else None)
+                ),
+                "guidance": guidance,
+            },
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"detail": f"Server error: {exc}"})
+    finally:
+        _cleanup_temp_paths([tmp_path])
+
+
 @app.post("/api/preview/basic")
 def preview_basic(
     file: UploadFile = File(...),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
     resampleFreq: str = Form("1min"),
-    csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
-    csvSeparator: str = Form(","),  # accepted for frontend compatibility, ignored here
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
     maskingFiles: Optional[List[UploadFile]] = File(None),
     sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
     startStopFiles: Optional[List[UploadFile]] = File(None),
 ):
     tmp_path = None
     try:
-        _json_or_empty(csvMapping)
+        parsed_csv_mapping = _clean_csv_mapping(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
         requested_mapping = normalize_activity_mapping(activityMapping)
-        raw, reader_type = _load_native_supported_file(tmp_path, activity_mapping=requested_mapping)
+        raw, reader_type = _load_native_supported_file(
+            tmp_path,
+            activity_mapping=requested_mapping,
+            csv_mapping=parsed_csv_mapping,
+            csv_separator=csvSeparator,
+        )
         mapping_details = raw_mapping_metadata(raw)
 
         preview = build_native_preview(
@@ -498,7 +613,7 @@ def preview_basic(
             content={
                 **preview,
                 "detected_input_type": reader_type,
-                "native_reader_used": True,
+                "native_reader_used": reader_type != "tabular_mapped",
                 "activity_mapping": mapping_details,
             }
         )
@@ -519,8 +634,8 @@ def preview_light(
     file: UploadFile = File(...),
     resampleFreq: str = Form("1min"),
     rgbResampleFreq: str = Form("5min"),
-    csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
-    csvSeparator: str = Form(","),  # accepted for frontend compatibility, ignored here
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
     maskingFiles: Optional[List[UploadFile]] = File(None),
     sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
     startStopFiles: Optional[List[UploadFile]] = File(None),
@@ -528,10 +643,15 @@ def preview_light(
     tmp_path = None
     try:
         _validate_light_upload_format(file)
-        _json_or_empty(csvMapping)
+        parsed_csv_mapping = _clean_csv_mapping(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path, purpose="light")
+        raw, reader_type = _load_native_supported_file(
+            tmp_path,
+            purpose="light",
+            csv_mapping=parsed_csv_mapping,
+            csv_separator=csvSeparator,
+        )
 
         preview = build_light_preview(raw=raw, resample_freq=resampleFreq)
         detection = _light_detection_payload(raw, reader_type)
@@ -550,7 +670,7 @@ def preview_light(
                     "message": detection["message"],
                     "skipped": True,
                     "detected_input_type": reader_type,
-                    "native_reader_used": True,
+                    "native_reader_used": reader_type != "tabular_mapped",
                 },
             )
 
@@ -568,7 +688,7 @@ def preview_light(
                 "message": detection["message"],
                 "skipped": False,
                 "detected_input_type": reader_type,
-                "native_reader_used": True,
+                "native_reader_used": reader_type != "tabular_mapped",
             }
         )
 
@@ -604,7 +724,7 @@ def preview_light_rgb(
                 "message": detection["message"],
                 "skipped": not detection["available"],
                 "detected_input_type": reader_type,
-                "native_reader_used": True,
+                "native_reader_used": reader_type != "tabular_mapped",
             }
         )
 
@@ -639,7 +759,7 @@ def light_channels(
                 "message": detection["message"],
                 "skipped": not detection["available"],
                 "detected_input_type": reader_type,
-                "native_reader_used": True,
+                "native_reader_used": reader_type != "tabular_mapped",
             }
         )
 
@@ -669,6 +789,8 @@ def analyze_light(
     lmxLength: str = Form("5h"),
     lowest: str = Form("true"),
     binarize: str = Form("false"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
 ):
     session = DiagnosticSession("/api/light/analyze", source_file_name=file.filename).activate()
     temp_paths = []
@@ -680,6 +802,7 @@ def analyze_light(
     try:
         _validate_light_upload_format(file)
         with session.stage("request.parse_light_metric", category="request"):
+            parsed_csv_mapping = _clean_csv_mapping(csvMapping)
             agg_funcs = [x.strip() for x in aggFuncs.split(",") if x.strip()] if aggFuncs else None
             update_current_stage(
                 metric_id=metricId,
@@ -705,11 +828,14 @@ def analyze_light(
         with session.stage("input.detect_reader", category="reader"):
             reader_type = infer_reader_type(tmp_path)
             update_current_stage(detected_input_type=reader_type)
-            if reader_type == "tabular":
-                raise ValueError("The file was detected as generic tabular data rather than a supported native/light recording.")
 
         with session.stage("input.load_recording", category="reader", details={"detected_input_type": reader_type}):
-            raw = load_native_file(tmp_path, reader_type, purpose="light")
+            raw, reader_type = _load_native_supported_file(
+                tmp_path,
+                purpose="light",
+                csv_mapping=parsed_csv_mapping,
+                csv_separator=csvSeparator,
+            )
             update_current_stage(raw_class=type(raw).__name__, raw_module=type(raw).__module__)
 
         with session.stage("input.inspect_recording", category="data_validation"):
@@ -725,7 +851,7 @@ def analyze_light(
                     "light_detection": detection,
                     "message": detection["message"],
                     "detected_input_type": reader_type,
-                    "native_reader_used": True,
+                    "native_reader_used": reader_type != "tabular_mapped",
                 }
                 final_status = "completed_with_warnings"
                 mark_current_stage("warning")
@@ -759,7 +885,7 @@ def analyze_light(
                 "light_available": True,
                 "light_detection": _light_detection_payload(raw, reader_type),
                 "detected_input_type": reader_type,
-                "native_reader_used": True,
+                "native_reader_used": reader_type != "tabular_mapped",
             }
 
     except ValueError as exc:
@@ -805,6 +931,8 @@ def analyze_light_batch(
     lmxLength: str = Form("5h"),
     lowest: str = Form("true"),
     binarize: str = Form("false"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
     requestId: Optional[str] = Form(None),
 ):
     """Inspect once and run all selected light metrics on one loaded recording."""
@@ -821,6 +949,7 @@ def analyze_light_batch(
 
     try:
         with session.stage("request.parse_light_metrics", category="request"):
+            parsed_csv_mapping = _clean_csv_mapping(csvMapping)
             try:
                 parsed_metric_ids = json.loads(metricIds or "[]")
             except Exception as exc:
@@ -845,17 +974,18 @@ def analyze_light_batch(
         with session.stage("input.detect_reader", category="reader"):
             reader_type = infer_reader_type(tmp_path)
             update_current_stage(detected_input_type=reader_type)
-            if reader_type == "tabular":
-                raise ValueError(
-                    "The file was detected as generic tabular data rather than a supported native/light recording."
-                )
 
         with session.stage(
             "input.inspect_light",
             category="reader",
             details={"detected_input_type": reader_type},
         ):
-            raw = load_native_file(tmp_path, reader_type, purpose="light")
+            raw, reader_type = _load_native_supported_file(
+                tmp_path,
+                purpose="light",
+                csv_mapping=parsed_csv_mapping,
+                csv_separator=csvSeparator,
+            )
             session.recording = raw_recording_summary(raw)
             detection = _light_detection_payload(raw, reader_type)
             update_current_stage(
@@ -939,7 +1069,7 @@ def analyze_light_batch(
                 )
             ),
             "detected_input_type": reader_type,
-            "native_reader_used": True,
+            "native_reader_used": reader_type != "tabular_mapped",
         }
 
     except ValueError as exc:
@@ -1010,7 +1140,7 @@ def manipulate_light(
             content={
                 **payload,
                 "detected_input_type": reader_type,
-                "native_reader_used": True,
+                "native_reader_used": reader_type != "tabular_mapped",
             }
         )
 
@@ -1389,8 +1519,8 @@ def analyze_basic(
     lightTransform: str = Form("none"),
     analysisMode: str = Form("standard"),
     analysisConfig: str = Form("{}"),
-    csvMapping: str = Form("{}"),   # accepted for frontend compatibility, ignored here
-    csvSeparator: str = Form(","),  # accepted for frontend compatibility, ignored here
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
     maskingFiles: Optional[List[UploadFile]] = File(None),
     sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
     startStopFiles: Optional[List[UploadFile]] = File(None),
@@ -1424,7 +1554,7 @@ def analyze_basic(
             )
             analysis_window_settings = analysis_config.get("analysisWindowSettings", {}) or {}
             analysis_window_settings = {**analysis_window_settings, "sourceFileName": source_filename}
-            _json_or_empty(csvMapping)
+            parsed_csv_mapping = _clean_csv_mapping(csvMapping)
             update_current_stage(
                 analysis_mode=analysisMode,
                 analysis_scope=analysis_scope,
@@ -1453,19 +1583,18 @@ def analyze_basic(
         with session.stage("input.detect_reader", category="reader"):
             reader_type = infer_reader_type(tmp_path)
             update_current_stage(detected_input_type=reader_type)
-            if reader_type == "tabular":
-                raise ValueError(
-                    "This file is currently being detected as a generic tabular file, not a native "
-                    "pyActigraphy-supported format. Upload a native actigraphy file, raw .gt3x/.bin/.cwa, "
-                    "or a pre-converted accelerometer *timeSeries.csv.gz file."
-                )
 
         with session.stage(
             "input.load_recording",
             category="reader",
             details={"detected_input_type": reader_type},
         ):
-            raw = load_native_file(tmp_path, reader_type, activity_mapping=requested_mapping)
+            raw, reader_type = _load_native_supported_file(
+                tmp_path,
+                activity_mapping=requested_mapping,
+                csv_mapping=parsed_csv_mapping,
+                csv_separator=csvSeparator,
+            )
             mapping_details = raw_mapping_metadata(raw)
             update_current_stage(
                 raw_class=type(raw).__name__,
@@ -1594,7 +1723,7 @@ def analyze_basic(
             "supportFileSummary": support_file_summary,
             "dataQuality": data_quality,
             "detected_input_type": reader_type,
-            "native_reader_used": True,
+            "native_reader_used": reader_type != "tabular_mapped",
             "activity_mapping": mapping_details,
         }
 
@@ -1685,6 +1814,8 @@ def _background_light_worker(primary_spec: dict, operation: str, options: dict) 
                 lmxLength=options.get("lmxLength", "5h"),
                 lowest=options.get("lowest", "true"),
                 binarize=options.get("binarize", "false"),
+                csvMapping=options.get("csvMapping", "{}"),
+                csvSeparator=options.get("csvSeparator", ","),
                 requestId=options.get("requestId"),
             )
         else:
@@ -1938,6 +2069,8 @@ def start_background_light_analysis(
     lmxLength: str = Form("5h"),
     lowest: str = Form("true"),
     binarize: str = Form("false"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
     requestId: Optional[str] = Form(None),
     jobId: Optional[str] = Form(None),
 ):
@@ -1958,6 +2091,8 @@ def start_background_light_analysis(
             "lmxLength": lmxLength,
             "lowest": lowest,
             "binarize": binarize,
+            "csvMapping": csvMapping,
+            "csvSeparator": csvSeparator,
             "requestId": requestId or resolved_job_id,
         },
         requested_job_id=resolved_job_id,

@@ -5,12 +5,12 @@ Page 1 imports **actigraphy files only**. Optional start/stop and masking files 
 
 | Format | Typical content | Default analysis basis | Optional mappings | Important notes |
 |---|---|---|---|---|
-| GENEActiv `.bin` | Raw X/Y/Z and embedded light/temperature | Processed `acc` | MAD, custom ENMO | Large files use streamed decoding. Light preview exposes `LIGHT` (`log10(lux + 1)`) and `LIGHT_LUX` (lux) when available. |
-| Axivity `.cwa` | Raw X/Y/Z | Processed `acc` through supported conversion | Mapping availability depends on output | Java and Oxford `accelerometer` dependencies may be required. |
-| ActiGraph `.gt3x` | Raw calibrated X/Y/Z; optional timestamped lux records | Processed `acc` | MAD, custom ENMO, 30 Hz ActiGraph-style counts | `log.bin` activity is streamed directly to epochs. Official type-`0x05` lux records are inspected and streamed separately when present; no-light files skip light outputs without affecting activity. |
+| GENEActiv `.bin` | Raw X/Y/Z and embedded light/temperature | Processed `acc` | ENMO, MAD, PIM, ZCM | Large files use streamed decoding. Light preview exposes `LIGHT` (`log10(lux + 1)`) and `LIGHT_LUX` (lux) when available. |
+| Axivity `.cwa` | Raw X/Y/Z | Processed `acc` through supported conversion | Existing ENMO, MAD, PIM, or ZCM only when emitted in an uploaded converted time-series | Java and Oxford `accelerometer` dependencies may be required. The standard server conversion currently emits epoch-level `acc`. |
+| ActiGraph `.gt3x` | Raw calibrated X/Y/Z; optional timestamped lux records | Processed `acc` | ENMO, MAD, PIM, ZCM, 30 Hz ActiGraph-style counts | `log.bin` activity is streamed directly to epochs. Official type-`0x05` lux records are inspected and streamed separately when present; no-light files skip light outputs without affecting activity. |
 | ActiGraph `.agd` | Device count/activity series | Source/device activity | Normally none | Preferred when the analysis is intended to remain on the ActiGraph count scale. |
-| Actiwatch `.awd` and other native pyActigraphy formats | Device activity | Source/device activity | Normally none | Reader and metric availability depend on the corresponding pyActigraphy class. |
-| Oxford `*timeSeries.csv(.gz)` | Epoch-level `acc` and related columns | Existing `acc` column | Existing compatible columns | Use when exact output from a chosen `accProcess` version is required. |
+| Actiwatch `.awd` and other native pyActigraphy formats | Device activity | Source/device activity | Native reader modes where available; ATR supports PIM/ZCM | Reader and metric availability depend on the corresponding pyActigraphy class. |
+| Oxford `*timeSeries.csv(.gz)` | Epoch-level `acc` and related columns | Existing `acc` column | Existing ENMO, MAD, PIM, or ZCM columns | The selected existing column is used directly and recorded in provenance. |
 | Philips Actiware/RPX CSV | Localized epoch activity with optional white/RGB light | Source activity | Existing light channels | English, French, and German exports are parsed directly. UTF-8, UTF-8 BOM, Windows-1252, and compatible Latin-1 text are accepted. |
 | Generic CSV/TSV | User-defined timestamp/activity/light | Source activity when supplied | Manual timestamp, time, activity, light, temperature, and non-wear mapping | Automatic detection is attempted first; manual mapping is available on page 1. |
 | NHANES `PAXHR_H` | Multi-participant hourly summary | `PAXMTSH` only after participant/time-index preparation | `PAXLXSH` is an hourly light sum, not epoch lux | Filter one `SEQN`, merge `PAXFDAY`/`PAXFTIME`, and construct a documented participant-relative time index from `PAXSSNHP`. The cohort file is not analysed directly as one recording. |
@@ -64,7 +64,7 @@ participant-level minute data or original GT3X data when available.
 
 ## Raw X/Y/Z is not a pyActigraphy activity series
 
-Most pyActigraphy metrics operate on one timestamp-indexed activity series. Three raw axes must first be converted into a scalar epoch-level signal such as processed `acc`, MAD, ENMO, vector magnitude, or validated device counts.
+Most pyActigraphy metrics operate on one timestamp-indexed activity series. Three raw axes must first be converted into a scalar epoch-level signal such as processed `acc`, ENMO, MAD, PIM, ZCM, vector magnitude, or source device counts.
 
 ## Units and calibration
 
@@ -123,15 +123,6 @@ Format references:
 - [ActiGraph current GT3X log-record format](https://github.com/actigraph/GT3X-File-Format)
 - [ActiGraph legacy NHANES GT3X format](https://github.com/actigraph/NHANES-GT3X-File-Format)
 
-## Exact Oxford processing
+## Oxford time-series pathway
 
-The direct memory-safe pathway is designed to approximate the documented processed-acceleration sequence without materializing the entire raw recording in memory. It may not be byte-identical to every Oxford `accProcess` release because complete autocalibration and interpolation details can differ.
-
-For release-specific reproducibility:
-
-```text
-raw .bin/.cwa/.gt3x
-→ selected accProcess release
-→ *timeSeries.csv.gz
-→ upload generated file
-```
+An Oxford `*timeSeries.csv(.gz)` upload uses its existing epoch-level activity columns directly. The selected column name, units, epoch duration, and mapping are retained in the result provenance. Raw files instead use the bounded-memory decoder/converter available for that format.

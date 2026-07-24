@@ -875,6 +875,8 @@ export default function Dashboard() {
       formData.append("lmxLength", lightMetricSettings.lmxLength || "5h");
       formData.append("lowest", String(lightMetricSettings.lowest !== false));
       formData.append("binarize", String(Boolean(lightMetricSettings.binarizeMetric)));
+      formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
+      formData.append("csvSeparator", csvSeparator);
 
       const lightAnalysisJobId = createRequestId();
       formData.append("requestId", lightAnalysisJobId);
@@ -1607,6 +1609,7 @@ export default function Dashboard() {
 
   return (
     <div
+      className="app-center-aligned"
       style={{
         padding: 24,
         fontFamily: "Arial, sans-serif",
@@ -1615,8 +1618,8 @@ export default function Dashboard() {
       }}
     >
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
-          <div>
+        <div className="app-header-centered" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+          <div style={{ width: "100%" }}>
             <h1 style={{ fontSize: 32, margin: "0 0 8px" }}>{appConfig.appName}</h1>
             <p style={{ color: "#475569", margin: 0, lineHeight: 1.5 }}>
               Guided 10-step actigraphy workflow covering preprocessing, activity estimation, cleaning, sleep-wake classification, other sensors, analysis, results, and export.
@@ -1661,6 +1664,7 @@ export default function Dashboard() {
           <DocumentationPanel onClose={() => setDocumentationOpen(false)} />
         ) : (
         <div
+          className="workflow-centered"
           style={{
             display: "grid",
             gridTemplateColumns: "280px 1fr",
@@ -1680,13 +1684,13 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div style={{ display: "grid", gap: 16 }}>
+          <div className="workflow-page-centered" style={{ display: "grid", gap: 16 }}>
             {content}
 
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                justifyContent: "center",
                 gap: 12,
                 alignItems: "center",
                 background: "white",
@@ -1723,7 +1727,7 @@ export default function Dashboard() {
                 {stepValidation.message}
               </div>
 
-              <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
                 <button
                   type="button"
                   onClick={goNext}

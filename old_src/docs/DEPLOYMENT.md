@@ -26,11 +26,11 @@ For this revision, confirm:
 ```text
 VITE_API_BASE_URL=https://your-backend.example/
 VITE_GITHUB_REPOSITORY_URL=https://github.com/owner/repository
-VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/docs
+VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/src/docs
 VITE_ENABLE_AUTH_RUNS=false
 ```
 
-The Documentation page always displays a clickable GitHub docs link. Set `VITE_GITHUB_DOCS_URL` to the exact deployed branch/path. When it is omitted, the frontend derives `/tree/main/docs` from `VITE_GITHUB_REPOSITORY_URL`, then uses the bundled project repository as a final fallback. Verify the link after each deployment.
+The Documentation page always displays a clickable GitHub docs link. Set `VITE_GITHUB_DOCS_URL` to the exact deployed branch/path. When it is omitted, the frontend derives `/tree/main/src/docs` from `VITE_GITHUB_REPOSITORY_URL`, then uses the bundled project repository as a final fallback. Verify the link after each deployment.
 
 ## CORS
 

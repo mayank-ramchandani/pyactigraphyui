@@ -32,9 +32,9 @@
       {
         "id": "cosinor",
         "label": "Cosinor",
-        "description": "Cosinor rhythm modeling.",
+        "description": "24-hour cosinor rhythm modelling through pyActigraphy, including mesor, amplitude, acrophase, and fit statistics.",
         "metrics": [],
-        "planned": true
+        "planned": false
       },
       {
         "id": "flm",

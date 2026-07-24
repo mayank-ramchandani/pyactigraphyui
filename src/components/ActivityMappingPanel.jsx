@@ -21,9 +21,21 @@ export const ACTIVITY_MAPPING_OPTIONS = [
   },
   {
     id: "enmo",
-    label: "Custom ENMO (legacy)",
+    label: "ENMO",
     units: "mg",
-    description: "Retains the earlier direct ENMO mapping for comparison. The recommended processed `acc` option should normally be used for raw recordings.",
+    description: "Uses the epoch mean of positive Euclidean Norm Minus One from calibrated vector magnitude.",
+  },
+  {
+    id: "pim",
+    label: "PIM",
+    units: "mg·s/epoch",
+    description: "Proportional-integrating mode. Integrates the absolute dynamic vector-magnitude signal across each epoch, preserving movement intensity and duration.",
+  },
+  {
+    id: "zcm",
+    label: "ZCM",
+    units: "crossings/epoch",
+    description: "Zero-crossing mode. Counts dead-band sign changes in dynamic vector magnitude within each epoch, emphasizing movement frequency.",
   },
 ];
 
@@ -58,7 +70,7 @@ export default function ActivityMappingPanel({
       <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
         {isPreview
           ? "This only controls the plotted preview. It does not change the activity basis selected later for analysis."
-          : "Choose one of four supported activity-basis options. The selected epoch-level series becomes the basis for all chosen rest/activity metrics and is also used as the initial Activity Preview setting."}
+          : "Choose one of six supported activity-basis options. The selected epoch-level series becomes the basis for all chosen rest/activity metrics and is also used as the initial Activity Preview setting."}
       </div>
       <select
         value={value}
@@ -79,9 +91,9 @@ export default function ActivityMappingPanel({
       <div style={{ color: "#1e3a8a", fontSize: 13, marginTop: 8, lineHeight: 1.45 }}>
         {selected.description}
       </div>
-      {["auto", "accelerometer", "mad", "enmo"].includes(value) && !isPreview && (
+      {["auto", "accelerometer", "mad", "enmo", "pim", "zcm"].includes(value) && !isPreview && (
         <div style={{ color: "#9a3412", fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>
-          Count-based thresholds are not automatically equivalent to mg. For RA, IS, IV, M10, and L5, continuous analysis without count binarization is usually the clearer starting point.
+          Thresholds are tied to the selected signal scale (counts, mg, mg·s/epoch, or crossings/epoch). The chosen value and binarization setting are retained with the analysis configuration.
         </div>
       )}
     </div>

@@ -106,10 +106,10 @@ Commit the entire `docs/` directory and root `README.md`. Configure both values 
 
 ```text
 VITE_GITHUB_REPOSITORY_URL=https://github.com/owner/repository
-VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/docs
+VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/src/docs
 ```
 
-`VITE_GITHUB_DOCS_URL` is the preferred direct target and can include a branch or custom documentation directory. The Documentation page still shows a clickable link when it is omitted by deriving `/tree/main/docs` from the repository URL. The bundled project default is used only as a final fallback.
+`VITE_GITHUB_DOCS_URL` is the preferred direct target and can include a branch or custom documentation directory. The Documentation page still shows a clickable link when it is omitted by deriving `/tree/main/src/docs` from the repository URL. The bundled project default is used only as a final fallback.
 
 ## Release documentation checks
 

@@ -109,3 +109,98 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* Shared centred layout for every workflow and documentation page. */
+.app-center-aligned,
+.workflow-centered,
+.workflow-page-centered,
+.workflow-panel-centered,
+.documentation-centered,
+.documentation-card {
+  text-align: center;
+}
+
+.app-center-aligned h1,
+.app-center-aligned h2,
+.app-center-aligned h3,
+.app-center-aligned h4,
+.app-center-aligned p,
+.app-center-aligned label,
+.app-center-aligned legend,
+.app-center-aligned small,
+.app-center-aligned li,
+.app-center-aligned th,
+.app-center-aligned td,
+.documentation-centered h1,
+.documentation-centered h2,
+.documentation-centered h3,
+.documentation-centered h4,
+.documentation-centered p,
+.documentation-centered label,
+.documentation-centered legend,
+.documentation-centered small,
+.documentation-centered li,
+.documentation-centered th,
+.documentation-centered td {
+  text-align: center !important;
+}
+
+.app-center-aligned ul,
+.app-center-aligned ol,
+.documentation-centered ul,
+.documentation-centered ol {
+  list-style-position: inside;
+  padding-inline-start: 0 !important;
+}
+
+.app-center-aligned button,
+.app-center-aligned a,
+.app-center-aligned input,
+.app-center-aligned select,
+.app-center-aligned textarea,
+.documentation-centered button,
+.documentation-centered a,
+.documentation-centered input,
+.documentation-centered select,
+.documentation-centered textarea {
+  text-align: center !important;
+}
+
+.workflow-centered [style*="justify-content: space-between"],
+.workflow-centered [style*="justify-content: flex-end"],
+.workflow-page-centered [style*="justify-content: space-between"],
+.workflow-page-centered [style*="justify-content: flex-end"],
+.documentation-centered [style*="justify-content: space-between"],
+.documentation-centered [style*="justify-content: flex-end"] {
+  justify-content: center !important;
+}
+
+.workflow-centered [style*="align-items: flex-start"],
+.workflow-page-centered [style*="align-items: flex-start"],
+.documentation-centered [style*="align-items: flex-start"] {
+  align-items: center !important;
+}
+
+.workflow-page-centered > *,
+.documentation-centered main,
+.documentation-centered aside,
+.documentation-card {
+  margin-inline: auto;
+}
+
+.documentation-centered table,
+.workflow-page-centered table {
+  margin-inline: auto;
+}
+
+@media (max-width: 900px) {
+  .workflow-centered,
+  .documentation-content-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .workflow-centered > div[style*="position: sticky"],
+  .documentation-centered aside {
+    position: static !important;
+  }
+}

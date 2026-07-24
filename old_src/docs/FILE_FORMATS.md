@@ -11,7 +11,9 @@ Page 1 imports **actigraphy files only**. Optional start/stop and masking files 
 | ActiGraph `.agd` | Device count/activity series | Source/device activity | Normally none | Preferred when the analysis is intended to remain on the ActiGraph count scale. |
 | Actiwatch `.awd` and other native pyActigraphy formats | Device activity | Source/device activity | Normally none | Reader and metric availability depend on the corresponding pyActigraphy class. |
 | Oxford `*timeSeries.csv(.gz)` | Epoch-level `acc` and related columns | Existing `acc` column | Existing compatible columns | Use when exact output from a chosen `accProcess` version is required. |
-| Generic CSV/TSV | User-defined timestamp/activity or XYZ | Source activity when supplied | Derived mapping only from valid XYZ | Timestamp and activity columns may need manual mapping. |
+| Philips Actiware/RPX CSV | Localized epoch activity with optional white/RGB light | Source activity | Existing light channels | English, French, and German exports are parsed directly. UTF-8, UTF-8 BOM, Windows-1252, and compatible Latin-1 text are accepted. |
+| Generic CSV/TSV | User-defined timestamp/activity/light | Source activity when supplied | Manual timestamp, time, activity, light, temperature, and non-wear mapping | Automatic detection is attempted first; manual mapping is available on page 1. |
+| NHANES `PAXHR_H` | Multi-participant hourly summary | `PAXMTSH` only after participant/time-index preparation | `PAXLXSH` is an hourly light sum, not epoch lux | Filter one `SEQN`, merge `PAXFDAY`/`PAXFTIME`, and construct a documented participant-relative time index from `PAXSSNHP`. The cohort file is not analysed directly as one recording. |
 | Excel/ODS | Tabular activity or XYZ | Source activity when supplied | Conditional | Very large spreadsheets are not recommended for raw high-frequency data. |
 
 All formats enter the same downstream missingness, mask, valid-day, and
@@ -25,6 +27,40 @@ signal basis differs by format; the validity rules do not.
 | Converted BIN/CWA or Oxford time-series | Missing timestamps/values preserved | Used only when supplied by the series/reader |
 | Native pyActigraphy formats | Missing values preserved | Existing reader mask respected when available and enabled |
 | Mapped tabular input | Missing values preserved | `nonwear`/`mask`/`offwrist`: 1 means excluded; `wear`/`worn`: 1 means worn |
+
+
+## Localized Actiware/RPX CSV exports
+
+Actiware CSV exports can place metadata before the epoch table and can localize
+column names such as `Date`, `Heure`, `Activité`, `Datum`, `Zeit`, and
+`Aktivität`. The backend now:
+
+- detects UTF-8, UTF-8 with BOM, Windows-1252, UTF-16, and a lossless Latin-1 fallback;
+- locates the epoch table by semantic date/time/activity headers rather than a fixed row offset;
+- bypasses the pyActigraphy RPX `data_offset` path for localized CSV exports;
+- parses decimal-comma activity and light values;
+- preserves white, red, green, and blue light channels when present; and
+- treats a valid no-light export as an activity recording with light analysis skipped.
+
+## NHANES PAXHR_H preparation
+
+`PAXHR_H` is a survey-level hour-summary file containing many participants, not
+a single timestamped device recording. The importer identifies its characteristic
+columns and returns a preparation message instead of the former generic-tabular
+error. Before using it in this application:
+
+1. filter to one `SEQN`;
+2. merge `PAXFDAY` (starting day of week) and `PAXFTIME` (first recording
+   time) from `PAXHD_H`;
+3. use `PAXSSNHP` to construct a participant-relative hourly time index;
+4. choose and document a synthetic anchor date consistent with the reported
+   day of week, because the public files do not include the actual calendar date;
+5. map `PAXMTSH` as the activity series; and
+6. document that the signal is an hourly MIMS sum, not raw acceleration or
+   device counts.
+
+For minute-resolution rhythm or sleep analysis, prefer the corresponding
+participant-level minute data or original GT3X data when available.
 
 ## Raw X/Y/Z is not a pyActigraphy activity series
 

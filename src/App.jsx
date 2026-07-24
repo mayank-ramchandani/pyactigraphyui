@@ -1,6 +1,8 @@
 import React from "react";
 import Dashboard from "./pages/Dashboard";
+import FeedbackAdminPanel from "./components/FeedbackAdminPanel";
 
 export default function App() {
-  return <Dashboard />;
+  const feedbackAdmin = new URLSearchParams(window.location.search).get("feedback-admin");
+  return feedbackAdmin === "1" ? <FeedbackAdminPanel /> : <Dashboard />;
 }

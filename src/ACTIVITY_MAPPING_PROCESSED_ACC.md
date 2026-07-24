@@ -1,18 +1,18 @@
 # Processed acceleration activity basis
 
-Processed acceleration is one of the four choices on page 3. The maintained documentation is [docs/ACTIVITY_PROCESSING.md](docs/ACTIVITY_PROCESSING.md).
+Processed acceleration is one of the six choices on page 3. The maintained documentation is [docs/ACTIVITY_PROCESSING.md](docs/ACTIVITY_PROCESSING.md).
 
 ## Current behaviour
 
-- `auto` selects a suitable source/device series for compatible native/count files and processed epoch-level acceleration for supported raw X/Y/Z files.
+- `auto` selects source/device activity for compatible native/count files and processed epoch-level acceleration for supported raw X/Y/Z files.
 - `accelerometer` explicitly requests processed `acc`.
-- `mad` and `enmo` remain available as distinct alternatives.
-- Page 4 previews the activity series; page 8 selects metrics; page 9 generates results.
+- `enmo`, `mad`, `pim`, and `zcm` are distinct alternative scalar mappings.
+- Page 4 previews the activity series; page 8 selects metric- or family-level processing; page 9 generates results.
 
 ## Large raw files
 
-The direct GENEActiv and GT3X readers reduce calibrated raw samples into epochs without constructing a complete high-frequency X/Y/Z DataFrame. GT3X device-local timestamps and real gaps are preserved. For exact equivalence with a particular Oxford `accProcess` release, generate and upload that release's `*timeSeries.csv.gz` output.
+The direct GENEActiv and GT3X readers reduce calibrated raw samples into epochs without constructing a complete high-frequency X/Y/Z DataFrame. GT3X device-local timestamps, filter state, epoch state, and genuine recording gaps are preserved. Oxford `*timeSeries.csv.gz` uploads use their existing epoch-level columns directly.
 
 ## Provenance and interpretation
 
-Results and diagnostics record the requested and resolved activity basis, source/engine, units, and epoch duration. Count cut-points are not automatically valid for mg-scale processed acceleration, MAD, or ENMO.
+Results and diagnostics record the requested and resolved activity basis, source/engine, units, epoch duration, filtering, and mapping-specific parameters. Thresholds remain explicit and tied to the selected signal scale.

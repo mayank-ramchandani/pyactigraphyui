@@ -28,6 +28,7 @@ const RESULT_INFO_OVERRIDES = {
   analysis_window_mode: "Shows whether metrics were calculated on the whole recording or selected analysis intervals.",
   analysis_window_count: "Number of selected analysis intervals used for this run.",
   analysis_window_summary: "Explanation of how selected-interval outputs were summarized in the top-level table.",
+  cosinor: "A fixed 24-hour, single-component rhythm model fitted with pyActigraphy.analysis.Cosinor. Expand the result to inspect mesor, amplitude, acrophase, derived peak time, and fit statistics.",
 };
 
 const RESULT_LABEL_OVERRIDES = {
@@ -47,6 +48,7 @@ const RESULT_LABEL_OVERRIDES = {
   analysis_window_mode: "Analysis window mode",
   analysis_window_count: "Analysis window count",
   analysis_window_summary: "Analysis window summary",
+  cosinor: "Cosinor family",
 };
 
 function resultLabel(metricRegistry, key) {
