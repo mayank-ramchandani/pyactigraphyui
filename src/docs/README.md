@@ -41,5 +41,7 @@ After actigraphy files are imported, pages 2–9 are directly clickable in the l
 - **Consecutive valid days** means one uninterrupted calendar-day run.
 - **Sleep-window coverage** means the proportion of expected epochs inside a sleep window that remain recorded and scorable after gaps, non-wear, and masks.
 - **Window** means a full-timestamp rest/sleep interval; no heuristic fallback window is inserted.
+- **Localized RPX CSV** means an Actiware export whose metadata/header labels may be English, French, or German and whose encoding may be UTF-8 or Windows-1252.
+- **Mapped tabular activity** means a timestamped source column used as supplied; it is not automatically equivalent to raw acceleration, ENMO, MAD, or device counts.
 
-Last consolidated: **2026-07-23**.
+Last consolidated: **2026-07-24**.

@@ -12,7 +12,11 @@ Optional inputs are deliberately moved to the page where they are used:
 - sleep diaries: page 6;
 - separate light, temperature, and other sensor files: page 7.
 
-Generic CSV files are inspected automatically. Enable manual column mapping on this page only when timestamp and activity detection is incorrect.
+Generic CSV files are inspected automatically. Enable manual column mapping on this page only when timestamp and activity detection is incorrect. The mapping panel can inspect timestamp, separate time, activity, light, temperature, and non-wear columns.
+
+Localized Philips Actiware/RPX CSV exports in English, French, or German are parsed directly, including UTF-8 and Windows-1252 files. Metadata rows before the epoch table are skipped automatically, decimal-comma values are converted safely, and embedded white/RGB light channels are retained.
+
+`PAXHR_H.csv` from NHANES is not one actigraphy recording: it contains hourly summaries for many participants and has no standalone timestamp column. The app now identifies it and explains that one `SEQN` must be selected, `PAXFDAY`/`PAXFTIME` merged from `PAXHD_H`, and a participant-relative time index constructed from `PAXSSNHP` before `PAXMTSH` can be mapped. The public files do not disclose the actual calendar date, so any synthetic anchor date must be documented.
 
 ## 2. Pre-processing
 

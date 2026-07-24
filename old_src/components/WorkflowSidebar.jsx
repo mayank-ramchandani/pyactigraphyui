@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep, onStepClick }) {
+export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep, visitedSteps = [], onStepClick }) {
   const currentStepNumber = Number(currentStep);
   const unlockedStepNumber = Number(maxUnlockedStep || currentStep);
 
@@ -19,14 +19,14 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
       </div>
 
       <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, marginBottom: 16 }}>
-        You can move between the current step and any unlocked earlier step.
+        After importing actigraphy files, click any step from 2 through 9 directly. Export unlocks after results are generated.
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
         {workflow.map((item, index) => {
           const stepNumber = Number(item.id);
           const isActive = stepNumber === currentStepNumber;
-          const isCompleted = stepNumber < currentStepNumber;
+          const isVisited = (visitedSteps || []).includes(String(item.id)) && !isActive;
           const isUnlocked = stepNumber <= unlockedStepNumber;
           const isLast = index === workflow.length - 1;
 
@@ -41,9 +41,9 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
                     width: 34,
                     height: 34,
                     borderRadius: 999,
-                    background: isActive || isCompleted ? "#0f172a" : "white",
-                    color: isActive || isCompleted ? "white" : "#0f172a",
-                    border: isActive || isCompleted ? "none" : "1px solid #cbd5e1",
+                    background: isActive || isVisited ? "#0f172a" : "white",
+                    color: isActive || isVisited ? "white" : "#0f172a",
+                    border: isActive || isVisited ? "none" : "1px solid #cbd5e1",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -52,7 +52,7 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
                     opacity: isUnlocked ? 1 : 0.5,
                   }}
                 >
-                  {isCompleted ? "✓" : item.id}
+                  {isVisited ? "✓" : item.id}
                 </button>
 
                 {!isLast && (
@@ -61,7 +61,7 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
                       width: 2,
                       flex: 1,
                       marginTop: 6,
-                      background: isCompleted ? "#0f172a" : "#e2e8f0",
+                      background: isVisited ? "#0f172a" : "#e2e8f0",
                       borderRadius: 999,
                       minHeight: 28,
                     }}
@@ -74,10 +74,10 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
                 disabled={!isUnlocked}
                 onClick={() => isUnlocked && onStepClick?.(item.id)}
                 style={{
-                  border: isActive ? "1px solid #0f172a" : isCompleted ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
+                  border: isActive ? "1px solid #0f172a" : isVisited ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
                   borderRadius: 16,
                   padding: 14,
-                  background: isActive ? "#f8fafc" : isCompleted ? "#f8fafc" : "white",
+                  background: isActive ? "#f8fafc" : isVisited ? "#f8fafc" : "white",
                   opacity: isUnlocked ? 1 : 0.6,
                   textAlign: "left",
                   cursor: isUnlocked ? "pointer" : "not-allowed",
@@ -91,12 +91,12 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
                       fontWeight: 700,
                       padding: "4px 8px",
                       borderRadius: 999,
-                      background: isActive ? "#0f172a" : isCompleted ? "#e2e8f0" : "#f1f5f9",
-                      color: isActive ? "white" : isCompleted ? "#334155" : "#64748b",
+                      background: isActive ? "#0f172a" : isVisited ? "#e2e8f0" : "#f1f5f9",
+                      color: isActive ? "white" : isVisited ? "#334155" : "#64748b",
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {isActive ? "Current" : isCompleted ? "Done" : isUnlocked ? "Unlocked" : "Locked"}
+                    {isActive ? "Current" : isVisited ? "Visited" : isUnlocked ? "Unlocked" : "Locked"}
                   </div>
                 </div>
 

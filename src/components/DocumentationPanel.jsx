@@ -7,6 +7,7 @@ import analysisFamilyRegistry from "../config/analysisFamilyRegistry.json";
 import { ACTIVITY_MAPPING_OPTIONS } from "./ActivityMappingPanel";
 
 const DEFAULT_REPOSITORY_URL = "https://github.com/mayank-ramchandani/pyactigraphyui";
+const DEFAULT_DOCS_URL = "https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs";
 
 const FILE_ROWS = [
   ["GENEActiv .bin", "Raw tri-axial acceleration and embedded light", "Recommended processed acc, processed acceleration, MAD, or custom ENMO", "Large previews and analyses use background/streamed paths where available."],
@@ -15,14 +16,16 @@ const FILE_ROWS = [
   ["ActiGraph .agd", "Device activity/counts", "Recommended source/device activity", "Preferred when the intended analysis scale is ActiGraph counts."],
   ["Actiwatch .awd and native pyActigraphy formats", "Device activity", "Recommended source/device activity", "Availability depends on the matching pyActigraphy reader."],
   ["Oxford timeSeries.csv(.gz)", "Epoch-level processed acceleration", "Existing acc column", "Use this when exact external accProcess output is required."],
-  ["Generic CSV/TXT", "User-defined columns", "Mapped source activity; derived mappings require valid XYZ", "Manual mapping is available on the Importing Actigraphy Files page."],
+  ["Philips Actiware/RPX CSV", "Localized epoch activity with optional white/RGB light", "Source activity", "English, French, and German exports are parsed directly in UTF-8 or Windows-1252."],
+  ["Generic CSV/TXT", "User-defined columns", "Mapped source activity", "Automatic detection or manual timestamp/activity/light mapping is available on Importing Actigraphy Files."],
+  ["NHANES PAXHR_H", "Multi-participant hourly summary", "PAXMTSH after participant/time-index preparation", "Filter one SEQN, merge PAXFDAY/PAXFTIME, and build a documented participant-relative time index from PAXSSNHP."],
 ];
 
 const NARRATIVE_SEARCH_TEXT = {
   overview: "guided ten step actigraphy application provenance preprocessing activity magnitude preview cleaning masking sleep wake classification light temperature sensors metrics results export csv json plots diagnostics github documentation",
   workflow: appConfig.workflow.map((step) => `${step.id} ${step.title} ${step.description}`).join(" "),
   preprocessing: "pre-processing preprocessing minimum valid hours valid day 16 hours consecutive days two days sri rhythm metrics longest run missing data gaps non-wear masks minimum sleep-window coverage 80 percent expected epochs recorded scorable tst waso sleep efficiency customize threshold",
-  files: FILE_ROWS.flat().join(" "),
+  files: `${FILE_ROWS.flat().join(" ")} encoding utf-8 windows-1252 cp1252 localized actiware french german data_offset generic csv manual mapping nhanes paxhr paxhd seqn paxmtsh`,
   activity: ACTIVITY_MAPPING_OPTIONS.map((option) => `${option.label} ${option.units} ${option.description}`).join(" "),
   cleaning: "start stop recording interval support files masks masking exclusion non-wear file id per-file plot selection crossing midnight missing epochs unavailable not zero",
   sleep: `${algorithmRegistry.algorithms.map((algorithm) => JSON.stringify(algorithm)).join(" ")} sleep diary custom windows plot bedtime wake time classification algorithm cole kripke sadeh oakley scripps crespo roenneberg no fallback`,
@@ -52,7 +55,7 @@ const SECTIONS = [
 
 function Card({ title, children }) {
   return (
-    <section style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18 }}>
+    <section className="documentation-card" style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18, textAlign: "center" }}>
       <h3 style={{ margin: "0 0 10px", fontSize: 18, color: "#0f172a" }}>{title}</h3>
       <div style={{ color: "#475569", lineHeight: 1.65, fontSize: 14 }}>{children}</div>
     </section>
@@ -66,7 +69,7 @@ function Table({ headers, rows }) {
         <thead>
           <tr style={{ background: "#f8fafc" }}>
             {headers.map((header) => (
-              <th key={header} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #e2e8f0", color: "#334155" }}>{header}</th>
+              <th key={header} style={{ textAlign: "center", padding: 10, borderBottom: "1px solid #e2e8f0", color: "#334155" }}>{header}</th>
             ))}
           </tr>
         </thead>
@@ -74,7 +77,7 @@ function Table({ headers, rows }) {
           {rows.map((row, rowIndex) => (
             <tr key={`${rowIndex}-${row[0]}`}>
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} style={{ padding: 10, verticalAlign: "top", borderBottom: rowIndex === rows.length - 1 ? "none" : "1px solid #f1f5f9", color: cellIndex === 0 ? "#0f172a" : "#475569", fontWeight: cellIndex === 0 ? 700 : 400 }}>
+                <td key={cellIndex} style={{ padding: 10, verticalAlign: "top", textAlign: "center", borderBottom: rowIndex === rows.length - 1 ? "none" : "1px solid #f1f5f9", color: cellIndex === 0 ? "#0f172a" : "#475569", fontWeight: cellIndex === 0 ? 700 : 400 }}>
                   {cell}
                 </td>
               ))}
@@ -118,7 +121,10 @@ export default function DocumentationPanel({ onClose }) {
   const [query, setQuery] = useState("");
 
   const repositoryUrl = String(import.meta.env.VITE_GITHUB_REPOSITORY_URL || DEFAULT_REPOSITORY_URL).replace(/\/$/, "");
-  const githubDocsUrl = String(import.meta.env.VITE_GITHUB_DOCS_URL || `${repositoryUrl}/tree/main/docs`).replace(/\/$/, "");
+  const derivedDocsUrl = repositoryUrl === DEFAULT_REPOSITORY_URL
+    ? DEFAULT_DOCS_URL
+    : `${repositoryUrl}/tree/main/src/docs`;
+  const githubDocsUrl = String(import.meta.env.VITE_GITHUB_DOCS_URL || derivedDocsUrl).replace(/\/$/, "");
 
   const metricRows = metricRegistry.metrics.map((metric) => [
     metric.shortLabel || metric.label,
@@ -187,8 +193,14 @@ export default function DocumentationPanel({ onClose }) {
         <Card title="Supported input patterns">
           <Table headers={["Format", "Primary signal", "Available activity basis", "Notes"]} rows={FILE_ROWS} />
         </Card>
+        <Card title="Localized Actiware/RPX CSV files">
+          Philips Actiware/RPX epoch exports are recognized in English, French, and German. UTF-8, UTF-8 with BOM, Windows-1252, and Latin-1-compatible text are decoded safely. The backend locates the actual epoch table instead of relying on pyActigraphy’s English-only data-offset assumptions, and retains white/RGB light channels when present.
+        </Card>
         <Card title="Generic CSV and TXT files">
           Automatic detection is attempted first. When it is incorrect, enable manual CSV mapping on the Importing Actigraphy Files page and provide timestamp plus activity columns. Light, temperature, non-wear, and separate time columns can also be mapped where present.
+        </Card>
+        <Card title="NHANES PAXHR_H">
+          PAXHR_H is a cohort-level hourly summary rather than one timestamped actigraphy recording. The application now identifies it and gives preparation guidance instead of a generic unsupported-file error. Filter to one participant (SEQN), merge PAXFDAY and PAXFTIME from PAXHD_H, and use PAXSSNHP to build a participant-relative hourly time index. Because the public files do not disclose the actual calendar date, use and document a synthetic anchor date consistent with the reported day of week, then map PAXMTSH as activity.
         </Card>
       </div>
     ),
@@ -340,15 +352,15 @@ export default function DocumentationPanel({ onClose }) {
   }, [activeSection, visibleSections]);
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className="documentation-centered" style={{ display: "grid", gap: 16, textAlign: "center" }}>
       <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 18, padding: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-          <div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ width: "100%" }}>
             <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>Help & methods</div>
             <h2 style={{ margin: "6px 0 6px", fontSize: 26, color: "#0f172a" }}>Documentation</h2>
             <div style={{ color: "#475569", lineHeight: 1.5 }}>Searchable user guidance, methods, file support, diagnostics, limitations, and developer notes.</div>
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", width: "100%" }}>
             <a href={githubDocsUrl} target="_blank" rel="noreferrer" style={{ padding: "9px 13px", borderRadius: 10, border: "1px solid #cbd5e1", color: "#0f172a", textDecoration: "none", fontWeight: 700, fontSize: 13 }}>
               Open GitHub docs
             </a>
@@ -359,7 +371,7 @@ export default function DocumentationPanel({ onClose }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 280px) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
+      <div className="documentation-content-grid" style={{ display: "grid", gridTemplateColumns: "minmax(220px, 280px) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
         <aside style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: 14, position: "sticky", top: 24 }}>
           <input
             value={query}
@@ -377,7 +389,7 @@ export default function DocumentationPanel({ onClose }) {
                 key={section.id}
                 type="button"
                 onClick={() => setActiveSection(section.id)}
-                style={{ border: activeSection === section.id ? "1px solid #0f172a" : "1px solid transparent", background: activeSection === section.id ? "#f1f5f9" : "transparent", borderRadius: 9, padding: "9px 10px", textAlign: "left", cursor: "pointer", color: "#0f172a", fontWeight: activeSection === section.id ? 800 : 600 }}
+                style={{ border: activeSection === section.id ? "1px solid #0f172a" : "1px solid transparent", background: activeSection === section.id ? "#f1f5f9" : "transparent", borderRadius: 9, padding: "9px 10px", textAlign: "center", cursor: "pointer", color: "#0f172a", fontWeight: activeSection === section.id ? 800 : 600 }}
               >
                 {section.label}
               </button>

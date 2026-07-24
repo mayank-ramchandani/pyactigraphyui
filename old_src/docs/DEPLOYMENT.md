@@ -26,10 +26,11 @@ For this revision, confirm:
 ```text
 VITE_API_BASE_URL=https://your-backend.example/
 VITE_GITHUB_REPOSITORY_URL=https://github.com/owner/repository
+VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/docs
 VITE_ENABLE_AUTH_RUNS=false
 ```
 
-The repository URL is optional. When provided, the in-app Documentation page exposes a direct link to `docs/` on GitHub.
+The Documentation page always displays a clickable GitHub docs link. Set `VITE_GITHUB_DOCS_URL` to the exact deployed branch/path. When it is omitted, the frontend derives `/tree/main/docs` from `VITE_GITHUB_REPOSITORY_URL`, then uses the bundled project repository as a final fallback. Verify the link after each deployment.
 
 ## CORS
 

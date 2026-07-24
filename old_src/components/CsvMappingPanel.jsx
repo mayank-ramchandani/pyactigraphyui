@@ -233,7 +233,7 @@ export default function CsvMappingPanel({
             fontWeight: 600,
           }}
         >
-          Continue to Preview
+          Continue to Pre-processing
         </button>
       </div>
     </div>

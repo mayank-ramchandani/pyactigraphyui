@@ -1,4 +1,6 @@
-# Feedback, Google login, and saved run history setup
+# Feedback, optional Google login, and saved run history setup
+
+The current public workflow does not require login and does not place Supabase setup instructions on page 1. Authentication and saved runs remain optional deployment features controlled separately from the ten-page analysis workflow.
 
 This source includes two new features:
 

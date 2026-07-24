@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 function BubbleInfo({ label, content }) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
 
   return (
     <span
@@ -13,9 +13,9 @@ function BubbleInfo({ label, content }) {
       <button
         type="button"
         aria-label={`More information about ${label}`}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
           setOpen((value) => !value);
         }}
         style={{
@@ -36,7 +36,6 @@ function BubbleInfo({ label, content }) {
       >
         i
       </button>
-
       {open && (
         <div
           style={{
@@ -44,7 +43,7 @@ function BubbleInfo({ label, content }) {
             top: "120%",
             left: 0,
             zIndex: 50,
-            width: 340,
+            width: 360,
             padding: 12,
             borderRadius: 12,
             border: "1px solid #cbd5e1",
@@ -81,15 +80,14 @@ const acceptedActigraphyExtensions = [
 ];
 
 function getExtension(name) {
-  const parts = name.toLowerCase().split(".");
+  const parts = String(name || "").toLowerCase().split(".");
   return parts.length > 1 ? `.${parts.pop()}` : "";
 }
 
 export default function FileSelectionPanel({
   title,
   uploadedFiles,
-  setUploadedFiles,
-  setCurrentStep,
+  setCurrentStep = () => {},
   analysisMode,
   setAnalysisMode,
   setPreviewLoaded,
@@ -105,28 +103,18 @@ export default function FileSelectionPanel({
   setShowManualMapping = () => {},
 }) {
   const [uploadError, setUploadError] = useState("");
-
   const actigraphyFiles = uploadedFiles.actigraphy || [];
   const hasCsvActigraphy = actigraphyFiles.length > 0 && actigraphyFiles.every((file) => getExtension(file.name) === ".csv");
 
-  const fileInputs = [
-    { key: "actigraphy", title: "Actigraphy Files", button: "Choose Files" },
-    { key: "sleepDiary", title: "Sleep Diary", button: "Optional Upload" },
-    { key: "light", title: "Light Data", button: "Optional Upload" },
-    { key: "temperature", title: "Temperature Data", button: "Optional Upload" },
-    { key: "masking", title: "Cleaning / Masking", button: "Optional Upload" },
-    { key: "startStop", title: "Start / Stop", button: "Optional Upload" },
-  ];
-
-  const handleFiles = async (key, fileList) => {
+  const handleFiles = (fileList) => {
     const files = Array.from(fileList || []);
     setUploadError("");
     setFileError?.("");
 
-    if (key === "actigraphy" && files.length > 0) {
+    if (files.length > 0) {
       const invalid = files.find((file) => {
         const lower = file.name.toLowerCase();
-        return !acceptedActigraphyExtensions.some((ext) => lower.endsWith(ext));
+        return !acceptedActigraphyExtensions.some((extension) => lower.endsWith(extension));
       });
 
       if (invalid) {
@@ -145,15 +133,7 @@ export default function FileSelectionPanel({
       }
     }
 
-    if (key === "actigraphy" && onActigraphyFilesChange) {
-      onActigraphyFilesChange(files);
-    } else {
-      setUploadedFiles((prev) => ({
-        ...prev,
-        [key]: files,
-      }));
-    }
-
+    onActigraphyFilesChange?.(files);
     setPreviewLoaded?.(false);
     setPreviewData?.(null);
     setPreviewError?.("");
@@ -163,141 +143,63 @@ export default function FileSelectionPanel({
   };
 
   return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #e2e8f0",
-        borderRadius: 20,
-        padding: 20,
-      }}
-    >
+    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        Upload raw actigraphy data and optional supporting files before previewing.
+        Upload actigraphy recordings here. Sleep diaries, masks, start/stop files, light files, and other sensor files are added later in the step where they are used.
       </p>
 
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 16,
-          padding: 16,
-          background: "#f8fafc",
-          marginBottom: 16,
-        }}
-      >
-        <div
-  style={{
-    border: "1px solid #e2e8f0",
-    borderRadius: 16,
-    padding: 16,
-    background: "#f8fafc",
-    marginBottom: 16,
-    display: "grid",
-    gap: 10,
-  }}
->
-  <div style={{ fontWeight: 700 }}>
-    <BubbleInfo
-      label="Accepted actigraphy files"
-      content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. ActiGraph .gt3x files can be read with pygt3x and converted to epoch activity through agcounts when available. GENEActiv .bin files can be read directly by the app; other raw .bin/.cwa files use the Oxford accelerometer conversion path when the server has enough memory.`}
-    />
-  </div>
-
-  <div style={{ fontWeight: 700 }}>
-    <BubbleInfo
-      label="Custom CSV / TXT mapping"
-      content="Manual mapping is optional. Native pyActigraphy-supported files should load directly. Generic CSV or TXT files can use manual mapping only when automatic detection does not match the file."
-    />
-  </div>
-
-
-  <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.6 }}>
-    Masking excludes invalid or non-wear periods. Sleep diary files describe reported sleep timing. Start/stop inputs define the intended analysis interval; files are optional because manual intervals can also be used.
-  </div>
-</div>
+      <div style={{ border: "1px solid #dbeafe", borderRadius: 16, padding: 16, background: "#eff6ff", marginBottom: 16, display: "grid", gap: 10 }}>
+        <div style={{ fontWeight: 700 }}>
+          <BubbleInfo
+            label="Accepted actigraphy files"
+            content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. ActiGraph .gt3x and GENEActiv .bin recordings are inspected for embedded light later on the Other Sensors page.`}
+          />
+        </div>
+        <div style={{ fontWeight: 700 }}>
+          <BubbleInfo
+            label="Multiple-file analysis"
+            content="Multiple actigraphy files can be uploaded together when they use the same extension. Cleaning, masking, sleep windows, results, and exports retain the source file name so file-specific settings remain traceable."
+          />
+        </div>
       </div>
 
       {(uploadError || fileError) && (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: 12,
-            borderRadius: 12,
-            border: "1px solid #fecaca",
-            background: "#fef2f2",
-            color: "#991b1b",
-            fontSize: 14,
-          }}
-        >
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 12, border: "1px solid #fecaca", background: "#fef2f2", color: "#991b1b", fontSize: 14 }}>
           {uploadError || fileError}
         </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          gap: 12,
-        }}
-      >
-        {fileInputs.map((item) => (
-          <label
-            key={item.key}
-            style={{
-              border: "2px dashed #cbd5e1",
-              borderRadius: 16,
-              padding: 20,
-              background: "#f8fafc",
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ fontWeight: 700 }}>{item.title}</div>
-            <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
-              {uploadedFiles[item.key]?.length
-                ? `${uploadedFiles[item.key].length} file(s) selected`
-                : "No files selected"}
-            </div>
-
-            <input
-              type="file"
-              multiple
-              accept={item.key === "actigraphy" ? acceptedActigraphyExtensions.join(",") : undefined}
-              style={{ display: "none" }}
-              onChange={(e) => handleFiles(item.key, e.target.files)}
-            />
-
-            <div
-              style={{
-                marginTop: 12,
-                display: "inline-block",
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: "1px solid #cbd5e1",
-                background: "white",
-              }}
-            >
-              {item.button}
-            </div>
-          </label>
-        ))}
-      </div>
+      <label style={{ display: "block", border: "2px dashed #cbd5e1", borderRadius: 16, padding: 24, background: "#f8fafc", cursor: "pointer" }}>
+        <div style={{ fontWeight: 800, fontSize: 17 }}>Actigraphy files</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
+          {actigraphyFiles.length ? `${actigraphyFiles.length} file(s) selected` : "No actigraphy files selected"}
+        </div>
+        {actigraphyFiles.length > 0 && (
+          <div style={{ marginTop: 8, color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
+            {actigraphyFiles.map((file) => file.name).join(", ")}
+          </div>
+        )}
+        <input
+          type="file"
+          multiple
+          accept={acceptedActigraphyExtensions.join(",")}
+          style={{ display: "none" }}
+          onChange={(event) => handleFiles(event.target.files)}
+        />
+        <div style={{ marginTop: 14, display: "inline-block", padding: "9px 13px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", fontWeight: 700 }}>
+          Choose actigraphy files
+        </div>
+      </label>
 
       {hasCsvActigraphy && (
-        <div
-          style={{
-            marginTop: 20,
-            border: "1px solid #dbeafe",
-            borderRadius: 16,
-            padding: 16,
-            background: "#eff6ff",
-          }}
-        >
+        <div style={{ marginTop: 20, border: "1px solid #dbeafe", borderRadius: 16, padding: 16, background: "#eff6ff" }}>
           <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
             <input
               type="checkbox"
               checked={showManualMapping}
-              onChange={(e) => {
-                const checked = e.target.checked;
+              onChange={(event) => {
+                const checked = event.target.checked;
                 setShowManualMapping(checked);
                 if (checked) onCsvNeedsMapping?.();
               }}
@@ -306,34 +208,26 @@ export default function FileSelectionPanel({
             <span>
               <strong>Manually map CSV columns</strong>
               <span style={{ display: "block", color: "#475569", fontSize: 14, lineHeight: 1.5, marginTop: 4 }}>
-                Use this only when the automatic CSV detector picks the wrong timestamp, activity, light, temperature, or non-wear columns.
+                Use this only when automatic detection does not correctly identify timestamp, activity, light, temperature, or non-wear columns. The mapping form remains on this importing page.
               </span>
             </span>
           </label>
         </div>
       )}
 
-      <div
-        style={{
-          marginTop: 20,
-          border: "1px solid #e2e8f0",
-          borderRadius: 16,
-          padding: 16,
-          background: "#f8fafc",
-        }}
-      >
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Analysis Type</div>
+      <div style={{ marginTop: 20, border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc" }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Analysis type</div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {[
             {
               id: "standard",
               label: "Standard / Default Analysis",
-              description: "Uses default preprocessing and standard metric defaults.",
+              description: "Uses the standard preprocessing rules and default metric selections while still allowing review of every stage.",
             },
             {
               id: "custom",
               label: "Customized Analysis",
-              description: "Lets you manually choose algorithms, families, metrics, mappings, and parameters.",
+              description: "Lets you change preprocessing thresholds, algorithms, metrics, mappings, and advanced parameters.",
             },
           ].map((mode) => {
             const selected = analysisMode === mode.id;
@@ -341,10 +235,7 @@ export default function FileSelectionPanel({
               <button
                 key={mode.id}
                 type="button"
-                onClick={() => {
-                  setAnalysisMode(mode.id);
-                  setCurrentStep("1");
-                }}
+                onClick={() => setAnalysisMode(mode.id)}
                 style={{
                   padding: "12px 14px",
                   borderRadius: 14,
@@ -353,38 +244,16 @@ export default function FileSelectionPanel({
                   color: selected ? "white" : "#0f172a",
                   cursor: "pointer",
                   textAlign: "left",
-                  maxWidth: 340,
+                  maxWidth: 360,
                 }}
               >
                 <div style={{ fontWeight: 700 }}>{mode.label}</div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    marginTop: 6,
-                    color: selected ? "rgba(255,255,255,0.9)" : "#475569",
-                  }}
-                >
+                <div style={{ fontSize: 13, marginTop: 6, color: selected ? "rgba(255,255,255,0.9)" : "#475569" }}>
                   {mode.description}
                 </div>
               </button>
             );
           })}
-        </div>
-
-        <div style={{ marginTop: 12 }}>
-          <button
-            type="button"
-            onClick={onCsvNeedsMapping}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 12,
-              border: "1px solid #cbd5e1",
-              background: "white",
-              cursor: "pointer",
-            }}
-          >
-            Open Manual Mapping
-          </button>
         </div>
       </div>
     </div>

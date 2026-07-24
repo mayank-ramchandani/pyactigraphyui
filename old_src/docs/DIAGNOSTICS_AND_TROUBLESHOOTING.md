@@ -1,5 +1,9 @@
 # Diagnostics and troubleshooting
 
+## Where diagnostics appear
+
+Page 9 generates and displays results, daily recording quality, sleep-window coverage decisions, warnings, and per-stage diagnostics. Page 10 exports configured result and diagnostic outputs after a successful run. Preprocessing thresholds are changed on page 2; start/stop and masks on page 5; sleep windows and algorithms on page 6.
+
 ## Structured diagnostic report
 
 Each backend-generated analysis response includes a per-file `diagnostics` object. The Results page can display and download the report.

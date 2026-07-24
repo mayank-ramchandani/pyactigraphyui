@@ -159,6 +159,41 @@ When light is expected, inspect the response's `light_detection.gt3x` fields:
 If the archive contains `lux.bin` instead of `log.bin`, it uses the legacy GT3X
 layout and requires a compatible legacy converter.
 
+
+### CSV reports `utf-8` decode errors
+
+Older Actiware exports may be encoded as Windows-1252 and can contain byte
+`0xA0` for a non-breaking space. The current loader detects UTF-8/UTF-8 BOM,
+Windows-1252, UTF-16, and Latin-1-compatible text before parsing. If this error
+persists after deployment, confirm the backend revision includes the localized
+CSV reader and that the request reached the updated container.
+
+### Actiware CSV reports `data_offset` referenced before assignment
+
+French and German Actiware/RPX exports do not always match the fixed English
+metadata layout expected by the native pyActigraphy RPX reader. The application
+now detects the localized epoch-table header and parses it directly, so CSV RPX
+files no longer use that `data_offset` code path. Native `.rpx` files still use
+the installed pyActigraphy reader.
+
+### `PAXHR_H.csv` is rejected or has no timestamp
+
+This is a cohort-level NHANES hour-summary dataset, not a single recording.
+Filter to one `SEQN`, merge `PAXFDAY` and `PAXFTIME` from `PAXHD_H`,
+and use the 80 Hz starting sample number `PAXSSNHP` to build a
+participant-relative hourly time index. The public files do not disclose the
+actual calendar date, so use and document a synthetic anchor date consistent
+with the reported day of week. Map `PAXMTSH` as activity and do not analyse all
+participants as one time series. The column-inspection endpoint returns this
+guidance directly.
+
+### Generic CSV column detection is incorrect
+
+Enable **Manually map CSV columns** on page 1. The frontend calls
+`POST /api/tabular/columns`, displays the detected encoding and suggested
+columns, and lets the user select timestamp, optional separate time, activity,
+light, temperature, and non-wear fields.
+
 ### Metric returns `null`
 
 Review the metric stage and suppressed exceptions. The metric can be unsupported for the raw-object type, require more days, require sleep windows, or have returned a non-scalar value that failed validation.

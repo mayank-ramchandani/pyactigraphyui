@@ -1,130 +1,159 @@
 # User guide
 
-## 1. Select files
+The current interface uses a ten-page workflow. After at least one actigraphy file is imported, pages 2–9 are directly clickable in the left workflow. Page 10 remains locked until results are generated.
 
-Upload one or more actigraphy recordings. Optional files may define start/stop limits, masking/non-wear intervals, sleep diary windows, light data, or temperature data.
+## 1. Importing Actigraphy Files
 
-For initial validation, begin with one known-good file rather than a large batch.
+Upload one or more **actigraphy recordings only** on this page. Multiple files are supported when they use the same extension.
 
-## 2. Map generic tabular files
+Optional inputs are deliberately moved to the page where they are used:
 
-CSV or spreadsheet files may require timestamp and activity columns to be selected. Light, temperature, non-wear, and XYZ columns can also be mapped when present.
+- start/stop and masking files: page 5;
+- sleep diaries: page 6;
+- separate light, temperature, and other sensor files: page 7.
 
-Confirm:
+Generic CSV files are inspected automatically. Enable manual column mapping on this page only when timestamp and activity detection is incorrect.
 
-- timestamps parse correctly;
-- timezone assumptions are known;
-- activity units are known;
-- rows are ordered and not duplicated;
-- the epoch interval is plausible.
+## 2. Pre-processing
 
-## 3. Preview activity
+Review the project-standard data-quality rules:
 
-The preview is for visual inspection. It can display a different signal from the activity basis later selected for analysis.
+- **16 analyzable hours** are required for a valid calendar day;
+- **2 consecutive valid calendar days** are required for multi-day rhythm metrics and SRI eligibility;
+- **80% sleep-window coverage** is required for window-dependent sleep summaries;
+- detected or mapped non-wear is respected by default.
 
-For large raw files, the upload starts a background preview job. Keep the page
-open while the interface polls the job; decoding may continue beyond the
-hosting platform's ordinary HTTP request deadline.
+Enable **Modify the standard data-quality thresholds** only when a protocol or sensitivity analysis requires different values.
+
+### Minimum sleep-window coverage
+
+Coverage is the proportion of expected epochs inside a diary-defined or automatically estimated sleep window that remain recorded and scorable after:
+
+- recording gaps;
+- start/stop truncation;
+- detected non-wear;
+- manually selected masks.
+
+A threshold of `0.8` means at least 80% of expected epochs must remain. A window below the threshold is excluded from TST, WASO, sleep efficiency, and other window-dependent summaries rather than filled or treated as zero activity.
+
+## 3. Estimating Activity Metric / Magnitude of Acceleration
+
+Choose one of four activity-basis options:
+
+1. **Recommended source / processed `acc`**: source/device activity for count-based files and epoch-level processed acceleration for raw `.bin`, `.cwa`, and `.gt3x` files.
+2. **Processed acceleration (`acc`)**: Oxford `acc` when available, or the documented compatible memory-safe path.
+3. **MAD**: mean amplitude deviation of vector magnitude within each epoch.
+4. **Custom ENMO (legacy)**: retained for comparison with earlier analyses.
+
+The selected series becomes the basis for rest/activity metrics. Counts, processed mg, MAD, and ENMO are not interchangeable; report the selected mapping and units.
+
+## 4. Activity Preview
+
+Preview is optional but recommended. It is required for later plot-based interval selection.
 
 Check:
 
 - recording start and stop dates;
-- obvious clock or timezone shifts;
+- clock or timezone shifts;
 - long gaps;
-- all-zero or constant periods;
+- constant or all-zero periods;
 - implausible spikes;
-- whether the selected file matches the file ID shown.
+- whether the selected file name matches the intended recording.
 
-## 4. Preview light
+Large raw recordings use background preview jobs so decoding can continue beyond ordinary request timeouts.
 
-Review available light channels and units. Light preview is optional and does
-not affect activity metrics unless light metrics are explicitly selected.
+## 5. Cleaning and Masking
 
-Large light files are processed as background jobs. Choose **Load Light
-Preview** to inspect the selected separate light file, or the selected
-actigraphy file when no separate file is supplied.
+This page contains two related sections.
 
-- If usable light exists, the response includes the plot, channel list, units,
-  and initial multichannel/RGB sample.
-- If it does not, the page reports that inspection completed with no embedded
-  light measurements and skips light plots and metrics.
-- Activity preview and analysis continue in either case.
+### Recording Start / Stop
 
-For current-format `.gt3x`, the light-only reader scans `log.bin` for official
-type-`0x05` lux records without decoding raw acceleration. It exposes raw lux
-as `LIGHT_LUX` and `log10(lux + 1)` as `LIGHT`. A GT9X Link file without a lux
-sensor will therefore produce the expected no-light status, not a server error.
+Upload start/stop files or create per-file intervals using timestamp fields and the activity plot. These intervals define the effective recording period before masks and sleep windows are applied.
 
-Selected light metrics run together in one background job after one content
-inspection/load. Thresholds entered in lux are converted to the selected
-channel scale automatically.
+Full timestamps are used. An interval beginning at 23:00 and ending at 02:00 on the next calendar date crosses midnight correctly.
 
-## 5. Start/stop intervals
+### Masking and Non-wear
 
-Start/stop intervals define the effective recording period. They can be uploaded or selected manually for each file.
+Upload exclusion files, respect detected non-wear, or create per-file masks using the activity plot. File IDs are retained so one recording’s interval is not applied to another.
 
-Intervals use full timestamps. An interval beginning at 23:00 and ending at 02:00 on the next calendar day is valid and crosses midnight correctly.
+Missing, non-wear, and masked epochs remain unavailable. They are never converted to zero activity.
 
-## 6. Cleaning and masking
+## 6. Sleep-wake Classification
 
-Mask invalid periods, confirmed non-wear, device artefacts, or other intervals that should not contribute to analysis. Do not silently replace missing or masked data with zero activity.
+### Sleep diary and custom windows
 
-The same page controls the shared data-quality rules. The project standards remain active unless **Modify the standard data-quality thresholds** is enabled:
+Upload diary windows or create per-file bedtime/wake-time intervals using timestamps and the activity plot. Diary windows may represent night sleep, naps, time in bed, lights-off/rise time, or other supported states.
 
-- **Respect detected non-wear** uses a source/native/mapped mask when available;
-- **Minimum valid hours per day** defaults to 16 h;
-- **Minimum consecutive valid days for rhythm/SRI** defaults to 2 days;
-- **Minimum sleep-window coverage** defaults to 0.80 (80%).
+### Sleep/rest algorithms
 
-These rules run independently for every selected file. Uploaded and manual
-intervals remain associated with their file ID.
+Choose the classification algorithm on this page. Available algorithms and their parameters are defined in `config/algorithmRegistry.json`.
 
-## 7. Sleep diary
+When no diary window is available, the app can use pyActigraphy `Crespo_AoT` or `Roenneberg_AoT` to estimate the main rest window. No lowest-activity fallback window is inserted. If the selected method returns no usable window, window-dependent sleep metrics are reported as unavailable.
 
-Diary windows can supply reported bedtimes, wake times, naps, or in-bed intervals. If diary windows are unavailable, Crespo or Roenneberg can be selected to estimate rest windows. The application does not generate a fallback window when detection fails.
+## 7. Other Sensors
 
-## 8. Algorithms and analysis setup
+### Light
 
-Select:
+Use light embedded in the selected actigraphy file or upload a separate light file. The page supports:
 
-- files to analyse;
-- analysis activity basis;
-- metrics or analysis families;
-- sleep/rest algorithm;
-- binarization and thresholds;
-- full-file or selected analysis intervals;
-- light metrics and channels.
+- light-channel inspection;
+- light preview;
+- multichannel/RGB preview where available;
+- light-metric selection and settings.
 
-For processed `acc`, MAD, or ENMO, begin with continuous non-binarized RA, IS, and IV. Count thresholds are not automatically valid for milligravity signals.
+Selected light metrics run when page 9 generates the main results. A file with no usable light still proceeds through activity analysis; light outputs are skipped with a diagnostic message.
 
-## 9. Generate results
+### Temperature and additional sensors
 
-The interface reports upload progress, the background-job state, current
-backend stage, stage number, pipeline percentage, and raw-page/sample progress
-where available. Keep the page open until the completed result is retrieved.
+Temperature and other sensor files can be attached for future workflow development. Their filenames and basic file metadata are retained in the exported analysis configuration, but the current version does **not** calculate temperature or generic sensor metrics and labels these uploads as future analysis.
 
-Review:
+## 8. Analysis Set-up
 
-- results by file ID;
-- QC warnings;
-- per-file daily recording quality;
+Choose analysis families or individual metrics and configure shared or metric-specific parameters. This page only configures the analysis; it does not run it.
+
+For processed `acc`, MAD, or ENMO, begin with continuous non-binarized RA, IS, and IV unless the study protocol specifies a validated threshold for that signal and unit.
+
+Use **Next** or click **Generate Results** in the left workflow to continue to page 9.
+
+## 9. Generate Results
+
+This page contains the only **Generate Results** action. Select the uploaded files to analyse, then run the pipeline.
+
+The page displays:
+
+- upload and background-job progress;
+- file-level status;
+- summary values and plots;
+- multi-file tables;
+- daily recording-quality information;
+- total valid days and longest consecutive valid-day run;
 - sleep-window coverage and exclusion decisions;
-- M10/L5 components for RA;
-- detected sleep-window count;
-- activity mapping and units;
-- failed, warning, or skipped stages;
-- memory and timing diagnostics.
+- QC warnings;
+- requested and resolved activity mapping;
+- structured diagnostics;
+- light results when supported.
 
-## 10. Export
+Results remain on page 9 for review. Successful generation unlocks page 10.
 
-Exports should retain the source filename, requested and resolved activity mapping, units, epoch duration, algorithm, parameters, preprocessing intervals, results, warnings, and application version.
+## 10. Export Outputs
+
+Download configured outputs such as result summaries, CSV-compatible tables, JSON analysis configuration, QC information, and diagnostic reports. Exports should retain:
+
+- source filename/file ID;
+- requested and resolved activity mapping;
+- units and epoch duration;
+- selected sleep/rest algorithm;
+- metric and algorithm parameters;
+- preprocessing thresholds and intervals;
+- result values and warnings;
+- application/build version.
 
 ## Recommended validation workflow
 
-1. Run a known-good small file.
-2. Compare results with an independent reference workflow.
-3. Run the same file locally, inside the deployed container, and through the public endpoint.
-4. Add medium and large recordings.
-5. Retain diagnostic JSON reports and exact build identifiers.
-6. Confirm valid/invalid/completely missing days and sleep-window coverage.
+1. Run one known-good small recording.
+2. Compare it with an independent reference workflow.
+3. Confirm valid/invalid days, gaps, non-wear, masks, and sleep-window coverage.
+4. Test a medium and large file through the deployed endpoint.
+5. Test an embedded-light file and a no-light file.
+6. Retain diagnostic JSON and exact build identifiers.
 7. Only then run a research batch.

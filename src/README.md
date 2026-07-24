@@ -39,7 +39,7 @@ The in-app **Documentation** page searches full explanatory content as well as w
 
 ```text
 VITE_GITHUB_REPOSITORY_URL=https://github.com/owner/repository
-VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/docs
+VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/src/docs
 ```
 
 ## Core design principles

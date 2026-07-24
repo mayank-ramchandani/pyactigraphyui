@@ -17,8 +17,8 @@ import MetricsPanel from "../components/MetricsPanel";
 import ResultsPanel from "../components/ResultsPanel";
 import ExportPanel from "../components/ExportPanel";
 import SupportFilesStep from "../components/SupportFilesStep";
-import LightMetricsPanel from "../components/LightMetricsPanel";
-import LightRGBPanel from "../components/LightRGBPanel";
+import PreprocessingPanel from "../components/PreprocessingPanel";
+import OtherSensorsPanel from "../components/OtherSensorsPanel";
 import AuthBar from "../components/AuthBar";
 import RunHistoryPanel from "../components/RunHistoryPanel";
 import FeedbackButton from "../components/FeedbackButton";
@@ -147,6 +147,7 @@ export default function Dashboard() {
   const [currentStep, setCurrentStep] = useState("1");
   const [documentationOpen, setDocumentationOpen] = useState(false);
   const [maxUnlockedStep, setMaxUnlockedStep] = useState("1");
+  const [visitedSteps, setVisitedSteps] = useState(["1"]);
 
   const [uploadedFiles, setUploadedFiles] = useState({
     actigraphy: [],
@@ -338,13 +339,25 @@ export default function Dashboard() {
     });
   }, [actigraphyFiles]);
 
+  useEffect(() => {
+    if (!actigraphyFiles.length) {
+      setMaxUnlockedStep("1");
+      setVisitedSteps(["1"]);
+      if (currentStep !== "1") setCurrentStep("1");
+      return;
+    }
+
+    setMaxUnlockedStep(resultsGenerated ? "10" : "9");
+    if (!resultsGenerated && currentStep === "10") setCurrentStep("9");
+  }, [actigraphyFiles.length, currentStep, resultsGenerated]);
+
   const workflowSteps = useMemo(
     () =>
       getVisibleWorkflowSteps(appConfig, {
         enableCleaning: true,
         enableDiary: true,
-      }).filter((step) => showManualMapping || step.key !== "csvMapping"),
-    [showManualMapping]
+      }),
+    []
   );
 
   const currentStepIndex = workflowSteps.findIndex((step) => step.id === currentStep);
@@ -389,6 +402,15 @@ export default function Dashboard() {
         selectedLightMetrics,
         lightMetricSettings,
       },
+      futureSensorAttachments: {
+        temperatureAndOther: (uploadedFiles.temperature || []).map((file) => ({
+          name: file.name,
+          sizeBytes: file.size,
+          contentType: file.type || null,
+          lastModified: file.lastModified || null,
+        })),
+        analysisStatus: "not_implemented",
+      },
     }),
     [
       selectedMetrics,
@@ -403,6 +425,7 @@ export default function Dashboard() {
       analysisWindowSettings,
       selectedLightMetrics,
       lightMetricSettings,
+      uploadedFiles.temperature,
     ]
   );
 
@@ -592,7 +615,9 @@ export default function Dashboard() {
 
   const goToStep = (stepId) => {
     if (Number(stepId) <= Number(maxUnlockedStep)) {
-      setCurrentStep(stepId);
+      const resolvedStepId = String(stepId);
+      setCurrentStep(resolvedStepId);
+      setVisitedSteps((previous) => Array.from(new Set([...(previous || []), resolvedStepId])));
     }
   };
 
@@ -604,8 +629,10 @@ export default function Dashboard() {
   };
 
   const unlockAndGoToStep = (stepId) => {
-    unlockStep(stepId);
-    setCurrentStep(String(stepId));
+    const resolvedStepId = String(stepId);
+    unlockStep(resolvedStepId);
+    setCurrentStep(resolvedStepId);
+    setVisitedSteps((previous) => Array.from(new Set([...(previous || []), resolvedStepId])));
   };
 
   const goPrevious = () => {
@@ -650,6 +677,10 @@ export default function Dashboard() {
 
   const handleActivityMappingChange = (nextMapping) => {
     setActivityMapping(nextMapping);
+    setPreviewActivityMapping(nextMapping);
+    setPreviewLoaded(false);
+    setPreviewData(null);
+    setActivityPreviewByFile({});
     setResultsGenerated(false);
     setSummaryResults({});
     setMultiFileResults([]);
@@ -673,12 +704,12 @@ export default function Dashboard() {
       nonwear_col: "",
     });
 
-    unlockStep("3");
+    setMaxUnlockedStep(files?.length ? "9" : "1");
+    setVisitedSteps(["1"]);
   };
 
   const handleCsvNeedsMapping = () => {
     setShowManualMapping(true);
-    unlockAndGoToStep("2");
   };
 
   const loadActivityPreviewForFile = async (fileName = selectedPreviewFile) => {
@@ -906,7 +937,6 @@ export default function Dashboard() {
     const filesToAnalyze = selectedAnalysisFiles;
     if (!filesToAnalyze.length) {
       setAnalysisError("Select at least one file to analyze.");
-      unlockAndGoToStep("10");
       return;
     }
 
@@ -1124,7 +1154,7 @@ export default function Dashboard() {
       );
       setResultsGenerated(true);
       setAnalysisError(failed.length ? `Some files could not be analyzed: ${failed.map((item) => `${item.fileName}: ${item.error}`).join(" | ")}` : "");
-      unlockAndGoToStep("10");
+      unlockStep("10");
     } catch (err) {
       const message = err.message || "Failed to generate results.";
       setAnalysisError(message);
@@ -1193,91 +1223,87 @@ export default function Dashboard() {
     setAnalysisError(run.error_message || "");
     setLightResults({});
     setLightAnalysisError("");
-    unlockAndGoToStep("10");
+    unlockAndGoToStep("9");
   };
 
   const getStepValidation = () => {
+    const dataQuality = supportFileSettings.masking || {};
+    const customThresholdsValid =
+      !dataQuality.customizeDataQualityThresholds ||
+      (
+        Number(dataQuality.minimumValidHoursPerDay) >= 1 &&
+        Number(dataQuality.minimumValidHoursPerDay) <= 24 &&
+        Number(dataQuality.minimumValidDaysForRhythm) >= 1 &&
+        Number(dataQuality.minimumSleepWindowCoverage) >= 0 &&
+        Number(dataQuality.minimumSleepWindowCoverage) <= 1
+      );
+
+    const hasMetrics =
+      analysisMode === "standard"
+        ? resolvedSelectedMetrics.length > 0
+        : analysisScope === "family"
+        ? selectedFamilies.length > 0
+        : selectedMetrics.length > 0;
+
     switch (currentStep) {
-      case "1":
+      case "1": {
+        const mappingValid = !showManualMapping || Boolean(csvMapping.timestamp_col && csvMapping.activity_col);
         return {
-          valid: actigraphyFiles.length > 0,
-          message: actigraphyFiles.length > 0 ? "" : "Upload at least one actigraphy file.",
+          valid: actigraphyFiles.length > 0 && mappingValid,
+          message: !actigraphyFiles.length
+            ? "Upload at least one actigraphy file."
+            : !mappingValid
+            ? "Select timestamp and activity columns for the manually mapped CSV."
+            : "",
         };
+      }
       case "2":
         return {
-          valid: !showManualMapping || Boolean(csvMapping.timestamp_col && csvMapping.activity_col),
-          message:
-            !showManualMapping || (csvMapping.timestamp_col && csvMapping.activity_col)
-              ? ""
-              : "Select timestamp and activity columns to continue.",
+          valid: customThresholdsValid,
+          message: customThresholdsValid
+            ? ""
+            : "Use 1–24 valid hours, at least 1 consecutive day, and sleep-window coverage between 0 and 1.",
         };
       case "3":
         return {
-          valid: true,
-          message: previewLoaded
-            ? ""
-            : "Activity preview is optional. Load it if you want to inspect one file, or click Next to continue.",
+          valid: Boolean(activityMapping),
+          message: activityMapping ? "" : "Choose an activity metric / acceleration-magnitude option.",
         };
       case "4":
         return {
           valid: true,
-          message: lightPreviewLoaded
+          message: previewLoaded
             ? ""
-            : "Light preview is optional. Load it if light channels exist, or click Next to skip.",
+            : "Activity preview is optional, but it is needed for plot-based interval selection on later pages.",
         };
       case "5":
+        return { valid: true, message: "" };
       case "6":
+        return {
+          valid: Boolean(selectedAlgorithm),
+          message: selectedAlgorithm ? "" : "Choose a sleep/rest classification algorithm.",
+        };
       case "7":
+        return {
+          valid: true,
+          message: lightPreviewLoaded ? "" : "Light and other sensor processing is optional.",
+        };
       case "8":
         return {
-          valid: true,
-          message: "",
-        };
-      case "9": {
-        const hasMetrics =
-          analysisMode === "standard"
-            ? resolvedSelectedMetrics.length > 0
-            : analysisScope === "family"
-            ? selectedFamilies.length > 0
-            : selectedMetrics.length > 0;
-
-        const hasAlgorithm = Boolean(selectedAlgorithm);
-        const hasAnalysisFiles = selectedAnalysisFileNames.length > 0;
-
-        const selectedIntervalPreset = analysisWindowSettings.intervalPreset || "manual";
-        const hasRequiredSpecificDays =
-          selectedIntervalPreset !== "specific_days" ||
-          (analysisWindowSettings.specificDays || []).length > 0;
-
-        const intervalModeValid =
-          !["selected", "both"].includes(analysisWindowSettings.mode) ||
-          (
-            selectedIntervalPreset !== "manual" &&
-            hasRequiredSpecificDays
-          ) ||
-          (analysisWindowSettings.manualIntervals || []).length > 0;
-
-        return {
-          valid: hasMetrics && hasAlgorithm && intervalModeValid && hasAnalysisFiles,
-          message: !hasAnalysisFiles
+          valid: selectedAnalysisFileNames.length > 0 && hasMetrics,
+          message: !selectedAnalysisFileNames.length
             ? "Select at least one uploaded file to analyze."
-            : !hasMetrics || !hasAlgorithm
-            ? "Select an algorithm and at least one metric or family."
-            : !intervalModeValid
-            ? "Add at least one manual analysis interval, choose weekdays/weekends/specific days, or switch back to Analyze whole file."
+            : !hasMetrics
+            ? "Choose at least one analysis family or metric."
             : "",
         };
-      }
-      case "10":
+      case "9":
         return {
           valid: resultsGenerated,
-          message: resultsGenerated ? "" : "Generate results to continue.",
+          message: resultsGenerated ? "" : "Generate results on this page to unlock Export Outputs.",
         };
       default:
-        return {
-          valid: true,
-          message: "",
-        };
+        return { valid: true, message: "" };
     }
   };
 
@@ -1285,25 +1311,6 @@ export default function Dashboard() {
 
   const goNext = () => {
     if (!stepValidation.valid) return;
-
-    if (currentStep === "1" && !showManualMapping) {
-      unlockAndGoToStep("3");
-      return;
-    }
-
-    if (currentStep === "2" && !showManualMapping) {
-      unlockAndGoToStep("3");
-      return;
-    }
-
-    if (
-      currentStep === "4" &&
-      (!lightPreviewLoaded || !lightPreviewData?.light_preview_available)
-    ) {
-      unlockAndGoToStep("6");
-      return;
-    }
-
     if (currentStepIndex < workflowSteps.length - 1) {
       const next = workflowSteps[currentStepIndex + 1];
       unlockAndGoToStep(next.id);
@@ -1315,64 +1322,91 @@ export default function Dashboard() {
     getExtension(actigraphyFile?.name || "").replace(".", "") ||
     "unknown";
 
+  const metricsPanelProps = {
+    metricRegistry,
+    algorithmRegistry,
+    analysisFamilyRegistry,
+    sharedParamRegistry,
+    selectedMetrics,
+    setSelectedMetrics,
+    selectedFamilies,
+    setSelectedFamilies,
+    analysisScope,
+    setAnalysisScope,
+    selectedAlgorithm,
+    setSelectedAlgorithm,
+    sharedValues,
+    setSharedValues,
+    metricOverrides,
+    setMetricOverrides,
+    algorithmParams,
+    setAlgorithmParams,
+    sleepWindowSettings,
+    setSleepWindowSettings,
+    analysisMode,
+    inputType: detectedInputType,
+    previewData,
+    analysisWindowSettings,
+    setAnalysisWindowSettings,
+  };
+
   let content = null;
 
   if (currentStep === "1") {
     content = (
-      <FileSelectionPanel
-        title={appConfig.panels.fileSelection.title}
-        uploadedFiles={uploadedFiles}
-        setUploadedFiles={setUploadedFiles}
-        setCurrentStep={setCurrentStep}
-        analysisMode={analysisMode}
-        setAnalysisMode={setAnalysisMode}
-        setPreviewLoaded={setPreviewLoaded}
-        setPreviewData={setPreviewData}
-        setPreviewError={setPreviewError}
-        setAnalysisError={setAnalysisError}
-        setResultsGenerated={setResultsGenerated}
-        fileError={fileError}
-        setFileError={setFileError}
-        onActigraphyFilesChange={handleActigraphyFilesChange}
-        onCsvNeedsMapping={handleCsvNeedsMapping}
-        showManualMapping={showManualMapping}
-        setShowManualMapping={setShowManualMapping}
-      />
+      <div style={{ display: "grid", gap: 16 }}>
+        <FileSelectionPanel
+          title={appConfig.panels.fileSelection.title}
+          uploadedFiles={uploadedFiles}
+          setUploadedFiles={setUploadedFiles}
+          setCurrentStep={setCurrentStep}
+          analysisMode={analysisMode}
+          setAnalysisMode={setAnalysisMode}
+          setPreviewLoaded={setPreviewLoaded}
+          setPreviewData={setPreviewData}
+          setPreviewError={setPreviewError}
+          setAnalysisError={setAnalysisError}
+          setResultsGenerated={setResultsGenerated}
+          fileError={fileError}
+          setFileError={setFileError}
+          onActigraphyFilesChange={handleActigraphyFilesChange}
+          onCsvNeedsMapping={handleCsvNeedsMapping}
+          showManualMapping={showManualMapping}
+          setShowManualMapping={setShowManualMapping}
+        />
+        {showManualMapping && (
+          <CsvMappingPanel
+            title="Manual CSV Column Mapping"
+            csvFile={actigraphyFile}
+            csvMapping={csvMapping}
+            setCsvMapping={setCsvMapping}
+            csvSeparator={csvSeparator}
+            setCsvSeparator={setCsvSeparator}
+            onContinue={goNext}
+          />
+        )}
+      </div>
     );
-  } else if (currentStep === "2" && !showManualMapping) {
+  } else if (currentStep === "2") {
     content = (
-      <PreviewPanel
-        title={appConfig.panels.preview.title}
-        mode="activity"
-        previewLoaded={previewLoaded}
-        previewLoading={previewLoading}
-        previewError={previewError}
-        previewData={previewData}
-        actigraphyFiles={actigraphyFiles}
-        selectedPreviewFile={selectedPreviewFile}
-        setSelectedPreviewFile={setSelectedPreviewFile}
-        lightFiles={lightFiles}
-        selectedLightPreviewFile={selectedLightPreviewFile}
-        setSelectedLightPreviewFile={setSelectedLightPreviewFile}
-        activityMapping={previewActivityMapping}
-        setActivityMapping={handlePreviewActivityMappingChange}
-        onPreview={onActivityPreview}
-      />
-    );
-  } else if (currentStep === "2" && showManualMapping) {
-    content = (
-      <CsvMappingPanel
-        title={appConfig.panels.csvMapping.title}
-        csvFile={actigraphyFile}
-        csvMapping={csvMapping}
-        setCsvMapping={setCsvMapping}
-        csvSeparator={csvSeparator}
-        setCsvSeparator={setCsvSeparator}
-        onContinue={onActivityPreview}
+      <PreprocessingPanel
+        title={appConfig.panels.preprocessing.title}
+        settings={supportFileSettings.masking}
+        onSettingsChange={(settings) =>
+          setSupportFileSettings((previous) => ({ ...previous, masking: settings }))
+        }
       />
     );
   } else if (currentStep === "3") {
     content = (
+      <ActivityMappingPanel
+        title={appConfig.panels.activityMapping.title}
+        value={activityMapping}
+        onChange={handleActivityMappingChange}
+      />
+    );
+  } else if (currentStep === "4") {
+    content = (
       <PreviewPanel
         title={appConfig.panels.preview.title}
         mode="activity"
@@ -1391,151 +1425,132 @@ export default function Dashboard() {
         onPreview={onActivityPreview}
       />
     );
-  } else if (currentStep === "4") {
+  } else if (currentStep === "5") {
     content = (
       <div style={{ display: "grid", gap: 16 }}>
-        <PreviewPanel
-          title={appConfig.panels.lightPreview.title}
-          mode="light"
-          previewLoaded={lightPreviewLoaded}
-          previewLoading={previewLoading}
-          previewError={previewError}
-          previewData={lightPreviewData}
+        <SupportFilesStep
+          title={appConfig.panels.startStop.title}
+          type="startStop"
+          description="Define the true effective recording interval for each file before masks and sleep windows are applied."
+          files={uploadedFiles.startStop}
+          onFilesChange={(files) => setUploadedFiles((previous) => ({ ...previous, startStop: files }))}
+          settings={supportFileSettings.startStop}
+          onSettingsChange={(settings) =>
+            setSupportFileSettings((previous) => ({ ...previous, startStop: settings }))
+          }
+          options={[
+            { id: "apply", label: "Apply uploaded or manually selected start/stop intervals", defaultValue: true },
+          ]}
+          previewData={previewData}
+          previewDataByFile={activityPreviewByFile}
           actigraphyFiles={actigraphyFiles}
-          selectedPreviewFile={selectedPreviewFile}
-          setSelectedPreviewFile={setSelectedPreviewFile}
-          lightFiles={lightFiles}
-          selectedLightPreviewFile={selectedLightPreviewFile}
-          setSelectedLightPreviewFile={setSelectedLightPreviewFile}
-          lightSourceAvailable={Boolean(lightFile)}
-          lightSourceMessage={lightSourceMessage}
-          onPreview={onLightPreview}
+          onLoadPreviewForFile={loadActivityPreviewForFile}
         />
-
-        {lightFile && lightPreviewLoaded && lightPreviewData?.light_preview_available && (
-          <LightRGBPanel lightFile={lightFile} initialPayload={lightPreviewData} />
-        )}
+        <SupportFilesStep
+          title={appConfig.panels.masking.title}
+          type="masking"
+          description="Upload exclusion intervals, respect detected non-wear, or select per-file masks directly on the activity plot."
+          files={uploadedFiles.masking}
+          onFilesChange={(files) => setUploadedFiles((previous) => ({ ...previous, masking: files }))}
+          settings={supportFileSettings.masking}
+          onSettingsChange={(settings) =>
+            setSupportFileSettings((previous) => ({ ...previous, masking: settings }))
+          }
+          options={[
+            { id: "apply", label: "Apply uploaded or manually selected masking intervals", defaultValue: true },
+            { id: "respectNonwear", label: "Respect detected non-wear when available", defaultValue: true },
+          ]}
+          previewData={previewData}
+          previewDataByFile={activityPreviewByFile}
+          actigraphyFiles={actigraphyFiles}
+          onLoadPreviewForFile={loadActivityPreviewForFile}
+        />
       </div>
     );
   } else if (currentStep === "6") {
     content = (
-      <SupportFilesStep
-        title={appConfig.panels.startStop.title}
-        type="startStop"
-        description="Start/stop files define the true recording interval and should be applied before masking or sleep scoring."
-        files={uploadedFiles.startStop}
-        onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, startStop: files }))}
-        settings={supportFileSettings.startStop}
-        onSettingsChange={(settings) =>
-          setSupportFileSettings((prev) => ({ ...prev, startStop: settings }))
-        }
-        options={[
-          { id: "apply", label: "Apply uploaded or manually selected start/stop intervals", defaultValue: true },
-        ]}
-        previewData={previewData}
-        previewDataByFile={activityPreviewByFile}
-        actigraphyFiles={actigraphyFiles}
-        onLoadPreviewForFile={loadActivityPreviewForFile}
-      />
+      <div style={{ display: "grid", gap: 16 }}>
+        <SupportFilesStep
+          title={appConfig.panels.sleepDiary.title}
+          type="sleepDiary"
+          description="Upload sleep diaries or create per-file bedtime/wake-time windows using timestamps or the activity plot."
+          files={uploadedFiles.sleepDiary}
+          onFilesChange={(files) => setUploadedFiles((previous) => ({ ...previous, sleepDiary: files }))}
+          settings={supportFileSettings.sleepDiary}
+          onSettingsChange={(settings) =>
+            setSupportFileSettings((previous) => ({ ...previous, sleepDiary: settings }))
+          }
+          options={[
+            { id: "apply", label: "Use uploaded or manually selected diary windows when available", defaultValue: true },
+          ]}
+          previewData={previewData}
+          previewDataByFile={activityPreviewByFile}
+          actigraphyFiles={actigraphyFiles}
+          onLoadPreviewForFile={loadActivityPreviewForFile}
+        />
+        <MetricsPanel
+          {...metricsPanelProps}
+          title={appConfig.panels.sleepWake.title}
+          mode="sleep"
+        />
+      </div>
     );
   } else if (currentStep === "7") {
     content = (
-      <SupportFilesStep
-        title={appConfig.panels.cleaning.title}
-        type="masking"
-        description="Masking excludes invalid, non-wear, or spurious inactivity periods before analysis."
-        files={uploadedFiles.masking}
-        onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, masking: files }))}
-        settings={supportFileSettings.masking}
-        onSettingsChange={(settings) =>
-          setSupportFileSettings((prev) => ({ ...prev, masking: settings }))
+      <OtherSensorsPanel
+        title={appConfig.panels.otherSensors.title}
+        lightFiles={lightFiles}
+        onLightFilesChange={(files) => {
+          setUploadedFiles((previous) => ({ ...previous, light: files }));
+          setSelectedLightPreviewFile(files?.[0]?.name || "");
+          setLightPreviewLoaded(false);
+          setLightPreviewData(null);
+        }}
+        temperatureFiles={uploadedFiles.temperature || []}
+        onTemperatureFilesChange={(files) =>
+          setUploadedFiles((previous) => ({ ...previous, temperature: files }))
         }
-        options={[
-          { id: "apply", label: "Apply uploaded or manually selected masking intervals", defaultValue: true },
-          { id: "respectNonwear", label: "Respect detected non-wear when available", defaultValue: true },
-        ]}
-        previewData={previewData}
-        previewDataByFile={activityPreviewByFile}
-        actigraphyFiles={actigraphyFiles}
-        onLoadPreviewForFile={loadActivityPreviewForFile}
+        previewProps={{
+          title: appConfig.panels.lightPreview.title,
+          mode: "light",
+          previewLoaded: lightPreviewLoaded,
+          previewLoading,
+          previewError,
+          previewData: lightPreviewData,
+          actigraphyFiles,
+          selectedPreviewFile,
+          setSelectedPreviewFile,
+          lightFiles,
+          selectedLightPreviewFile,
+          setSelectedLightPreviewFile,
+          lightSourceAvailable: Boolean(lightFile),
+          lightSourceMessage,
+          onPreview: onLightPreview,
+        }}
+        lightFile={lightMetricFile}
+        lightPreviewLoaded={lightPreviewLoaded}
+        lightPreviewData={lightPreviewData}
+        selectedLightMetrics={selectedLightMetrics}
+        setSelectedLightMetrics={setSelectedLightMetrics}
+        lightMetricSettings={lightMetricSettings}
+        setLightMetricSettings={setLightMetricSettings}
+        lightSourceMessage={lightSourceMessage}
+        onLightInspection={(data) => {
+          if (!lightFile || data?.light_detection?.available !== false) return;
+          setLightPreviewData({ ...data, light_preview_file_name: lightFile.name });
+          setLightPreviewLoaded(true);
+        }}
       />
     );
   } else if (currentStep === "8") {
     content = (
-      <SupportFilesStep
-        title={appConfig.panels.sleepDiary.title}
-        type="sleepDiary"
-        description="Sleep diary files provide reported bedtimes, wake times, naps, or diary states for sleep-specific summaries."
-        files={uploadedFiles.sleepDiary}
-        onFilesChange={(files) => setUploadedFiles((prev) => ({ ...prev, sleepDiary: files }))}
-        settings={supportFileSettings.sleepDiary}
-        onSettingsChange={(settings) =>
-          setSupportFileSettings((prev) => ({ ...prev, sleepDiary: settings }))
-        }
-        options={[
-          { id: "apply", label: "Use uploaded or manually selected diary windows when available", defaultValue: true },
-        ]}
-        previewData={previewData}
-        previewDataByFile={activityPreviewByFile}
-        actigraphyFiles={actigraphyFiles}
-        onLoadPreviewForFile={loadActivityPreviewForFile}
+      <MetricsPanel
+        {...metricsPanelProps}
+        title={appConfig.panels.metrics.title}
+        mode="metrics"
       />
     );
   } else if (currentStep === "9") {
-    content = (
-      <div style={{ display: "grid", gap: 16 }}>
-        <ActivityMappingPanel
-          value={activityMapping}
-          onChange={handleActivityMappingChange}
-        />
-        <MetricsPanel
-          title={appConfig.panels.metrics.title}
-          metricRegistry={metricRegistry}
-          algorithmRegistry={algorithmRegistry}
-          analysisFamilyRegistry={analysisFamilyRegistry}
-          sharedParamRegistry={sharedParamRegistry}
-          selectedMetrics={selectedMetrics}
-          setSelectedMetrics={setSelectedMetrics}
-          selectedFamilies={selectedFamilies}
-          setSelectedFamilies={setSelectedFamilies}
-          analysisScope={analysisScope}
-          setAnalysisScope={setAnalysisScope}
-          selectedAlgorithm={selectedAlgorithm}
-          setSelectedAlgorithm={setSelectedAlgorithm}
-          sharedValues={sharedValues}
-          setSharedValues={setSharedValues}
-          metricOverrides={metricOverrides}
-          setMetricOverrides={setMetricOverrides}
-          algorithmParams={algorithmParams}
-          setAlgorithmParams={setAlgorithmParams}
-          sleepWindowSettings={sleepWindowSettings}
-          setSleepWindowSettings={setSleepWindowSettings}
-          analysisMode={analysisMode}
-          inputType={detectedInputType}
-          previewData={previewData}
-          analysisWindowSettings={analysisWindowSettings}
-          setAnalysisWindowSettings={setAnalysisWindowSettings}
-        />
-        <LightMetricsPanel
-          lightFile={lightMetricFile}
-          selectedLightMetrics={selectedLightMetrics}
-          setSelectedLightMetrics={setSelectedLightMetrics}
-          lightMetricSettings={lightMetricSettings}
-          setLightMetricSettings={setLightMetricSettings}
-          previewData={lightPreviewData || previewData}
-          lightSourceMessage={lightSourceMessage}
-          onLightInspection={(data) => {
-            if (!lightFile || data?.light_detection?.available !== false) return;
-            setLightPreviewData({
-              ...data,
-              light_preview_file_name: lightFile.name,
-            });
-            setLightPreviewLoaded(true);
-          }}
-        />
-      </div>
-    );
-  } else if (currentStep === "10") {
     content = (
       <ResultsPanel
         title={appConfig.panels.results.title}
@@ -1604,7 +1619,7 @@ export default function Dashboard() {
           <div>
             <h1 style={{ fontSize: 32, margin: "0 0 8px" }}>{appConfig.appName}</h1>
             <p style={{ color: "#475569", margin: 0, lineHeight: 1.5 }}>
-              Sequential actigraphy workflow with separate activity and light preview, optional mapping, support files, and family-aware analysis.
+              Guided 10-step actigraphy workflow covering preprocessing, activity estimation, cleaning, sleep-wake classification, other sensors, analysis, results, and export.
             </p>
           </div>
           <button
@@ -1659,6 +1674,7 @@ export default function Dashboard() {
                 workflow={workflowSteps}
                 currentStep={currentStep}
                 maxUnlockedStep={maxUnlockedStep}
+                visitedSteps={visitedSteps}
                 onStepClick={goToStep}
               />
             </div>
@@ -1708,24 +1724,6 @@ export default function Dashboard() {
               </div>
 
               <div style={{ display: "flex", gap: 10 }}>
-                {currentStep === "9" && (
-                  <button
-                    type="button"
-                    onClick={handleGenerateResults}
-                    style={{
-                      padding: "10px 16px",
-                      borderRadius: 12,
-                      background: "#0f172a",
-                      color: "white",
-                      border: "none",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Generate Results
-                  </button>
-                )}
-
                 <button
                   type="button"
                   onClick={goNext}
@@ -1740,7 +1738,7 @@ export default function Dashboard() {
                     fontWeight: 600,
                   }}
                 >
-                  Next
+                  {currentStep === "8" ? "Go to Generate Results" : currentStep === "9" ? "Go to Export Outputs" : "Next"}
                 </button>
               </div>
             </div>

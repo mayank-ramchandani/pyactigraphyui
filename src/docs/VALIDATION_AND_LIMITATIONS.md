@@ -16,6 +16,10 @@ Maintain a permanent set containing:
 - a recording without light channels;
 - files where Crespo and Roenneberg are known to return windows;
 - a previously failing file;
+- a UTF-8 localized Actiware/RPX CSV;
+- a Windows-1252 Actiware/RPX CSV containing non-breaking spaces;
+- localized no-light and RGB-light Actiware exports;
+- a generic mapped CSV and an NHANES `PAXHR_H` guidance fixture;
 - examples from each supported device/format.
 
 Store expected values, tolerances, dependency versions, checksums, and diagnostic reports.
@@ -82,6 +86,23 @@ The reader scans the file and returns an explicit no-light result when no usable
 records exist. Legacy `activity.bin`/`lux.bin` GT3X archives are not decoded by
 this path and require a compatible legacy converter.
 
+
+### Tabular and localized CSV interpretation
+
+Automatic column detection does not validate the scientific meaning of a
+column. A mapped generic activity column is used as supplied and cannot be
+converted retroactively into ENMO, MAD, or processed acceleration without raw
+tri-axial data. Localized decimal separators and encodings are normalized, but
+users must still verify units, epoch duration, timezone, participant identity,
+and whether light variables are means, sums, or raw lux.
+
+`PAXHR_H` contains hourly aggregated MIMS and light summaries for many NHANES
+participants. The public files provide start day-of-week and clock time rather
+than an actual calendar date, so a participant-relative time index requires a
+documented synthetic anchor date. Even after preparing one participant, hourly
+data are not suitable for minute-level sleep classification and should not be
+interpreted as raw GT3X epochs.
+
 ### Large-file infrastructure
 
 Success depends on:
@@ -109,6 +130,9 @@ Before promoting a build:
 - verify all ten sidebar steps and direct access to pages 2–9 after file import;
 - verify page 10 remains locked until a successful page-9 result run;
 - verify full-content documentation search and the clickable GitHub docs link;
+- verify all workflow/documentation text, controls, tables, and navigation buttons are centre aligned;
+- test UTF-8 and Windows-1252 localized Actiware CSV imports, including no-light and RGB-light variants;
+- confirm `PAXHR_H` returns participant/timestamp preparation guidance;
 - run golden-file tests;
 - test partial metric failure;
 - test a vector-returning metric (`ISp`, `IVp`, or `RAp`);

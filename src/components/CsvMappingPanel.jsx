@@ -20,6 +20,7 @@ export default function CsvMappingPanel({
   const [columns, setColumns] = useState([]);
   const [detectedMapping, setDetectedMapping] = useState({});
   const [detectedInputType, setDetectedInputType] = useState("");
+  const [guidance, setGuidance] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -33,6 +34,7 @@ export default function CsvMappingPanel({
         setColumns([]);
         setDetectedMapping({});
         setDetectedInputType("");
+        setGuidance("");
         return;
       }
 
@@ -64,6 +66,7 @@ export default function CsvMappingPanel({
         setColumns(detectedColumns);
         setDetectedMapping(mapping);
         setDetectedInputType(data?.detected_input_type || "");
+        setGuidance(data?.guidance || "");
 
         setCsvMapping((prev) => ({
           timestamp_col: prev.timestamp_col || mapping.timestamp_col || "",
@@ -78,6 +81,7 @@ export default function CsvMappingPanel({
           setError(err.message || "Failed to detect columns.");
           setColumns([]);
           setDetectedMapping({});
+          setGuidance("");
         }
       } finally {
         if (!cancelled) {
@@ -104,6 +108,7 @@ export default function CsvMappingPanel({
 
   return (
     <div
+      className="workflow-panel-centered"
       style={{
         background: "white",
         border: "1px solid #e2e8f0",
@@ -133,6 +138,25 @@ export default function CsvMappingPanel({
           </div>
         )}
       </div>
+
+
+      {guidance && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 14,
+            borderRadius: 12,
+            border: "1px solid #fde68a",
+            background: "#fffbeb",
+            color: "#92400e",
+            fontSize: 14,
+            lineHeight: 1.55,
+            textAlign: "center",
+          }}
+        >
+          {guidance}
+        </div>
+      )}
 
       {loading && (
         <div
@@ -216,7 +240,7 @@ export default function CsvMappingPanel({
         style={{
           marginTop: 20,
           display: "flex",
-          justifyContent: "flex-end",
+          justifyContent: "center",
         }}
       >
         <button
