@@ -40,11 +40,11 @@ The in-app search must match content, not only section/topic names. Keep the sea
 - narrative documentation text;
 - workflow descriptions;
 - file formats and sensor capability;
-- all four activity options;
+- all six activity options;
 - algorithm registry entries;
 - metric registry entries;
 - analysis-family entries;
-- diagnostics, errors, deployment, and limitations.
+- diagnostics, errors, deployment, preprocessing, and provenance.
 
 When adding a new term or concept, verify that searching a phrase from its body text returns the relevant section even when the phrase is not in the section title.
 
@@ -53,7 +53,7 @@ When adding a new term or concept, verify that searching a phrase from its body 
 ### Workflow or preprocessing change
 
 - update `config/appConfig.json` and relevant panel/component;
-- update page validation and direct-navigation behaviour in `Dashboard.jsx`;
+- update page input checks and direct-navigation behaviour in `Dashboard.jsx`;
 - update the in-app narrative/search corpus;
 - update `USER_GUIDE.md`, related methods files, architecture, and change log;
 - add frontend/backend tests for payload and unlock behaviour.
@@ -63,24 +63,24 @@ When adding a new term or concept, verify that searching a phrase from its body 
 - update the metric registry;
 - update backend calculation and JSON serialization;
 - update `METRICS_AND_ALGORITHMS.md`;
-- add or update validation tests;
+- add or update calculation and serialization tests;
 - add a change-log entry;
 - confirm Results and Documentation tables/search.
 
 ### New or changed file/sensor format
 
 - update reader inference and loader;
-- document signal, units, mapping, page location, and limitations in `FILE_FORMATS.md`;
+- document signal, units, mapping, page location, and format-specific constraints in `FILE_FORMATS.md`;
 - update the in-app file/sensor content;
-- add a golden file;
+- add a representative regression fixture;
 - document deployment dependencies.
 
 ### Activity-basis change
 
 - update `ActivityMappingPanel.jsx` and backend normalization;
-- keep the public UI at the documented four options unless intentionally revised;
+- keep the public UI and backend normalization synchronized with the documented six options;
 - record requested/resolved mapping in diagnostics;
-- update `ACTIVITY_PROCESSING.md` and validation tolerances;
+- update `ACTIVITY_PROCESSING.md`, units, reducer definitions, and regression tolerances;
 - document units and threshold implications.
 
 ### Diagnostic or deployment change
@@ -92,11 +92,11 @@ When adding a new term or concept, verify that searching a phrase from its body 
 
 ## Writing principles
 
-- Distinguish implementation fact from scientific recommendation.
+- Describe the implemented preprocessing and pyActigraphy call path precisely.
 - State units and signal scale.
-- Do not describe exploratory combinations as validated.
+- State the requested/resolved mapping, units, epoch, and parameters.
 - Use exact endpoint, setting, and environment-variable names.
-- Include the date and release/commit when documenting validation.
+- Include the date and release/commit when documenting processing changes.
 - Remove obsolete instructions rather than retaining contradictory historical guidance.
 - Explain quality concepts in both technical and plain language, especially analyzable hours, consecutive valid days, and sleep-window coverage.
 

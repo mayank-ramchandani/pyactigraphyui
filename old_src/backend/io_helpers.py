@@ -372,6 +372,33 @@ def load_native_file(
             file_path, epoch_period=30, activity_mapping=requested_mapping
         )
 
+    if reader_type == "atr":
+        method_name = READERS.get(reader_type)
+        reader = getattr(pyActigraphy.io, method_name, None) if method_name else None
+        if reader is None:
+            raise ValueError("This pyActigraphy installation does not expose the ATR reader.")
+        if requested_mapping in {"pim", "zcm"}:
+            raw = _unwrap_pyactigraphy_reader(reader(file_path, mode=requested_mapping.upper()))
+            resolved = requested_mapping
+        elif requested_mapping in {"auto", "original"}:
+            raw = _unwrap_pyactigraphy_reader(reader(file_path))
+            resolved = "original"
+        else:
+            raise ValueError(
+                f"{requested_mapping.upper()} is not supplied by the ATR reader. "
+                "Choose source activity, PIM, or ZCM for this format."
+            )
+        return attach_mapping_metadata(
+            raw,
+            mapping_metadata(
+                requested_mapping,
+                resolved,
+                source="pyActigraphy:atr",
+                available_mappings=["auto", "original", "pim", "zcm"],
+                note="ATR PIM and ZCM modes are read through pyActigraphy's native ATR reader.",
+            ),
+        )
+
     # Philips Actiware/RPX exports are often distributed as localized CSVs.
     # pyActigraphy's RPX reader assumes a narrow English layout and can leave
     # ``data_offset`` undefined for French/German exports. Parse the epoch table

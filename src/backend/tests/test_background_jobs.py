@@ -38,6 +38,7 @@ from backend.app import (
     NO_LIGHT_MEASUREMENTS_DETAIL,
     analyze_light_batch,
     preview_light,
+    start_background_initial_qc,
     start_background_light_analysis,
     start_background_light_preview,
 )
@@ -190,6 +191,42 @@ class BackgroundJobTests(unittest.TestCase):
         self.assertTrue(payload["skipped"])
         self.assertFalse(payload["light_detection"]["available"])
         self.assertEqual(payload["message"], NO_LIGHT_MEASUREMENTS_DETAIL)
+
+    def test_initial_qc_uses_background_job_lifecycle(self):
+        upload = UploadFile(
+            file=io.BytesIO(b"small supported fixture"),
+            filename="recording.csv",
+        )
+        expected = {
+            "http_status": 200,
+            "content": {
+                "inspection_stage": "initial_after_load_before_manual_preprocessing",
+                "modes": {
+                    "calendar_day": {"window_count": 2},
+                    "recording_anchored": {"window_count": 1},
+                },
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"APP_DATA_DIR": directory}, clear=False
+        ), patch("backend.app._background_initial_qc_worker", return_value=expected):
+            response = start_background_initial_qc(
+                file=upload,
+                activityMapping="auto",
+                csvMapping="{}",
+                csvSeparator=",",
+                jobId="job-initial-qc",
+            )
+            self.assertEqual(response.status_code, 202)
+            job_id = json.loads(response.body)["job_id"]
+            record = self._wait(job_id)
+            result = get_job_result(job_id)
+
+            self.assertEqual(record["job_type"], "initial_qc")
+            self.assertEqual(record["status"], "completed")
+            self.assertEqual(result, expected)
+            self.assertFalse(os.path.exists(os.path.join(directory, "jobs", job_id, "inputs")))
 
     def test_gt3x_background_light_job_is_accepted_for_content_inspection(self):
         upload = UploadFile(

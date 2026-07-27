@@ -22,8 +22,8 @@ The analysis pipeline records and applies the following stages in order:
 4. **Epoch regularization** — align the scalar series to its detected epoch grid. Missing timestamps remain missing rather than becoming zero activity.
 5. **Start/stop limits** — apply uploaded or manually selected per-file recording bounds.
 6. **Non-wear and masks** — combine reader-provided or mapped non-wear with uploaded/manual exclusion intervals when enabled.
-7. **24-hour quality accounting** — calculate expected, recorded, gap, non-wear, masked, and analyzable hours using the selected calendar-day or recording-aligned basis.
-8. **Valid-window masking** — exclude quality windows below the configured analyzable-hours threshold and retain invalid epochs on the time axis.
+7. **Daily data-quality accounting** — calculate expected, recorded, gap, non-wear, masked, and analyzable hours for each calendar day.
+8. **Valid-day masking** — exclude days below the configured analyzable-hours threshold and retain invalid days on the time axis.
 9. **Sleep-window preparation** — apply diary/custom windows or pyActigraphy Crespo_AoT/Roenneberg_AoT windows and enforce minimum window coverage.
 10. **Metric/family execution** — call the selected pyActigraphy-backed metrics or analysis families on the cleaned activity series.
 11. **QC, diagnostics, and export** — retain resolved settings, warnings, file identifiers, software versions, and intermediate quality summaries.
@@ -47,14 +47,13 @@ For Actiwatch ATR inputs, explicit PIM and ZCM selections are passed to pyActigr
 
 Absent samples, excluded non-wear, and manual masks remain unavailable. Recorded zeros remain valid observations. This distinction is retained through resampling, daily summaries, sleep-window scoring, and rest–activity metrics.
 
-The recommended preprocessing settings are:
+The default preprocessing thresholds are:
 
-- calendar-day quality windows (midnight to midnight) as the default basis, with recording-aligned 24-hour windows available as a sensitivity option;
-- at least 16 analyzable hours for a valid quality window;
-- at least 2 consecutive valid quality windows for multi-window rhythm/SRI eligibility; and
+- at least 16 analyzable hours for a valid calendar day;
+- at least 2 consecutive valid calendar days for multi-day rhythm/SRI eligibility;
 - at least 80% available/scorable epochs within each sleep window.
 
-Step 2 also provides an initial per-file coverage table before manual masks and start/stop limits. Each setting is configurable and the resolved values and quality-window basis are stored in the analysis configuration and diagnostics.
+Each threshold is configurable on the Pre-processing page and is stored in the analysis configuration and diagnostics.
 
 ## Sleep/rest processing
 
@@ -73,7 +72,7 @@ Each file-level result should retain:
 - requested and resolved activity mapping;
 - activity units, sample rate, and epoch duration;
 - filtering/calibration details for raw accelerometer inputs;
-- start/stop, non-wear, mask, quality-window basis/validity, and sleep-window settings;
+- start/stop, non-wear, mask, valid-day, and sleep-window settings;
 - selected metric/family and algorithm parameters;
 - application version, Git commit, and relevant dependency versions;
 - QC warnings and structured diagnostic stages.

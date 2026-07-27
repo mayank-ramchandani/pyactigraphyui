@@ -1,6 +1,7 @@
 import copy
 import math
 import numbers
+import numpy as np
 import pandas as pd
 
 from .diagnostics import (
@@ -423,7 +424,7 @@ IMPLEMENTED_FAMILY_METRICS = {
     "fragmentation": ["kra", "kar"],
 }
 
-ADVANCED_FAMILY_IDS = {"cosinor", "flm", "mfdfa", "ssa", "clustering"}
+ADVANCED_FAMILY_IDS = {"flm", "mfdfa", "ssa", "clustering"}
 
 
 def _safe_float(value):
@@ -1449,6 +1450,103 @@ def _build_metric_requests_from_families(family_requests):
     return metric_requests
 
 
+def _run_cosinor_family(raw):
+    """Fit a fixed 24-hour single-component cosinor with pyActigraphy."""
+    try:
+        from pyActigraphy.analysis import Cosinor
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "family": "cosinor",
+            "message": f"pyActigraphy Cosinor could not be imported: {exc}",
+        }
+
+    series = getattr(raw, "data", None)
+    if isinstance(series, pd.DataFrame):
+        series = series.iloc[:, 0] if len(series.columns) else None
+    if series is None:
+        return {"status": "not_available", "family": "cosinor", "message": "No activity series was available."}
+
+    ts = pd.to_numeric(series, errors="coerce").sort_index()
+    if not isinstance(ts.index, pd.DatetimeIndex) or len(ts) < 3:
+        return {"status": "not_available", "family": "cosinor", "message": "Cosinor requires a timestamped activity series."}
+
+    diffs = ts.index.to_series().diff().dropna()
+    frequency = getattr(ts.index, "freq", None)
+    if frequency is None:
+        try:
+            inferred = pd.infer_freq(ts.index)
+            frequency = pd.Timedelta(inferred) if inferred else None
+        except Exception:
+            frequency = None
+    if frequency is None and len(diffs):
+        frequency = pd.Timedelta(diffs.median())
+    if frequency is None or pd.Timedelta(frequency) <= pd.Timedelta(0):
+        return {"status": "not_available", "family": "cosinor", "message": "The activity epoch frequency could not be determined."}
+
+    frequency = pd.Timedelta(frequency)
+    ts = ts[~ts.index.duplicated(keep="first")].asfreq(frequency)
+    valid = ts.dropna()
+    epochs_per_day = float(pd.Timedelta("24h") / frequency)
+    if len(valid) < max(12, int(round(epochs_per_day))):
+        return {
+            "status": "insufficient_data",
+            "family": "cosinor",
+            "valid_epochs": int(len(valid)),
+            "required_epochs": max(12, int(round(epochs_per_day))),
+            "message": "At least approximately 24 hours of valid epoch data are required for the 24-hour cosinor fit.",
+        }
+
+    model = Cosinor()
+    params = model.fit_initial_params.copy()
+    mesor_initial = max(0.0, float(valid.mean()))
+    amplitude_initial = max(1e-9, float((valid.quantile(0.95) - valid.quantile(0.05)) / 2.0))
+    params["Mesor"].set(value=mesor_initial, min=0)
+    params["Amplitude"].set(value=amplitude_initial, min=0)
+    params["Acrophase"].set(value=float(np.pi), min=0, max=float(2 * np.pi))
+    params["Period"].set(value=epochs_per_day, vary=False)
+
+    try:
+        fit = model.fit(ts=ts, params=params, method="leastsq", nan_policy="omit", verbose=False)
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "family": "cosinor",
+            "message": str(exc),
+            "valid_epochs": int(len(valid)),
+            "frequency": str(frequency),
+        }
+
+    fitted = fit.params.valuesdict()
+    acrophase = _safe_float(fitted.get("Acrophase"))
+    period_epochs = _safe_float(fitted.get("Period"))
+    peak_offset_hours = None
+    peak_clock_time = None
+    if acrophase is not None and period_epochs is not None:
+        peak_epoch = ((-acrophase / (2.0 * math.pi)) * period_epochs) % period_epochs
+        peak_offset_hours = float(peak_epoch * frequency.total_seconds() / 3600.0)
+        total_seconds = int(round(peak_offset_hours * 3600.0)) % (24 * 3600)
+        peak_clock_time = f"{total_seconds // 3600:02d}:{(total_seconds % 3600) // 60:02d}:{total_seconds % 60:02d}"
+
+    return {
+        "status": "completed" if bool(getattr(fit, "success", True)) else "completed_with_fit_warning",
+        "family": "cosinor",
+        "model": "single_component_fixed_24_hour",
+        "mesor": _safe_float(fitted.get("Mesor")),
+        "amplitude": _safe_float(fitted.get("Amplitude")),
+        "acrophase_radians": acrophase,
+        "period_hours": 24.0,
+        "peak_offset_hours": _safe_float(peak_offset_hours),
+        "peak_clock_time": peak_clock_time,
+        "bic": _safe_float(getattr(fit, "bic", None)),
+        "reduced_chi_square": _safe_float(getattr(fit, "redchi", None)),
+        "valid_epochs": int(len(valid)),
+        "total_epochs": int(len(ts)),
+        "frequency": str(frequency),
+        "pyactigraphy_class": "pyActigraphy.analysis.Cosinor",
+    }
+
+
 def _run_advanced_family_placeholder(family_id):
     return {
         "status": "planned",
@@ -1466,7 +1564,10 @@ def _run_basic_pyactigraphy_analysis_single(raw, metric_requests=None, family_re
         metric_requests = _build_metric_requests_from_families(family_requests)
         for family in family_requests:
             family_id = family.get("id")
-            if family_id in ADVANCED_FAMILY_IDS:
+            if family_id == "cosinor":
+                with diagnostic_stage("family.cosinor", category="family", details={"family_id": "cosinor"}):
+                    results[family_id] = _run_cosinor_family(raw)
+            elif family_id in ADVANCED_FAMILY_IDS:
                 results[family_id] = _run_advanced_family_placeholder(family_id)
 
     rest_and_fragmentation_ids = {"ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap", "kra", "kar"}

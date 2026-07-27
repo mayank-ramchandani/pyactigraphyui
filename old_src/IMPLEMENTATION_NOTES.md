@@ -11,7 +11,7 @@ This file previously described an early converter-only build and is retained to 
 
 - The frontend uses the documented ten-page workflow, with pages 2–9 directly clickable after actigraphy import and Export unlocked after successful result generation.
 - Page 2 controls valid-day hours, consecutive-day eligibility, sleep-window coverage, and detected non-wear handling.
-- Page 3 offers four activity choices: recommended/automatic, processed acceleration, MAD, and ENMO.
+- Page 3 offers six activity choices: recommended/automatic, processed acceleration, ENMO, MAD, PIM, and ZCM.
 - GENEActiv `.bin` and current-format ActiGraph `.gt3x` use bounded-memory direct readers where supported.
 - Axivity `.cwa` and exact Oxford outputs may use the converter/time-series path and can require Java/OpenJDK.
 - Current-format GT3X activity is supported directly; it is no longer necessary to export every GT3X recording to `.agd` before analysis.

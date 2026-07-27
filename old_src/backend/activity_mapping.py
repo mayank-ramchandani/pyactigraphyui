@@ -2,8 +2,7 @@
 
 The recommended ``auto`` mode keeps a device/source activity series when the
 file already contains one, and uses an epoch-level accelerometer ``acc`` series
-for raw tri-axial inputs.  ``mad`` and the legacy/custom ``enmo`` calculation
-remain available as explicit alternatives.
+for raw tri-axial inputs.  ``mad``, ``enmo``, proportional-integrating mode (PIM), and zero-crossing mode (ZCM) remain available as explicit alternatives.
 """
 
 from __future__ import annotations
@@ -39,9 +38,19 @@ ACTIVITY_MAPPING_OPTIONS: Dict[str, Dict[str, Any]] = {
         "description": "Mean amplitude deviation of vector magnitude within each epoch.",
     },
     "enmo": {
-        "label": "Custom ENMO (legacy)",
+        "label": "ENMO",
         "units": "mg",
-        "description": "Direct Euclidean Norm Minus One calculation retained for comparison and backwards compatibility.",
+        "description": "Epoch mean of positive Euclidean Norm Minus One from calibrated vector magnitude.",
+    },
+    "pim": {
+        "label": "PIM",
+        "units": "mg·s/epoch",
+        "description": "Proportional-integrating mode: integral of absolute dynamic vector magnitude within each epoch.",
+    },
+    "zcm": {
+        "label": "ZCM",
+        "units": "crossings/epoch",
+        "description": "Zero-crossing mode: dead-band sign changes of dynamic vector magnitude within each epoch.",
     },
 }
 
@@ -64,6 +73,12 @@ _ALIASES = {
     "euclidean_norm_minus_one": "enmo",
     "mean_amplitude_deviation": "mad",
     "mad_mg": "mad",
+    "proportional_integrating_mode": "pim",
+    "proportionalintegratingmode": "pim",
+    "pim_mg_s": "pim",
+    "zero_crossing_mode": "zcm",
+    "zerocrossingmode": "zcm",
+    "zero_crossings": "zcm",
 }
 
 

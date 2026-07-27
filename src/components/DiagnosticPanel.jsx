@@ -8,7 +8,7 @@ function formatNumber(value, digits = 3) {
 function statusColor(status) {
   const normalized = String(status || "").toLowerCase();
   if (["passed", "completed"].includes(normalized)) return "#166534";
-  if (["warning", "completed_with_warnings"].includes(normalized)) return "#9a3412";
+  if (["warning", "completed_with_warnings"].includes(normalized)) return "#a16207";
   if (["failed", "error"].includes(normalized)) return "#991b1b";
   return "#475569";
 }
@@ -97,7 +97,7 @@ export default function DiagnosticPanel({ diagnostics, title = "Diagnostic repor
       )}
 
       {transport.message && (
-        <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: "#fff7ed", border: "1px solid #fed7aa", color: "#9a3412" }}>
+        <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b" }}>
           <strong>Transport failure:</strong> {transport.message}
           {transport.http_status ? ` (HTTP ${transport.http_status})` : ""}
           {transport.response_preview ? <div style={{ marginTop: 6, overflowWrap: "anywhere" }}>Response: {transport.response_preview}</div> : null}
@@ -107,8 +107,8 @@ export default function DiagnosticPanel({ diagnostics, title = "Diagnostic repor
       <ErrorDetails error={diagnostics.error} label="Request error" />
 
       {raComponents && (
-        <div style={{ marginTop: 12, padding: 11, borderRadius: 10, background: raComponents.ra_at_upper_boundary ? "#fff7ed" : "#f0fdf4", border: `1px solid ${raComponents.ra_at_upper_boundary ? "#fed7aa" : "#bbf7d0"}`, fontSize: 13 }}>
-          <div style={{ fontWeight: 800, color: raComponents.ra_at_upper_boundary ? "#9a3412" : "#166534" }}>
+        <div style={{ marginTop: 12, padding: 11, borderRadius: 10, background: raComponents.ra_at_upper_boundary ? "#fffbeb" : "#f0fdf4", border: `1px solid ${raComponents.ra_at_upper_boundary ? "#fde68a" : "#bbf7d0"}`, fontSize: 13 }}>
+          <div style={{ fontWeight: 800, color: raComponents.ra_at_upper_boundary ? "#92400e" : "#166534" }}>
             RA calculation details
           </div>
           <div style={{ marginTop: 5, display: "flex", gap: 14, flexWrap: "wrap" }}>
@@ -119,14 +119,14 @@ export default function DiagnosticPanel({ diagnostics, title = "Diagnostic repor
             <span><strong>Threshold:</strong> {formatNumber(raComponents.threshold)}</span>
           </div>
           {raComponents.ra_at_upper_boundary && (
-            <div style={{ marginTop: 5, color: "#9a3412" }}>RA equals 1 because L5 is zero while M10 is positive. Review the mapping, units, binarization, and threshold before interpreting it.</div>
+            <div style={{ marginTop: 5, color: "#92400e" }}>RA equals 1 because L5 is zero while M10 is positive. Review the mapping, units, binarization, and threshold before interpreting it.</div>
           )}
         </div>
       )}
 
       {sleepWindowDetails && (
-        <div style={{ marginTop: 10, padding: 11, borderRadius: 10, background: sleepWindowDetails.window_count > 0 ? "#f0fdf4" : "#fff7ed", border: `1px solid ${sleepWindowDetails.window_count > 0 ? "#bbf7d0" : "#fed7aa"}`, fontSize: 13 }}>
-          <div style={{ fontWeight: 800, color: sleepWindowDetails.window_count > 0 ? "#166534" : "#9a3412" }}>Sleep-window detection</div>
+        <div style={{ marginTop: 10, padding: 11, borderRadius: 10, background: sleepWindowDetails.window_count > 0 ? "#f0fdf4" : "#fffbeb", border: `1px solid ${sleepWindowDetails.window_count > 0 ? "#bbf7d0" : "#fde68a"}`, fontSize: 13 }}>
+          <div style={{ fontWeight: 800, color: sleepWindowDetails.window_count > 0 ? "#166534" : "#92400e" }}>Sleep-window detection</div>
           <div style={{ marginTop: 5 }}>
             <strong>Method:</strong> {sleepWindowDetails.method || "—"} · <strong>Windows:</strong> {sleepWindowDetails.window_count ?? 0}
           </div>

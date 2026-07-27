@@ -1,5 +1,13 @@
 # Change log
 
+## 2026-07-24 — PIM/ZCM, Cosinor family, feedback access, and preprocessing provenance
+
+- Added PIM and ZCM to the activity-mapping UI, normalization, raw GENEActiv/GT3X streaming reducers, preprocessed time-series column detection, generic mapped tables, and native ATR reader modes.
+- Restored the family-level/metric-level selector in Standard and Custom modes and enabled the pyActigraphy Cosinor family.
+- Expanded feedback submissions with selected files, analysis configuration, progress, request ID, client URL, and recent errors.
+- Added token-protected feedback list and CSV/JSONL export endpoints plus a local export command.
+- Replaced the former document with preprocessing, pyActigraphy foundation, provenance, missingness, and reproducible configuration guidance.
+
 ## 2026-07-24 — Centred interface and resilient CSV/RPX loading
 
 - Updated the persistent documentation link to `https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs`.
@@ -16,12 +24,12 @@
 - Reorganized the interface into the requested ten-page process from actigraphy import through export.
 - Made sidebar pages 2–9 directly clickable after file import; Export unlocks only after successful result generation.
 - Moved valid-day, consecutive-day, sleep-window coverage, and non-wear choices to the Pre-processing page.
-- Limited the activity-estimation page to four options: recommended/automatic, processed acceleration, MAD, and ENMO.
+- At that release, limited the activity-estimation page to four options; the 2026-07-24 update later expanded it to include PIM and ZCM.
 - Separated cleaning/masking, sleep-wake classification, other sensors, metric setup, result generation, and export into dedicated pages.
 - Added an information explanation for minimum sleep-window coverage.
-- Expanded in-app search to index complete narrative, workflow, format, metric, algorithm, family, diagnostic, limitation, and developer content.
+- Expanded in-app search to index complete narrative, workflow, format, metric, algorithm, family, diagnostic, provenance, and developer content.
 - Made the GitHub documentation link persistently visible with an exact `VITE_GITHUB_DOCS_URL` override and repository fallback.
-- Updated the in-app guide, GitHub Markdown documentation, environment example, and validation guidance.
+- Updated the in-app guide, GitHub Markdown documentation, environment example, and preprocessing guidance.
 
 ## 2026-07-23 — Optional preprocessing validity thresholds
 
@@ -49,7 +57,7 @@
 ## 2026-07-23 — Safe large-file light previews
 
 - Stopped `.gt3x` activity files from being used as implicit light sources.
-- Added a clear GT3X-light limitation message while preserving GT3X activity
+- Added a clear GT3X-light capability message while preserving GT3X activity
   preview and analysis.
 - Rejected direct GT3X light requests before temporary-file copying or decoding.
 - Added background jobs for standard light preview, multichannel/RGB preview,
@@ -122,7 +130,7 @@
 ## 2026-07-16 — Documentation centre
 
 - Added a searchable in-app Documentation page.
-- Added GitHub-ready user, methods, file-format, diagnostics, validation, architecture, deployment, and maintenance documentation.
+- Added GitHub-ready user, methods, file-format, diagnostics, preprocessing/provenance, architecture, deployment, and maintenance documentation.
 - Added optional `VITE_GITHUB_REPOSITORY_URL` support.
 - Added the `documentation_center` backend feature flag.
 
@@ -131,7 +139,7 @@
 - Restored file-aware recommended activity behaviour.
 - Count-based files use source/device activity.
 - Raw `.bin`, `.cwa`, and `.gt3x` files use processed epoch-level `acc` where supported.
-- Kept MAD and custom ENMO as optional mappings.
+- Kept MAD and ENMO as optional mappings; PIM and ZCM were added in the 2026-07-24 release.
 - Decoupled preview mapping from analysis mapping.
 - Added mapping engine, units, filter, and epoch metadata to diagnostics.
 

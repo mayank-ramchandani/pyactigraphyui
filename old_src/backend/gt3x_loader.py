@@ -32,6 +32,7 @@ except Exception:  # pragma: no cover - deployment dependency
     butter = lfilter = lfilter_zi = sosfilt = sosfilt_zi = None
 
 from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
+from .activity_metrics import EpochPIMAccumulator, EpochZCMAccumulator
 from .geneactiv_bin import SimpleLightRecording
 
 try:
@@ -441,6 +442,10 @@ def _resolve_mode(
         return "mad", "mad", None
     if requested_mapping == "enmo":
         return "enmo", "enmo", None
+    if requested_mapping == "pim":
+        return "pim", "pim", None
+    if requested_mapping == "zcm":
+        return "zcm", "zcm", None
 
     mode = (activity_mode or "counts").strip().lower()
     if mode in {"enmo", "enmo_mg"}:
@@ -449,6 +454,10 @@ def _resolve_mode(
         return "mad", "mad", None
     if mode in {"accelerometer", "accelerometer_acc", "acc"}:
         return "accelerometer", "accelerometer", None
+    if mode in {"pim", "proportional_integrating_mode"}:
+        return "pim", "pim", None
+    if mode in {"zcm", "zero_crossing_mode"}:
+        return "zcm", "zcm", None
     if mode != "counts":
         raise GT3XProcessingError(f"Unsupported GT3X activity mode/mapping: {mode}")
 
@@ -700,6 +709,8 @@ def _stream_gt3x_activity(
         counts_accumulator = None
         mean_accumulator = None
         mad_accumulator = None
+        pim_accumulator = None
+        zcm_accumulator = None
         vm_filter = _StreamingVmLowPass(sample_rate)
         if mode == "counts":
             try:
@@ -710,6 +721,10 @@ def _stream_gt3x_activity(
                 fallback_reason = str(exc)
         if mode == "mad":
             mad_accumulator = _MadAccumulator(epoch_period)
+        elif mode == "pim":
+            pim_accumulator = EpochPIMAccumulator(epoch_period)
+        elif mode == "zcm":
+            zcm_accumulator = EpochZCMAccumulator(epoch_period)
         elif mode != "counts":
             name = "ACC_mg" if mode == "accelerometer" else "ENMO_mg"
             mean_accumulator = _EpochMeanAccumulator(epoch_period, name)
@@ -782,9 +797,18 @@ def _stream_gt3x_activity(
             if mad_accumulator is not None and mode == "mad":
                 mad_accumulator.add(vm, local_start, sample_rate)
                 return
-            if mode == "accelerometer":
+            if mode in {"accelerometer", "pim", "zcm"}:
                 vm = vm_filter.apply(vm, local_start)
-            values = np.maximum(vm - 1.0, 0.0) * 1000.0
+            dynamic_mg = (vm - 1.0) * 1000.0
+            if mode == "pim":
+                assert pim_accumulator is not None
+                pim_accumulator.add(dynamic_mg, local_start, sample_rate)
+                return
+            if mode == "zcm":
+                assert zcm_accumulator is not None
+                zcm_accumulator.add(dynamic_mg, local_start, sample_rate)
+                return
+            values = np.maximum(dynamic_mg, 0.0)
             assert mean_accumulator is not None
             mean_accumulator.add(values, local_start, sample_rate)
 
@@ -977,6 +1001,25 @@ def _stream_gt3x_activity(
             "_activity_units": "mg",
             "_late_mad_samples_skipped": mad_accumulator.late_samples_skipped,
         }
+    elif mode == "pim" and pim_accumulator is not None:
+        activity = pim_accumulator.series()
+        mode_meta = {
+            "_gt3x_activity_mode": "pim",
+            "_activity_units": "mg·s/epoch",
+            "_vector_magnitude_lowpass_hz": 20 if vm_filter.enabled else None,
+            "_vector_magnitude_filter_order": 4 if vm_filter.enabled else None,
+            "_filter_state_resets": vm_filter.resets,
+        }
+    elif mode == "zcm" and zcm_accumulator is not None:
+        activity = zcm_accumulator.series()
+        mode_meta = {
+            "_gt3x_activity_mode": "zcm",
+            "_activity_units": "crossings/epoch",
+            "_zcm_threshold_mg": zcm_accumulator.threshold_mg,
+            "_vector_magnitude_lowpass_hz": 20 if vm_filter.enabled else None,
+            "_vector_magnitude_filter_order": 4 if vm_filter.enabled else None,
+            "_filter_state_resets": vm_filter.resets + zcm_accumulator.resets,
+        }
     else:
         assert mean_accumulator is not None
         activity = mean_accumulator.series()
@@ -999,7 +1042,7 @@ def _stream_gt3x_activity(
         source="pygt3x_streaming_raw_axes",
         epoch_seconds=int(epoch_period),
         calibrated_axes=True,
-        available_mappings=["auto", "accelerometer", "original", "mad", "enmo"],
+        available_mappings=["auto", "accelerometer", "original", "mad", "enmo", "pim", "zcm"],
         original_mode=activity_mode,
     )
     metadata.update(mode_meta)

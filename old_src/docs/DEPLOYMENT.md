@@ -161,7 +161,7 @@ Expose detailed server errors only during controlled debugging.
 3. Deploy the backend image.
 4. Confirm `/api/version` and feature flags.
 5. Deploy the frontend with the correct backend URL.
-6. Run a small golden file.
+6. Run a small representative recording and review its preprocessing/diagnostic summary.
 7. Confirm the daily QC table on a gapped/non-wear test file.
 8. Confirm a GT3X fixture with type-`0x05` records returns `LIGHT` and `LIGHT_LUX`.
 9. Confirm a no-light GT3X returns `light_detection.status = not_present` without an error.

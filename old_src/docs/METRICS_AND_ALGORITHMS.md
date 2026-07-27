@@ -53,7 +53,7 @@ The pyActigraphy SRI definition ranges from -100 to 100; 100 means every availab
 
 ## Sleep/rest algorithms
 
-The algorithm registry currently exposes Cole-Kripke, Sadeh, Oakley, Scripps, Crespo, and Roenneberg entries. Classic scoring algorithms were developed for specific devices, count scales, epochs, placements, and populations. Execution on a generic mg series does not establish validation for that combination.
+The algorithm registry currently exposes Cole-Kripke, Sadeh, Oakley, Scripps, Crespo, and Roenneberg entries. The selected activity mapping, units, epoch duration, algorithm, and parameters are stored together so the calculation context remains explicit. Sleep/rest algorithms are called through the corresponding pyActigraphy methods where available.
 
 ## Diary/custom and automatic sleep windows
 
@@ -99,3 +99,14 @@ Every result should include:
 - binarization and thresholds;
 - application and dependency versions;
 - QC and diagnostic warnings.
+
+
+## pyActigraphy computational basis
+
+Native readers, non-parametric rest–activity metrics, Crespo_AoT/Roenneberg_AoT procedures, and Cosinor modelling are based on pyActigraphy. The application resolves preprocessing and activity mapping before calling these methods and retains the resolved configuration with each result.
+
+- Documentation: https://ghammad.github.io/pyActigraphy/
+- Source: https://github.com/ghammad/pyActigraphy
+- Package paper: https://doi.org/10.1371/journal.pcbi.1009514
+
+The **Cosinor** family uses `pyActigraphy.analysis.Cosinor` with a fixed 24-hour single-component period and reports mesor, amplitude, acrophase, derived peak clock time, BIC, reduced chi-square, valid epochs, and epoch frequency.

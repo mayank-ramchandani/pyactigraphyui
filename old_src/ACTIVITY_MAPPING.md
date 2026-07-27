@@ -1,14 +1,14 @@
 # Activity metric / acceleration-magnitude selection
 
-This top-level file is retained for compatibility with older repository links. The current detailed documentation is [docs/ACTIVITY_PROCESSING.md](docs/ACTIVITY_PROCESSING.md).
+This compatibility page points to the maintained method description in [docs/ACTIVITY_PROCESSING.md](docs/ACTIVITY_PROCESSING.md).
 
-The setting appears on **page 3: Estimating Activity Metric / Magnitude of Acceleration** and has four public choices:
+Page 3 exposes six activity mappings:
 
-1. `auto` — recommended/automatic. Preserve a suitable source/device activity series when present; otherwise resolve an appropriate processed acceleration basis for compatible raw X/Y/Z files.
-2. `accelerometer` — explicitly request processed epoch-level acceleration (`acc`), typically reported in mg.
-3. `mad` — mean amplitude deviation, reported in mg when derived from calibrated acceleration.
-4. `enmo` — Euclidean Norm Minus One, using the application's documented custom ENMO implementation/available source column.
+1. `auto` — retain source/device activity when supplied; otherwise use processed epoch-level acceleration for compatible raw XYZ files.
+2. `accelerometer` — processed acceleration (`acc`), in mg.
+3. `enmo` — epoch mean of positive Euclidean Norm Minus One, in mg.
+4. `mad` — mean absolute deviation of vector magnitude, in mg.
+5. `pim` — proportional-integrating mode, reported as mg·s/epoch.
+6. `zcm` — zero-crossing mode, reported as crossings/epoch.
 
-There is no separate `original` button in the current UI. Source/device activity remains reachable through `auto` for compatible count-based or native files. The requested and resolved basis, engine, source column, units, and epoch are recorded in preview/results diagnostics.
-
-Page 4 previews activity using the selected initial basis, while page 8 controls metric selection and page 9 runs the analysis. Thresholds defined on a count scale must not be assumed equivalent to mg-scale processed acceleration, MAD, or ENMO.
+The resolved mapping, source column or raw-processing engine, units, epoch duration, and preprocessing parameters are retained in preview/results diagnostics. The resulting scalar series is supplied to pyActigraphy-backed metrics and analysis families.

@@ -196,7 +196,7 @@ light, temperature, and non-wear fields.
 
 ### Metric returns `null`
 
-Review the metric stage and suppressed exceptions. The metric can be unsupported for the raw-object type, require more days, require sleep windows, or have returned a non-scalar value that failed validation.
+Review the metric stage and suppressed exceptions. The metric can be unsupported for the raw-object type, require more days, require sleep windows, or have returned a value that could not be converted to the expected result shape.
 
 Also inspect `dataQuality`: multi-day rhythm/SRI metrics are unavailable below
 the configured minimum consecutive-valid-day run, and TST/WASO/sleep efficiency are

@@ -14,6 +14,8 @@ This directory is the long-form GitHub documentation for the Actigraphy Dashboar
 | [Architecture](ARCHITECTURE.md) | Developers | Frontend/backend modules, current workflow components, registries, and API endpoints |
 | [Deployment](DEPLOYMENT.md) | Operators | Environment variables, GitHub documentation link, Azure/proxy concerns, storage, and release checks |
 | [Documentation maintenance](DOCUMENTATION_MAINTENANCE.md) | Maintainers | Synchronizing in-app full-content search and GitHub documentation |
+| [Terms of use](TERMS_OF_USE.md) | All users | OBI hosting, CFA support, transient raw-file processing, privacy, acceptable use, and scientific responsibility |
+| [Implementation update — 2026-07-27](IMPLEMENTATION_UPDATE_2026-07-27.md) | Maintainers | File-by-file summary, API changes, deployment notes, and verification for this release |
 | [Change log](CHANGELOG.md) | Everyone | User-visible method and application changes |
 
 ## Current application workflow
@@ -37,11 +39,11 @@ After actigraphy files are imported, pages 2–9 are directly clickable in the l
 - **Raw acceleration** means high-frequency X/Y/Z measurements and is not itself a single pyActigraphy activity series.
 - **Processed `acc`** means epoch-level, gravity-adjusted acceleration from an existing Oxford `acc` column or the bounded-memory raw-sample pathway recorded in diagnostics.
 - **Activity mapping** means the scalar activity basis supplied to rest/activity metrics.
-- **Valid day** means a calendar day meeting the configured analyzable-hours threshold.
-- **Consecutive valid days** means one uninterrupted calendar-day run.
+- **Valid quality window** means a calendar day or recording-aligned 24-hour window meeting the configured analyzable-hours threshold.
+- **Consecutive valid windows** means one uninterrupted run under the selected window basis.
 - **Sleep-window coverage** means the proportion of expected epochs inside a sleep window that remain recorded and scorable after gaps, non-wear, and masks.
 - **Window** means a full-timestamp rest/sleep interval; no heuristic fallback window is inserted.
 - **Localized RPX CSV** means an Actiware export whose metadata/header labels may be English, French, or German and whose encoding may be UTF-8 or Windows-1252.
 - **Mapped tabular activity** means a timestamped activity column used as supplied and labelled with the selected mapping; raw-sample reconstruction is not performed.
 
-Last consolidated: **2026-07-24**.
+Last consolidated: **2026-07-27**.

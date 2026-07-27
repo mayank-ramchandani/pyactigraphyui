@@ -20,14 +20,16 @@ Localized Philips Actiware/RPX CSV exports in English, French, or German are par
 
 ## 2. Pre-processing
 
-Review the project-standard data-quality rules:
+Review the recommended data-quality settings and the initial file-coverage QC:
 
-- **16 analyzable hours** are required for a valid calendar day;
-- **2 consecutive valid calendar days** are required for multi-day rhythm metrics and SRI eligibility;
+- **16 analyzable hours** is the recommended threshold for a valid quality window;
+- **calendar-day windows** (midnight to midnight) are the recommended default for day-level summaries;
+- **recording-aligned 24-hour windows** are available as an explicit sensitivity option for partial first/last calendar dates;
+- **2 consecutive valid windows** is the recommended minimum for multi-day rhythm metrics and SRI eligibility;
 - **80% sleep-window coverage** is required for window-dependent sleep summaries;
 - detected or mapped non-wear is respected by default.
 
-Enable **Modify the standard data-quality thresholds** only when a protocol or sensitivity analysis requires different values.
+Enable **Customize recommended data-quality settings** when the study protocol or a planned sensitivity analysis requires different thresholds or window alignment.
 
 ### Minimum sleep-window coverage
 
@@ -166,3 +168,8 @@ Download configured outputs such as result summaries, CSV-compatible tables, JSO
 ## Reviewing submitted feedback (administrators)
 
 Configure `FEEDBACK_ADMIN_TOKEN` and open `/?feedback-admin=1` on the deployed frontend. The protected review screen supports full-text search, category filtering, complete report inspection, and CSV/JSONL download. Feedback remains stored in `${APP_DATA_DIR}/feedback.jsonl`; use persistent mounted storage in deployment.
+
+
+## Terms of use
+
+The persistent **Terms of Use** button and the Documentation section explain OBI hosting, CFA grant support, transient raw-file processing, technical metadata/feedback retention, de-identification expectations, acceptable use, and the research/educational nature of the tool. See [TERMS_OF_USE.md](TERMS_OF_USE.md).

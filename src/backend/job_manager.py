@@ -216,6 +216,9 @@ def _run_job(job_id: str, worker: Callable[[], Dict[str, Any]]) -> None:
             {"http_status": result_http_status, "content": result_content},
         )
         succeeded = 200 <= result_http_status < 400
+        # Remove the raw upload before exposing a terminal job status so a
+        # completed/failed poll never implies that input bytes are still held.
+        _remove_job_inputs(job_id)
         update_job(
             job_id,
             status="completed" if succeeded else "failed",
@@ -234,6 +237,7 @@ def _run_job(job_id: str, worker: Callable[[], Dict[str, Any]]) -> None:
             _job_dir(job_id) / "result.json",
             {"http_status": 500, "content": error_content},
         )
+        _remove_job_inputs(job_id)
         update_job(
             job_id,
             status="failed",

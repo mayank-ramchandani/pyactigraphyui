@@ -164,7 +164,9 @@ export default function Dashboard() {
 
   const [analysisMode, setAnalysisMode] = useState("standard");
   const [analysisScope, setAnalysisScope] = useState("metric");
-  const [selectedFamilies, setSelectedFamilies] = useState([]);
+  const [selectedFamilies, setSelectedFamilies] = useState(() =>
+    (analysisFamilyRegistry.families || []).filter((family) => !family.planned).map((family) => family.id)
+  );
   const [fileError, setFileError] = useState("");
 
   const [previewLoaded, setPreviewLoaded] = useState(false);
@@ -374,10 +376,9 @@ export default function Dashboard() {
   }, [selectedFamilies]);
 
   const resolvedSelectedMetrics = useMemo(() => {
-    if (analysisMode === "standard") {
-      return getDefaultSelectedMetrics(metricRegistry);
-    }
-    return analysisScope === "family" ? familyMetricIds : selectedMetrics;
+    if (analysisScope === "family") return familyMetricIds;
+    if (analysisMode === "standard") return getDefaultSelectedMetrics(metricRegistry);
+    return selectedMetrics;
   }, [analysisMode, analysisScope, familyMetricIds, selectedMetrics]);
 
   const resolvedAnalysisConfig = useMemo(
@@ -1241,10 +1242,10 @@ export default function Dashboard() {
       );
 
     const hasMetrics =
-      analysisMode === "standard"
-        ? resolvedSelectedMetrics.length > 0
-        : analysisScope === "family"
+      analysisScope === "family"
         ? selectedFamilies.length > 0
+        : analysisMode === "standard"
+        ? resolvedSelectedMetrics.length > 0
         : selectedMetrics.length > 0;
 
     switch (currentStep) {
@@ -1765,6 +1766,43 @@ export default function Dashboard() {
           endpoint: analysisError ? "api/analyze/basic" : previewError ? "api/preview/basic" : "",
           appVersion: import.meta.env.VITE_APP_VERSION || "frontend-dev",
           backendUrl: API_BASE_URL,
+          requestId: analysisProgress.requestId || null,
+          progress: analysisProgress,
+          selectedFiles: Object.entries(uploadedFiles).flatMap(([category, files]) =>
+            (files || []).map((file) => ({
+              category,
+              name: file.name,
+              type: getExtension(file.name || ""),
+              sizeMb: Number((file.size / (1024 * 1024)).toFixed(3)),
+              selectedForAnalysis: category === "actigraphy"
+                ? selectedAnalysisFileNames.includes(file.name)
+                : null,
+            }))
+          ),
+          configuration: {
+            activityMapping,
+            analysisMode,
+            analysisScope,
+            selectedFamilies,
+            selectedMetrics: resolvedSelectedMetrics,
+            selectedAlgorithm,
+            resolvedAnalysisConfig,
+            sleepWindowSettings,
+            supportFileSettings,
+            analysisWindowSettings,
+            selectedLightMetrics,
+            lightMetricSettings,
+            csvMapping: showManualMapping ? csvMapping : null,
+            selectedPreviewFile,
+            selectedLightPreviewFile,
+            selectedAnalysisFileNames,
+          },
+          recentErrors: [
+            previewError ? { area: "activity_preview", message: previewError } : null,
+            analysisError ? { area: "activity_analysis", message: analysisError } : null,
+            fileError ? { area: "file_upload", message: fileError } : null,
+            lightAnalysisError ? { area: "light_analysis", message: lightAnalysisError } : null,
+          ].filter(Boolean),
         }}
       />
     </div>

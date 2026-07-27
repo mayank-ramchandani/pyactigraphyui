@@ -41,7 +41,7 @@ The frontend uses React and Vite. The current interface is a ten-page workflow. 
 10 Export Outputs
 ```
 
-Direct navigation changes presentation order only. The backend still receives one resolved analysis payload containing preprocessing, mapping, intervals, sleep-window, algorithm, metric, and light settings. Page-level validation prevents an invalid setup from being submitted.
+Direct navigation changes presentation order only. The backend still receives one resolved analysis payload containing preprocessing, mapping, intervals, sleep-window, algorithm, metric, and light settings. Page-level input checks prevent incomplete settings from being submitted.
 
 ## Backend
 
@@ -73,7 +73,7 @@ Browser actigraphy upload
   → reader detection and native/raw or mapped-tabular loading
   → localized text decoding and semantic RPX header detection when applicable
   → activity-basis resolution
-  → timestamp/data validation
+  → timestamp/data checks
   → start/stop and manual masks
   → common gap/non-wear/analyzable-time processing
   → valid-day and longest-consecutive-run calculation
@@ -101,7 +101,7 @@ The registries define user-facing labels, defaults, availability, and analysis m
 - all workflow titles and descriptions;
 - supported-format and activity-option content;
 - complete algorithm, metric, and analysis-family registry content;
-- diagnostics, limitations, deployment, and developer guidance.
+- diagnostics, format constraints, deployment, and developer guidance.
 
 The panel always renders a GitHub documentation link. `VITE_GITHUB_DOCS_URL` can point to an exact docs branch/path; otherwise the link falls back to `${VITE_GITHUB_REPOSITORY_URL}/tree/main/src/docs`, and then to the project default repository.
 
@@ -135,3 +135,8 @@ The panel always renders a GitHub documentation link. `VITE_GITHUB_DOCS_URL` can
 - Operating-system kills, gateway rejection, and proxy timeouts remain outside the Python error boundary.
 - Background execution removes decoding and analysis from the ingress request, but the initial browser upload must still finish within the platform upload/request limit.
 - GT3X activity and light capabilities use separate bounded readers. Absence of light is a successful skip and does not affect activity processing.
+
+
+## Feedback administration
+
+`POST /api/feedback` appends reports to `${APP_DATA_DIR}/feedback.jsonl`. The frontend review surface is available at `/?feedback-admin=1`; it calls the token-protected list and export endpoints. In hosted deployments, `APP_DATA_DIR` should point to a mounted persistent volume.

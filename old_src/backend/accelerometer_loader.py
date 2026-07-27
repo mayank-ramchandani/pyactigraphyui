@@ -106,6 +106,32 @@ def _pick_activity_column(df: pd.DataFrame, activity_mapping: str = "auto") -> T
             )
         return str(col), "mad"
 
+    if requested_mapping == "pim":
+        col = _pick_column(
+            df,
+            ["pim", "PIM", "pim_mg_s", "PIM_mg_s", "proportionalIntegratingMode", "proportional_integrating_mode"],
+        )
+        if col is None:
+            raise AccelerometerProcessingError(
+                "PIM was selected, but this Oxford/preprocessed time-series does not contain a PIM column. "
+                "Raw GENEActiv .bin and ActiGraph .gt3x files can be reduced directly; for Axivity .cwa, "
+                "provide a converted time-series containing a PIM column."
+            )
+        return str(col), "pim"
+
+    if requested_mapping == "zcm":
+        col = _pick_column(
+            df,
+            ["zcm", "ZCM", "zeroCrossings", "zero_crossings", "zeroCrossingMode", "zero_crossing_mode"],
+        )
+        if col is None:
+            raise AccelerometerProcessingError(
+                "ZCM was selected, but this Oxford/preprocessed time-series does not contain a ZCM/zero-crossings column. "
+                "Raw GENEActiv .bin and ActiGraph .gt3x files can be reduced directly; for Axivity .cwa, "
+                "provide a converted time-series containing a ZCM/zero-crossings column."
+            )
+        return str(col), "zcm"
+
     acc_candidates = [
         "acc", "accOverallAvg", "acc_overall_avg", "acc-overall-avg",
         "acc-overall-avg(mg)", "accImputed",
@@ -154,7 +180,7 @@ def _pick_activity_column(df: pd.DataFrame, activity_mapping: str = "auto") -> T
         return str(numeric_cols[0]), "original"
 
     raise AccelerometerProcessingError(
-        "Could not find a compatible activity column. Expected source activity/counts, Oxford `acc`, ENMO, or MAD."
+        "Could not find a compatible activity column. Expected source activity/counts, Oxford `acc`, ENMO, MAD, PIM, or ZCM."
     )
 
 
@@ -174,7 +200,12 @@ def parse_accelerometer_time_column(series: pd.Series) -> pd.Series:
 
 def looks_like_accelerometer_timeseries_df(df: pd.DataFrame) -> bool:
     cols = {_normalise_column_name(c) for c in df.columns}
-    return "time" in cols and ("acc" in cols or "enmo" in cols or "mad" in cols or "activity" in cols or "vm" in cols)
+    activity_columns = {
+        "acc", "enmo", "mad", "pim", "pimmgs", "proportionalintegratingmode",
+        "zcm", "zcmcrossings", "zerocrossings", "zerocrossingmode",
+        "activity", "vm",
+    }
+    return "time" in cols and bool(cols & activity_columns)
 
 
 def looks_like_accelerometer_timeseries_file(file_path: str, sep: Optional[str] = None) -> bool:
@@ -377,7 +408,7 @@ def load_accelerometer_timeseries_csv(
     if not looks_like_accelerometer_timeseries_df(df):
         raise AccelerometerProcessingError(
             "This CSV does not look like an accelerometer timeSeries file. Expected at least "
-            "a `time` column and an `acc`/`ENMO`/`MAD`/`activity`/`VM` column."
+            "a `time` column and an `acc`/`ENMO`/`MAD`/`PIM`/`ZCM`/`activity`/`VM` column."
         )
     return df, {
         "_server_side_conversion": False,
@@ -421,6 +452,8 @@ def _prepare_timeseries(
     activity_name = (
         "MAD_mg" if resolved_mapping == "mad"
         else "ENMO_mg" if resolved_mapping == "enmo"
+        else "PIM_mg_s" if resolved_mapping == "pim"
+        else "ZCM_crossings" if resolved_mapping == "zcm"
         else "ACC_mg" if resolved_mapping == "accelerometer"
         else "activity"
     )
@@ -430,11 +463,13 @@ def _prepare_timeseries(
         source="accelerometer_timeseries",
         activity_column=str(activity_col),
         epoch_seconds=int(epoch_period),
-        available_mappings=list(dict.fromkeys(["auto", resolved_mapping, "original", "accelerometer", "mad", "enmo"])),
+        available_mappings=list(dict.fromkeys(["auto", resolved_mapping, "original", "accelerometer", "mad", "enmo", "pim", "zcm"])),
         note=(
             "The Oxford accelerometer `acc` column is used directly as the epoch-level activity basis in mg."
             if resolved_mapping == "accelerometer"
-            else "A supplied ENMO column is used directly." if resolved_mapping == "enmo" else None
+            else "A supplied ENMO column is used directly." if resolved_mapping == "enmo"
+            else "A supplied PIM column is used directly." if resolved_mapping == "pim"
+            else "A supplied ZCM/zero-crossings column is used directly." if resolved_mapping == "zcm" else None
         ),
     )
     return activity.rename(activity_name), light, inferred_freq, str(time_col), str(activity_col), str(light_col) if light_col else None, details

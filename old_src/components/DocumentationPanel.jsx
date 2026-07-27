@@ -10,12 +10,12 @@ const DEFAULT_REPOSITORY_URL = "https://github.com/mayank-ramchandani/pyactigrap
 const DEFAULT_DOCS_URL = "https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs";
 
 const FILE_ROWS = [
-  ["GENEActiv .bin", "Raw tri-axial acceleration and embedded light", "Recommended processed acc, processed acceleration, MAD, or custom ENMO", "Large previews and analyses use background/streamed paths where available."],
-  ["Axivity .cwa", "Raw tri-axial acceleration", "Recommended processed acc, processed acceleration, MAD, or custom ENMO", "Conversion depends on the server accelerometer/Java environment."],
-  ["ActiGraph .gt3x", "Raw tri-axial acceleration; optional lux records", "Recommended processed acc, processed acceleration, MAD, or custom ENMO", "Light is inspected separately; absence of lux does not block activity analysis."],
+  ["GENEActiv .bin", "Raw tri-axial acceleration and embedded light", "Recommended processed acc, processed acceleration, ENMO, MAD, PIM, or ZCM", "Large previews and analyses use background/streamed paths where available."],
+  ["Axivity .cwa", "Raw tri-axial acceleration", "Recommended processed acc; other mappings only when emitted by the converted time-series", "The server Oxford conversion currently emits epoch-level acc. PIM/ZCM require supplied converted columns."],
+  ["ActiGraph .gt3x", "Raw tri-axial acceleration; optional lux records", "Recommended processed acc, processed acceleration, ENMO, MAD, PIM, or ZCM", "Light is inspected separately; absence of lux does not block activity analysis."],
   ["ActiGraph .agd", "Device activity/counts", "Recommended source/device activity", "Preferred when the intended analysis scale is ActiGraph counts."],
   ["Actiwatch .awd and native pyActigraphy formats", "Device activity", "Recommended source/device activity", "Availability depends on the matching pyActigraphy reader."],
-  ["Oxford timeSeries.csv(.gz)", "Epoch-level processed acceleration", "Existing acc column", "Use this when exact external accProcess output is required."],
+  ["Oxford timeSeries.csv(.gz)", "Epoch-level processed acceleration", "Existing acc, ENMO, MAD, PIM, or ZCM column", "The selected existing column and units are retained in result provenance."],
   ["Philips Actiware/RPX CSV", "Localized epoch activity with optional white/RGB light", "Source activity", "English, French, and German exports are parsed directly in UTF-8 or Windows-1252."],
   ["Generic CSV/TXT", "User-defined columns", "Mapped source activity", "Automatic detection or manual timestamp/activity/light mapping is available on Importing Actigraphy Files."],
   ["NHANES PAXHR_H", "Multi-participant hourly summary", "PAXMTSH after participant/time-index preparation", "Filter one SEQN, merge PAXFDAY/PAXFTIME, and build a documented participant-relative time index from PAXSSNHP."],
@@ -33,7 +33,7 @@ const NARRATIVE_SEARCH_TEXT = {
   metrics: `${metricRegistry.metrics.map((metric) => JSON.stringify(metric)).join(" ")} ${analysisFamilyRegistry.families.map((family) => JSON.stringify(family)).join(" ")} analysis setup families individual metrics parameters ra is iv m10 l5 sri fragmentation`,
   results: "generate results page nine view results plots tables csv json diagnostics quality control multi-file three significant figures export outputs page ten configuration",
   diagnostics: "request id stages progress upload background job 413 500 503 504 timeout memory json diagnostic daily recording quality gaps warnings failed skipped passed",
-  limitations: "validation limitations golden files device scale counts milligravity mg thresholds scientific validity exploratory preprocessing sensitivity",
+  provenance: "pyactigraphy preprocessing provenance calibration filtering epochs timestamps gaps nonwear masks activity mapping units parameters software version citations reproducibility feedback storage",
   developers: "react vite fastapi uvicorn endpoint api jobs progress registries documentation maintenance github environment variable deployment architecture",
 };
 
@@ -49,7 +49,7 @@ const SECTIONS = [
   { id: "metrics", label: "Metrics & analysis" },
   { id: "results", label: "Results & export" },
   { id: "diagnostics", label: "Diagnostics" },
-  { id: "limitations", label: "Validation & limitations" },
+  { id: "provenance", label: "Preprocessing & provenance" },
   { id: "developers", label: "Developer reference" },
 ];
 
@@ -142,7 +142,7 @@ export default function DocumentationPanel({ onClose }) {
 
   const familyRows = analysisFamilyRegistry.families.map((family) => [
     family.label,
-    family.metrics.join(", ").toUpperCase(),
+    family.metrics.length ? family.metrics.join(", ").toUpperCase() : (family.id === "cosinor" ? "Mesor, amplitude, acrophase, fit statistics" : "Configured family output"),
     family.description,
   ]);
 
@@ -156,7 +156,7 @@ export default function DocumentationPanel({ onClose }) {
           After at least one actigraphy file is imported, pages 2 through 9 in the left workflow are directly clickable. Users may review pages in order or jump to a later setup page without repeatedly pressing Next. Page 10, Export Outputs, remains locked until results have been generated successfully.
         </Card>
         <Card title="Documentation sources">
-          This page is the searchable in-application guide. The repository documentation contains expanded user, methods, deployment, architecture, troubleshooting, validation, and change-history material. Documentation version: <strong>2026-07-23</strong>.
+          This page is the searchable in-application guide. The repository documentation contains expanded user, methods, deployment, architecture, troubleshooting, preprocessing, provenance, and change-history material. Documentation version: <strong>2026-07-24</strong>.
         </Card>
       </div>
     ),
@@ -206,11 +206,11 @@ export default function DocumentationPanel({ onClose }) {
     ),
     activity: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Four activity-basis options">
+        <Card title="Six activity-basis options">
           <Table headers={["Option", "Units", "Behaviour"]} rows={ACTIVITY_MAPPING_OPTIONS.map((option) => [option.label, option.units || "Source-dependent", option.description])} />
         </Card>
         <Card title="Interpretation">
-          Raw X/Y/Z acceleration must be reduced to one epoch-level scalar series before pyActigraphy-style rhythm metrics are calculated. Processed acceleration, MAD, ENMO, and proprietary activity counts are not interchangeable. Report the selected mapping, units, epoch duration, filtering, and threshold settings.
+          Raw X/Y/Z acceleration is reduced to one epoch-level scalar series before pyActigraphy metrics are calculated. The available bases are processed acceleration, ENMO, MAD, PIM, ZCM, and source/device activity. Results retain the selected mapping, units, epoch duration, filtering, reducer parameters, and source column or processing engine.
         </Card>
       </div>
     ),
@@ -294,19 +294,16 @@ export default function DocumentationPanel({ onClose }) {
         </Card>
       </div>
     ),
-    limitations: (
+    provenance: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Validation requirements">
-          Validate each device/file type and activity basis against a known-good independent workflow before research use. Maintain golden files covering small, large, gapped, non-wear, masked, diary-enabled, light-enabled, and previously failing recordings. Predefine acceptable numerical tolerances.
+        <Card title="pyActigraphy foundation">
+          Native readers, non-parametric activity metrics, Crespo_AoT/Roenneberg_AoT procedures, and Cosinor modelling use pyActigraphy. The web backend prepares the selected scalar activity series, applies file-specific preprocessing, and then calls the corresponding pyActigraphy methods. See <a href="https://ghammad.github.io/pyActigraphy/" target="_blank" rel="noreferrer">pyActigraphy documentation</a>, <a href="https://github.com/ghammad/pyActigraphy" target="_blank" rel="noreferrer">source code</a>, and the <a href="https://doi.org/10.1371/journal.pcbi.1009514" target="_blank" rel="noreferrer">package paper</a>.
         </Card>
-        <Card title="Key limitations">
-          <ul style={{ margin: 0, paddingLeft: 22 }}>
-            <li>Memory-safe processed acceleration may not be byte-identical to every Oxford accProcess release.</li>
-            <li>Derived mg signals and proprietary counts are not interchangeable.</li>
-            <li>An algorithm may execute on a signal without being validated for that device, scale, epoch, or population.</li>
-            <li>Large-file success depends on proxy limits, memory, temporary storage, background jobs, and replica configuration.</li>
-            <li>A successful calculation is not proof of scientific validity.</li>
-          </ul>
+        <Card title="Recorded preprocessing">
+          Results retain reader/file format, requested and resolved activity mapping, source column or raw-processing engine, units, sample rate, epoch duration, calibration/filter details, start/stop limits, non-wear and masks, valid-day decisions, sleep-window coverage, algorithm parameters, application version, Git commit, and diagnostic stages. Missing and excluded epochs remain unavailable rather than becoming zero activity.
+        </Card>
+        <Card title="Feedback location">
+          Feedback is appended to <Code>{"${APP_DATA_DIR}/feedback.jsonl"}</Code>. Configure persistent storage and <Code>FEEDBACK_ADMIN_TOKEN</Code>, then open <Code>/?feedback-admin=1</Code> in the frontend to search, inspect, and export reports. The protected <Code>GET /api/admin/feedback</Code> and <Code>GET /api/admin/feedback/export</Code> endpoints remain available for direct access. Reports include selected settings, filenames, progress, request ID, and visible errors, but not raw files.
         </Card>
       </div>
     ),
@@ -325,6 +322,8 @@ export default function DocumentationPanel({ onClose }) {
             ["POST /api/jobs/light/analyze", "Run selected light metrics."],
             ["POST /api/jobs/analyze/basic", "Run preprocessing, sleep, metrics, QC, and diagnostics."],
             ["POST /api/feedback", "Store user feedback in APP_DATA_DIR."],
+            ["GET /api/admin/feedback", "Token-protected feedback list, filters, counts, and storage details."],
+            ["GET /api/admin/feedback/export", "Token-protected CSV or JSONL feedback export."],
           ]} />
         </Card>
         <Card title="Documentation and search maintenance">
@@ -358,7 +357,7 @@ export default function DocumentationPanel({ onClose }) {
           <div style={{ width: "100%" }}>
             <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>Help & methods</div>
             <h2 style={{ margin: "6px 0 6px", fontSize: 26, color: "#0f172a" }}>Documentation</h2>
-            <div style={{ color: "#475569", lineHeight: 1.5 }}>Searchable user guidance, methods, file support, diagnostics, limitations, and developer notes.</div>
+            <div style={{ color: "#475569", lineHeight: 1.5 }}>Searchable user guidance, methods, file support, diagnostics, preprocessing provenance, and developer notes.</div>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", width: "100%" }}>
             <a href={githubDocsUrl} target="_blank" rel="noreferrer" style={{ padding: "9px 13px", borderRadius: 10, border: "1px solid #cbd5e1", color: "#0f172a", textDecoration: "none", fontWeight: 700, fontSize: 13 }}>

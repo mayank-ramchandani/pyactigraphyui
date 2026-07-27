@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-07-27 — Initial QC, flexible quality windows, dynamic file search, and terms
+
+- Added Step 2 initial per-file coverage QC before final preprocessing decisions.
+- Kept calendar-day QC as the recommended default and added recording-aligned 24-hour windows as an explicit sensitivity option.
+- Reframed numeric thresholds and related guidance as recommended, configurable settings across the preprocessing UI, results, and documentation.
+- Replaced Step 4 filename selects with dynamic search result lists that distinguish duplicate filenames using stable upload identity and metadata.
+- Removed the heterogeneous Context column from algorithm selection and moved context into the Context / details dialog.
+- Changed advisory processing/QC warning styling to yellow while retaining red for true failures and invalid quality windows.
+- Added in-app and repository Terms of Use covering OBI hosting, CFA grant support, transient raw inputs, diagnostic/feedback metadata, de-identification, acceptable use, and scientific responsibility.
+
 ## 2026-07-24 — PIM/ZCM, Cosinor family, feedback access, and preprocessing provenance
 
 - Added PIM and ZCM to the activity-mapping UI, normalization, raw GENEActiv/GT3X streaming reducers, preprocessed time-series column detection, generic mapped tables, and native ATR reader modes.

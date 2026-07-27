@@ -1,8 +1,11 @@
-from typing import Optional, List
-from fastapi import FastAPI, UploadFile, File, Form, Request
-from fastapi.responses import JSONResponse
+from typing import Any, Dict, Optional, List
+from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.datastructures import Headers
+import csv
+import hmac
+import io
 import json
 import os
 import tempfile
@@ -14,7 +17,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from .activity_mapping import normalize_activity_mapping, raw_mapping_metadata
+from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping, raw_mapping_metadata
 from .analysis import (
     run_basic_pyactigraphy_analysis,
     build_native_preview,
@@ -83,6 +86,13 @@ class FeedbackPayload(BaseModel):
     app_version: Optional[str] = Field(default=None, max_length=128)
     backend_url: Optional[str] = Field(default=None, max_length=512)
     browser_info: Optional[str] = Field(default=None, max_length=1000)
+    client_url: Optional[str] = Field(default=None, max_length=1000)
+    client_timestamp: Optional[str] = Field(default=None, max_length=128)
+    request_id: Optional[str] = Field(default=None, max_length=128)
+    configuration: Optional[Dict[str, Any]] = None
+    selected_files: Optional[List[Dict[str, Any]]] = None
+    progress: Optional[Dict[str, Any]] = None
+    recent_errors: Optional[List[Dict[str, Any]]] = None
 
 
 def _get_data_dir() -> Path:
@@ -94,8 +104,47 @@ def _get_data_dir() -> Path:
 def _append_jsonl(filename: str, payload: dict) -> Path:
     path = _get_data_dir() / filename
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+        handle.write(json.dumps(make_json_safe(payload), ensure_ascii=False, default=str) + "\n")
     return path
+
+
+def _feedback_path() -> Path:
+    return _get_data_dir() / "feedback.jsonl"
+
+
+def _require_feedback_admin(request: Request) -> None:
+    expected = os.getenv("FEEDBACK_ADMIN_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Feedback administration is disabled until FEEDBACK_ADMIN_TOKEN is configured.",
+        )
+    supplied = request.headers.get("x-feedback-admin-token", "").strip()
+    authorization = request.headers.get("authorization", "").strip()
+    if not supplied and authorization.lower().startswith("bearer "):
+        supplied = authorization[7:].strip()
+    if not supplied or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Invalid feedback administrator token.")
+
+
+def _read_feedback_records() -> List[dict]:
+    path = _feedback_path()
+    if not path.exists():
+        return []
+    records: List[dict] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                records.append(value)
+    return records
+
 
 app = FastAPI()
 
@@ -170,6 +219,10 @@ def version():
             "geneactiv_ra_average_daily_profile": True,
             "geneactiv_pyactigraphy_aot": True,
             "accelerometer_acc_default": True,
+            "activity_pim": True,
+            "activity_zcm": True,
+            "family_cosinor": True,
+            "feedback_admin_export": True,
             "preview_analysis_mapping_decoupled": True,
             "documentation_center": True,
             "generic_csv_mapping": True,
@@ -208,7 +261,78 @@ async def submit_feedback(payload: FeedbackPayload):
     })
 
     path = _append_jsonl("feedback.jsonl", record)
-    return {"ok": True, "id": record["id"], "stored": str(path)}
+    return {"ok": True, "id": record["id"], "storage_file": path.name}
+
+
+@app.get("/api/admin/feedback")
+async def list_feedback(request: Request, limit: int = 100, category: Optional[str] = None, search: Optional[str] = None):
+    _require_feedback_admin(request)
+    records = _read_feedback_records()
+    if category:
+        records = [item for item in records if str(item.get("category") or "").lower() == category.lower()]
+    if search:
+        needle = search.lower()
+        records = [item for item in records if needle in json.dumps(item, ensure_ascii=False, default=str).lower()]
+    records.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    bounded_limit = min(1000, max(1, int(limit)))
+    path = _feedback_path()
+    category_counts: Dict[str, int] = {}
+    for item in records:
+        key = str(item.get("category") or "uncategorized")
+        category_counts[key] = category_counts.get(key, 0) + 1
+    try:
+        storage_persistent = not path.resolve().is_relative_to(Path(tempfile.gettempdir()).resolve())
+    except (AttributeError, ValueError):
+        storage_persistent = not str(path.resolve()).startswith(str(Path(tempfile.gettempdir()).resolve()))
+    return {
+        "ok": True,
+        "storage_path": str(path),
+        "storage_persistent": storage_persistent,
+        "file_size_bytes": path.stat().st_size if path.exists() else 0,
+        "matching_count": len(records),
+        "category_counts": category_counts,
+        "records": records[:bounded_limit],
+    }
+
+
+@app.get("/api/admin/feedback/export")
+async def export_feedback(request: Request, format: str = "csv"):
+    _require_feedback_admin(request)
+    records = _read_feedback_records()
+    export_format = str(format or "csv").strip().lower()
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if export_format == "jsonl":
+        content = "".join(json.dumps(make_json_safe(item), ensure_ascii=False, default=str) + "\n" for item in records)
+        return Response(
+            content=content,
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": f'attachment; filename="feedback-{timestamp}.jsonl"'},
+        )
+    if export_format != "csv":
+        raise HTTPException(status_code=400, detail="format must be csv or jsonl.")
+
+    preferred_fields = [
+        "id", "created_at", "category", "message", "email", "user_email",
+        "current_step", "file_name", "file_type", "file_size_mb", "endpoint",
+        "error_message", "request_id", "app_version", "backend_url", "client_url",
+        "client_timestamp", "browser_info", "configuration", "selected_files",
+        "progress", "recent_errors",
+    ]
+    extras = sorted({key for item in records for key in item if key not in preferred_fields})
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=preferred_fields + extras, extrasaction="ignore")
+    writer.writeheader()
+    for item in records:
+        row = dict(item)
+        for key, value in list(row.items()):
+            if isinstance(value, (dict, list)):
+                row[key] = json.dumps(make_json_safe(value), ensure_ascii=False, default=str)
+        writer.writerow(row)
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="feedback-{timestamp}.csv"'},
+    )
 
 
 def _write_upload_to_temp(upload: UploadFile):
@@ -399,12 +523,6 @@ def _load_native_supported_file(
 
     if reader_type == "tabular":
         requested_mapping = normalize_activity_mapping(activity_mapping)
-        if requested_mapping not in {"auto", "original"}:
-            raise ValueError(
-                f"{requested_mapping.upper()} cannot be calculated from a generic mapped activity column. "
-                "Choose Recommended/Source activity, or upload raw tri-axial .bin/.cwa/.gt3x data."
-            )
-
         mapping = _clean_csv_mapping(csv_mapping)
         require_activity = str(purpose or "activity").strip().lower() != "light"
         if mapping.get("timestamp_col"):
@@ -432,11 +550,24 @@ def _load_native_supported_file(
             uuid=f"mapped-{Path(file_path).stem}",
             require_activity=require_activity,
         )
+        resolved_mapping = "original" if requested_mapping in {"auto", "original"} else requested_mapping
+        mapping_details = mapping_metadata(
+            requested_mapping,
+            resolved_mapping,
+            source="mapped_tabular_activity_column",
+            activity_column=mapping.get("activity_col"),
+            available_mappings=["auto", "original", "accelerometer", "mad", "enmo", "pim", "zcm"],
+            note=(
+                "The selected mapped activity column is treated as the requested activity basis; "
+                "no raw-sample reconstruction is performed for generic tabular uploads."
+            ),
+        )
         raw.metadata = {
             **(getattr(raw, "metadata", None) or {}),
             "detected_mapping": mapping,
+            "activity_mapping": mapping_details,
         }
-        return raw, "tabular_mapped"
+        return attach_mapping_metadata(raw, mapping_details), "tabular_mapped"
 
     raw = load_native_file(
         file_path,
@@ -1701,7 +1832,7 @@ def analyze_basic(
             if requested_mapping != "original" and (algorithm_request or {}).get("id"):
                 warnings.append(
                     f"{requested_mapping.upper()} was used as the activity mapping. "
-                    "Sleep-algorithm thresholds validated for device counts may not transfer directly to mg units."
+                    "Sleep-algorithm thresholds are scale-specific; retain the selected signal units and threshold in the analysis configuration."
                 )
 
             if warnings:

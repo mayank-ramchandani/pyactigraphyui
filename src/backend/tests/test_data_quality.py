@@ -10,7 +10,7 @@ from backend.analysis import (
     _score_minutes_in_windows,
     compute_metric,
 )
-from backend.data_quality import apply_data_quality_control, resolve_data_quality_settings
+from backend.data_quality import apply_data_quality_control, inspect_initial_data_coverage, resolve_data_quality_settings
 from backend.geneactiv_bin import GeneActivRaw, SimpleLightRecording
 
 
@@ -240,6 +240,46 @@ class DataQualityTests(unittest.TestCase):
 
         raw.IS = fail_if_called
         self.assertIsNone(compute_metric(raw, "is", {"freq": "1h"}))
+
+    def test_calendar_and_recording_anchored_windows_handle_4pm_deployment(self):
+        index = pd.date_range("2026-09-01 16:00", periods=24, freq="1h")
+        activity = pd.Series(5.0, index=index)
+
+        _, calendar_quality = apply_data_quality_control(FakeRaw(activity), {
+            "masking": {
+                "validDayWindowMode": "calendar_day",
+                "minimumValidHoursPerDay": 16,
+            }
+        })
+        self.assertEqual(calendar_quality["quality_windows"], 2)
+        self.assertEqual(calendar_quality["valid_quality_windows"], 1)
+        self.assertEqual(calendar_quality["daily_qc"][0]["recorded_hours"], 8.0)
+        self.assertEqual(calendar_quality["daily_qc"][1]["recorded_hours"], 16.0)
+
+        _, anchored_quality = apply_data_quality_control(FakeRaw(activity), {
+            "masking": {
+                "validDayWindowMode": "recording_anchored",
+                "minimumValidHoursPerDay": 16,
+            }
+        })
+        self.assertEqual(anchored_quality["quality_windows"], 1)
+        self.assertEqual(anchored_quality["valid_quality_windows"], 1)
+        self.assertEqual(anchored_quality["daily_qc"][0]["recorded_hours"], 24.0)
+        self.assertEqual(anchored_quality["valid_day_window_mode"], "recording_anchored")
+
+    def test_initial_qc_returns_both_window_bases_before_manual_masks(self):
+        index = pd.date_range("2026-10-01 16:00", periods=24, freq="1h")
+        activity = pd.Series(3.0, index=index)
+        raw = FakeRaw(activity)
+        raw._ui_mask_intervals = [{"start": "2026-10-01 18:00", "stop": "2026-10-01 22:00"}]
+
+        payload = inspect_initial_data_coverage(raw)
+
+        self.assertEqual(payload["inspection_stage"], "initial_after_load_before_manual_preprocessing")
+        self.assertEqual(payload["modes"]["calendar_day"]["window_count"], 2)
+        self.assertEqual(payload["modes"]["recording_anchored"]["window_count"], 1)
+        self.assertEqual(payload["modes"]["recording_anchored"]["windows"][0]["analyzable_hours"], 24.0)
+
 
 
 if __name__ == "__main__":

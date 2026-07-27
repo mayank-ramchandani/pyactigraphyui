@@ -30,20 +30,6 @@ VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_PUBLIC_KEY
 
 The app stores analysis results and metadata only. It does not store raw uploaded actigraphy files by default.
 
-## Feedback storage
+## Feedback storage and administration
 
-The backend writes feedback as newline-delimited JSON to:
-
-```bash
-APP_DATA_DIR/feedback.jsonl
-```
-
-Set `APP_DATA_DIR` to a persistent mounted folder on OBI Cloud if you want feedback to survive container restarts.
-
-Example:
-
-```bash
-APP_DATA_DIR=/data/actigraphy-ui
-```
-
-If you do not set `APP_DATA_DIR`, the backend uses `/tmp/actigraphy-ui-data`, which is useful for testing but not durable on most hosted containers.
+Feedback is stored in `${APP_DATA_DIR}/feedback.jsonl`. Use persistent mounted storage in OBI/Azure, set `FEEDBACK_ADMIN_TOKEN`, and use the protected `/api/admin/feedback` and `/api/admin/feedback/export` endpoints. The report includes selected settings, filenames, progress, request ID, current errors, deployment URLs, and browser context, but not raw uploaded files. See [FEEDBACK_STORAGE_NOTES.md](FEEDBACK_STORAGE_NOTES.md) for commands and deployment details.
