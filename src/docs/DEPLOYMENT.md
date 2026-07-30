@@ -50,6 +50,8 @@ Set `APP_DATA_DIR` to a mounted persistent path when feedback, diagnostics, and 
 APP_DATA_DIR=/data/actigraphy-ui
 ```
 
+Feedback is stored in `${APP_DATA_DIR}/feedback.jsonl`. The application enforces a 30-day retention period for each feedback submission, required contact email, and attached technical context. Cleanup runs at backend startup, every 24 hours, and whenever feedback is submitted, listed, or exported.
+
 Without persistent storage, `/tmp` data is ephemeral.
 
 ## Large uploads

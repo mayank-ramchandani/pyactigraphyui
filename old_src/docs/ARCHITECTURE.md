@@ -9,9 +9,9 @@ The frontend uses React and Vite. The current interface is a ten-page workflow. 
 | `pages/Dashboard.jsx` | Ten-page workflow state, direct sidebar navigation, uploads, API requests, progress polling, result orchestration, and export unlocking |
 | `components/WorkflowSidebar.jsx` | Clickable workflow navigation and lock state |
 | `components/FileSelectionPanel.jsx` | Page 1 actigraphy-file import and analysis mode |
-| `components/PreprocessingPanel.jsx` | Page 2 valid-day hours, consecutive-day requirement, sleep-window coverage, and non-wear policy |
+| `components/PreprocessingPanel.jsx` | Page 2 initial per-file coverage QC, recommended/custom validity thresholds, calendar-day versus recording-aligned quality windows, sleep-window coverage, and non-wear policy |
 | `components/ActivityMappingPanel.jsx` | Page 3 activity-basis selection: recommended/automatic, processed acceleration, MAD, or ENMO |
-| `components/PreviewPanel.jsx` | Page 4 activity preview and page 7 standard light preview |
+| `components/PreviewPanel.jsx` | Page 4 activity preview and page 7 standard light preview, including dynamic upload search and duplicate-filename selection |
 | `components/SupportFilesStep.jsx` | Page 5 start/stop and masking inputs; page 6 sleep-diary and custom sleep-window inputs |
 | `components/MetricsPanel.jsx` | Page 6 sleep-wake algorithm configuration and page 8 metric/family configuration through separate render modes |
 | `components/OtherSensorsPanel.jsx` | Page 7 light preview/analysis and clearly labelled future temperature/other-sensor attachments with file metadata retained in the analysis configuration |
@@ -20,8 +20,9 @@ The frontend uses React and Vite. The current interface is a ten-page workflow. 
 | `components/ResultsPanel.jsx` | Page 9 result generation, live progress, result tables/plots, quality summaries, and diagnostics |
 | `components/ExportPanel.jsx` | Page 10 CSV/JSON and other configured output downloads |
 | `components/DiagnosticPanel.jsx` | Per-stage diagnostic presentation and downloads |
-| `components/DocumentationPanel.jsx` | Full-content in-app documentation search and GitHub documentation links |
+| `components/DocumentationPanel.jsx` | Full-content in-app documentation search, Terms of Use, and GitHub documentation links |
 | `services/backgroundJobClient.js` | Background submission, affinity-aware polling, and result handoff |
+| `services/fileIdentityUtils.js` | Stable per-upload identities, duplicate-filename labels, and ranked file search |
 | `config/*.json` | Workflow, metric, algorithm, family, preview, shared-parameter, and export registries |
 
 ## Workflow and unlock rules
@@ -56,7 +57,7 @@ The backend uses FastAPI/Uvicorn.
 | `backend/accelerometer_loader.py` | Oxford converter/time-series support |
 | `backend/activity_mapping.py` | Mapping normalization, resolution, and provenance metadata |
 | `backend/preprocessing.py` | Start/stop, masking, diary, and custom interval handling |
-| `backend/data_quality.py` | Common gaps, non-wear, analyzable-time, valid-day, consecutive-day, and sleep-window coverage processing |
+| `backend/data_quality.py` | Initial/final gap and non-wear QC, analyzable-time thresholds, calendar-day or recording-aligned quality windows, consecutive-window gating, and sleep-window coverage processing |
 | `backend/analysis.py` | Metrics, sleep scoring/windows, light analysis, and previews |
 | `backend/qc.py` | Non-fatal quality control |
 | `backend/diagnostics.py` | Stage instrumentation, memory/timing, exceptions, and JSON safety |
@@ -74,9 +75,10 @@ Browser actigraphy upload
   → localized text decoding and semantic RPX header detection when applicable
   → activity-basis resolution
   → timestamp/data checks
+  → optional initial Step 2 coverage inspection before manual preprocessing
   → start/stop and manual masks
   → common gap/non-wear/analyzable-time processing
-  → valid-day and longest-consecutive-run calculation
+  → selected calendar-day or recording-aligned validity-window calculation
   → diary/custom/AoT sleep-window resolution
   → sleep-window coverage filtering
   → selected sleep scoring and metrics
@@ -112,6 +114,7 @@ The panel always renders a GitHub documentation link. `VITE_GITHUB_DOCS_URL` can
 | `GET /api/version` | Build metadata and feature flags |
 | `GET /api/progress/{request_id}` | Live analysis progress |
 | `GET /api/jobs/{job_id}` | Background preview/analysis status and completed result |
+| `POST /api/jobs/qc/initial` | Start Step 2 initial per-window data-coverage QC; returns HTTP 202 |
 | `POST /api/jobs/preview/basic` | Start an activity-preview job; returns HTTP 202 |
 | `POST /api/jobs/light/preview` | Start a standard light-preview job; also returns channels and an initial multichannel sample |
 | `POST /api/jobs/light/rgb-preview` | Start a resampled multichannel/RGB light-preview job |
@@ -119,6 +122,7 @@ The panel always renders a GitHub documentation link. `VITE_GITHUB_DOCS_URL` can
 | `POST /api/jobs/light/analyze` | Inspect once and run all selected light metrics in one background job |
 | `POST /api/jobs/analyze/basic` | Start a main-analysis job; returns HTTP 202 |
 | `POST /api/tabular/columns` | Inspect CSV/text/spreadsheet columns, encoding, suggested mapping, and format-specific guidance |
+| `POST /api/qc/initial` | Synchronous initial-QC compatibility route |
 | `POST /api/preview/basic` | Synchronous activity-preview compatibility route |
 | `POST /api/analyze/basic` | Synchronous main-analysis compatibility route |
 | `POST /api/feedback` | Feedback persistence |

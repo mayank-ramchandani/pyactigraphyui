@@ -8,7 +8,7 @@
 4. **Initial Step 2 QC** — a background endpoint loads each recording and reports initial per-window recorded hours, gaps, detected/mapped non-wear, effective hours, and threshold status before start/stop restrictions and manual masks.
 5. **Recommended-setting wording** — preprocessing, results, configuration descriptions, and documentation now describe the default thresholds as recommended and configurable rather than mandatory standards.
 6. **Algorithm details** — the heterogeneous Context column was removed. Algorithm-specific context, notes, warnings, and citations appear in the Context / details dialog.
-7. **Terms of Use** — a persistent header button and searchable documentation section describe OBI hosting, Centre for Analytics support, transient raw-file processing, de-identification, diagnostics/feedback metadata, scientific responsibility, availability, third-party software, and acceptable use.
+7. **Terms of Use** — a persistent header button and searchable documentation section describe OBI hosting, CFA grant support, transient raw-file processing, de-identification, diagnostics/feedback metadata, scientific responsibility, availability, third-party software, and acceptable use.
 
 ## Backend/API changes
 
@@ -23,7 +23,7 @@
 - Redeploy both frontend and backend together because the Step 2 UI depends on the new QC endpoint and payload.
 - No database migration is required.
 - The configured job store still controls transient result retention. `ANALYSIS_JOB_TTL_SECONDS` defaults to 21,600 seconds (six hours).
-- Feedback and diagnostic metadata are separate from raw uploads. Feedback requires a contact email and is automatically deleted 30 days after submission when `APP_DATA_DIR` uses persistent storage.
+- Feedback and diagnostic metadata are separate from raw uploads and may persist when `APP_DATA_DIR` uses persistent storage; apply an institutional access and retention policy.
 - The uploaded archive did not include a frontend `package.json`, so source parsing was checked but a full Vite production build could not be run in this workspace.
 
 ## Verification

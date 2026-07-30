@@ -167,9 +167,9 @@ Download configured outputs such as result summaries, CSV-compatible tables, JSO
 
 ## Reviewing submitted feedback (administrators)
 
-Configure `FEEDBACK_ADMIN_TOKEN` and open `/?feedback-admin=1` on the deployed frontend. The protected review screen supports full-text search, category filtering, complete report inspection, and CSV/JSONL download. Feedback remains stored in `${APP_DATA_DIR}/feedback.jsonl`; use persistent mounted storage in deployment.
+Configure `FEEDBACK_ADMIN_TOKEN` and open `/?feedback-admin=1` on the deployed frontend. The protected review screen supports full-text search, category filtering, complete report inspection, and CSV/JSONL download. Feedback remains stored in `${APP_DATA_DIR}/feedback.jsonl`; a contact email is required, and submissions are automatically deleted 30 days after submission. Use persistent mounted storage in deployment.
 
 
 ## Terms of use
 
-The persistent **Terms of Use** button and the Documentation section explain OBI hosting, CFA grant support, transient raw-file processing, technical metadata/feedback retention, de-identification expectations, acceptable use, and the research/educational nature of the tool. See [TERMS_OF_USE.md](TERMS_OF_USE.md).
+The persistent **Terms of Use** button and the Documentation section explain OBI hosting, Centre for Analytics support, transient raw-file processing, technical metadata/feedback retention, de-identification expectations, acceptable use, and the research/educational nature of the tool. See [TERMS_OF_USE.md](TERMS_OF_USE.md).

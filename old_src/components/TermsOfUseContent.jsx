@@ -14,7 +14,7 @@ export default function TermsOfUseContent({ compact = false }) {
     <div style={{ display: "grid", gap: 12, textAlign: "left" }}>
       {!compact && (
         <div style={{ border: "1px solid #bfdbfe", borderRadius: 14, padding: 15, background: "#eff6ff", color: "#1e3a8a", lineHeight: 1.6 }}>
-          This web tool is hosted by the Ontario Brain Institute (OBI), with development supported through the Centre for Analytics. By using the tool, you agree to the conditions below and to any applicable institutional, research-ethics, privacy, and data-governance requirements.
+          This web tool is hosted by the Ontario Brain Institute (OBI), with development supported through the CFA grant. By using the tool, you agree to the conditions below and to any applicable institutional, research-ethics, privacy, and data-governance requirements.
         </div>
       )}
 
@@ -31,7 +31,7 @@ export default function TermsOfUseContent({ compact = false }) {
       </TermSection>
 
       <TermSection title="Technical metadata, diagnostics, and feedback">
-        Operational diagnostics may retain non-raw technical information such as filenames, file sizes, selected settings, reader type, processing stages, errors, request IDs, and summary results when the deployment uses persistent application storage. Feedback is stored separately and may include the technical context attached to the report. A contact email address is required so the Centre for Analytics team can follow up about the submission. Feedback, the contact email address, and attached technical context are retained for 30 days from submission and then automatically deleted. Do not place participant identifiers, raw measurements, or other sensitive content in filenames or feedback text.
+        Operational diagnostics may retain non-raw technical information such as filenames, file sizes, selected settings, reader type, processing stages, errors, request IDs, and summary results when the deployment uses persistent application storage. Feedback is stored separately and may include the context attached to the report. Do not place participant identifiers, raw measurements, or other sensitive content in filenames or feedback text. Administrators should apply an appropriate retention and access policy to these records.
       </TermSection>
 
       <TermSection title="Recommended settings and scientific responsibility">

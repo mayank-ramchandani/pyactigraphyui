@@ -3,6 +3,8 @@ from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.datastructures import Headers
+import asyncio
+import contextlib
 import csv
 import hmac
 import io
@@ -10,10 +12,11 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import uuid
 import logging
 import re
+import threading
 
 from pydantic import BaseModel, Field
 
@@ -74,7 +77,7 @@ from .diagnostics import (
 class FeedbackPayload(BaseModel):
     category: str = Field(default="issue", max_length=80)
     message: str = Field(..., min_length=1, max_length=8000)
-    email: Optional[str] = Field(default=None, max_length=320)
+    email: str = Field(..., min_length=3, max_length=320)
     user_id: Optional[str] = Field(default=None, max_length=128)
     user_email: Optional[str] = Field(default=None, max_length=320)
     current_step: Optional[str] = Field(default=None, max_length=32)
@@ -108,8 +111,117 @@ def _append_jsonl(filename: str, payload: dict) -> Path:
     return path
 
 
+FEEDBACK_RETENTION_DAYS = 30
+FEEDBACK_CLEANUP_INTERVAL_SECONDS = 24 * 60 * 60
+_FEEDBACK_FILE_LOCK = threading.RLock()
+_feedback_cleanup_task: Optional[asyncio.Task] = None
+
+
 def _feedback_path() -> Path:
     return _get_data_dir() / "feedback.jsonl"
+
+
+def _parse_feedback_timestamp(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _load_feedback_records_unlocked(path: Path) -> tuple[List[dict], int]:
+    if not path.exists():
+        return [], 0
+    records: List[dict] = []
+    invalid_lines = 0
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                invalid_lines += 1
+                continue
+            if isinstance(value, dict):
+                records.append(value)
+            else:
+                invalid_lines += 1
+    return records, invalid_lines
+
+
+def _write_feedback_records_unlocked(path: Path, records: List[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary_path.open("w", encoding="utf-8") as handle:
+            for record in records:
+                handle.write(json.dumps(make_json_safe(record), ensure_ascii=False, default=str) + "\n")
+        os.replace(temporary_path, path)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            temporary_path.unlink()
+
+
+def _purge_expired_feedback_unlocked(path: Path, now: Optional[datetime] = None) -> Dict[str, int]:
+    records, invalid_lines = _load_feedback_records_unlocked(path)
+    current_time = now or datetime.now(timezone.utc)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    cutoff = current_time.astimezone(timezone.utc) - timedelta(days=FEEDBACK_RETENTION_DAYS)
+
+    retained: List[dict] = []
+    expired_records = 0
+    for record in records:
+        created_at = _parse_feedback_timestamp(record.get("created_at"))
+        if created_at is None or created_at <= cutoff:
+            expired_records += 1
+        else:
+            retained.append(record)
+
+    removed = expired_records + invalid_lines
+    if removed:
+        _write_feedback_records_unlocked(path, retained)
+    return {
+        "removed": removed,
+        "expired_records": expired_records,
+        "invalid_lines": invalid_lines,
+        "retained": len(retained),
+    }
+
+
+def _purge_expired_feedback(now: Optional[datetime] = None) -> Dict[str, int]:
+    with _FEEDBACK_FILE_LOCK:
+        return _purge_expired_feedback_unlocked(_feedback_path(), now=now)
+
+
+def _append_feedback_record(record: dict) -> Path:
+    path = _feedback_path()
+    with _FEEDBACK_FILE_LOCK:
+        _purge_expired_feedback_unlocked(path)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(make_json_safe(record), ensure_ascii=False, default=str) + "\n")
+    return path
+
+
+def _validate_feedback_email(value: Any) -> str:
+    email = str(value or "").strip()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise HTTPException(
+            status_code=422,
+            detail="A valid email address is required so the Centre for Analytics team can contact you about your feedback.",
+        )
+    return email
 
 
 def _require_feedback_admin(request: Request) -> None:
@@ -129,24 +241,42 @@ def _require_feedback_admin(request: Request) -> None:
 
 def _read_feedback_records() -> List[dict]:
     path = _feedback_path()
-    if not path.exists():
-        return []
-    records: List[dict] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                value = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(value, dict):
-                records.append(value)
+    with _FEEDBACK_FILE_LOCK:
+        _purge_expired_feedback_unlocked(path)
+        records, _ = _load_feedback_records_unlocked(path)
     return records
 
 
+async def _feedback_cleanup_loop() -> None:
+    while True:
+        await asyncio.sleep(FEEDBACK_CLEANUP_INTERVAL_SECONDS)
+        try:
+            await asyncio.to_thread(_purge_expired_feedback)
+        except Exception:
+            logging.getLogger("actigraphy.feedback").exception(
+                "Automatic feedback-retention cleanup failed."
+            )
+
+
 app = FastAPI()
+
+
+@app.on_event("startup")
+async def start_feedback_retention_cleanup() -> None:
+    global _feedback_cleanup_task
+    await asyncio.to_thread(_purge_expired_feedback)
+    if _feedback_cleanup_task is None or _feedback_cleanup_task.done():
+        _feedback_cleanup_task = asyncio.create_task(_feedback_cleanup_loop())
+
+
+@app.on_event("shutdown")
+async def stop_feedback_retention_cleanup() -> None:
+    global _feedback_cleanup_task
+    if _feedback_cleanup_task is not None:
+        _feedback_cleanup_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await _feedback_cleanup_task
+        _feedback_cleanup_task = None
 
 
 @app.exception_handler(Exception)
@@ -223,6 +353,8 @@ def version():
             "activity_zcm": True,
             "family_cosinor": True,
             "feedback_admin_export": True,
+            "feedback_email_required": True,
+            "feedback_retention_30_days": True,
             "preview_analysis_mapping_decoupled": True,
             "documentation_center": True,
             "generic_csv_mapping": True,
@@ -255,13 +387,19 @@ async def submit_feedback(payload: FeedbackPayload):
         # Pydantic v1 fallback.
         record = payload.dict()
 
+    record["email"] = _validate_feedback_email(record.get("email"))
     record.update({
         "id": str(uuid.uuid4()),
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-    path = _append_jsonl("feedback.jsonl", record)
-    return {"ok": True, "id": record["id"], "storage_file": path.name}
+    path = _append_feedback_record(record)
+    return {
+        "ok": True,
+        "id": record["id"],
+        "storage_file": path.name,
+        "retention_days": FEEDBACK_RETENTION_DAYS,
+    }
 
 
 @app.get("/api/admin/feedback")
@@ -288,6 +426,7 @@ async def list_feedback(request: Request, limit: int = 100, category: Optional[s
         "ok": True,
         "storage_path": str(path),
         "storage_persistent": storage_persistent,
+        "retention_days": FEEDBACK_RETENTION_DAYS,
         "file_size_bytes": path.stat().st_size if path.exists() else 0,
         "matching_count": len(records),
         "category_counts": category_counts,

@@ -6,9 +6,12 @@ import os
 import sys
 import tempfile
 import types
+from datetime import datetime, timedelta, timezone
 import unittest
 from unittest.mock import patch
 
+from fastapi import HTTPException
+from pydantic import ValidationError
 from starlette.requests import Request
 
 try:
@@ -87,14 +90,64 @@ class FeedbackStorageTests(unittest.TestCase):
             {"APP_DATA_DIR": directory, "FEEDBACK_ADMIN_TOKEN": "test-admin-secret"},
             clear=False,
         ):
-            asyncio.run(submit_feedback(FeedbackPayload(message="First", configuration={"activityMapping": "zcm"})))
-            asyncio.run(submit_feedback(FeedbackPayload(message="Second", configuration={"activityMapping": "mad"})))
+            asyncio.run(submit_feedback(FeedbackPayload(message="First", email="first@example.com", configuration={"activityMapping": "zcm"})))
+            asyncio.run(submit_feedback(FeedbackPayload(message="Second", email="second@example.com", configuration={"activityMapping": "mad"})))
 
             listing = asyncio.run(
                 list_feedback(_request("test-admin-secret"), limit=100, search="zcm")
             )
             self.assertEqual(listing["matching_count"], 1)
             self.assertEqual(listing["records"][0]["message"], "First")
+
+    def test_feedback_requires_a_valid_contact_email(self):
+        with self.assertRaises(ValidationError):
+            FeedbackPayload(message="Missing contact email")
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ,
+            {"APP_DATA_DIR": directory},
+            clear=False,
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(submit_feedback(FeedbackPayload(message="Please contact me.", email="not-an-email")))
+            self.assertEqual(raised.exception.status_code, 422)
+            self.assertIn("valid email address", raised.exception.detail)
+            self.assertFalse(os.path.exists(os.path.join(directory, "feedback.jsonl")))
+
+    def test_feedback_older_than_30_days_is_removed(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ,
+            {"APP_DATA_DIR": directory, "FEEDBACK_ADMIN_TOKEN": "test-admin-secret"},
+            clear=False,
+        ):
+            now = datetime.now(timezone.utc)
+            old_record = {
+                "id": "old-feedback",
+                "created_at": (now - timedelta(days=31)).isoformat(),
+                "category": "issue",
+                "message": "Expired report",
+                "email": "old@example.com",
+            }
+            recent_record = {
+                "id": "recent-feedback",
+                "created_at": (now - timedelta(days=29)).isoformat(),
+                "category": "suggestion",
+                "message": "Current report",
+                "email": "recent@example.com",
+            }
+            feedback_path = os.path.join(directory, "feedback.jsonl")
+            with open(feedback_path, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(old_record) + "\n")
+                handle.write(json.dumps(recent_record) + "\n")
+
+            listing = asyncio.run(list_feedback(_request("test-admin-secret"), limit=100))
+            self.assertEqual(listing["retention_days"], 30)
+            self.assertEqual(listing["matching_count"], 1)
+            self.assertEqual(listing["records"][0]["id"], "recent-feedback")
+
+            with open(feedback_path, "r", encoding="utf-8") as handle:
+                retained = [json.loads(line) for line in handle if line.strip()]
+            self.assertEqual([item["id"] for item in retained], ["recent-feedback"])
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ import metricRegistry from "../config/metricRegistry.json";
 import algorithmRegistry from "../config/algorithmRegistry.json";
 import analysisFamilyRegistry from "../config/analysisFamilyRegistry.json";
 import { ACTIVITY_MAPPING_OPTIONS } from "./ActivityMappingPanel";
+import TermsOfUseContent from "./TermsOfUseContent";
 
 const DEFAULT_REPOSITORY_URL = "https://github.com/mayank-ramchandani/pyactigraphyui";
 const DEFAULT_DOCS_URL = "https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs";
@@ -24,7 +25,7 @@ const FILE_ROWS = [
 const NARRATIVE_SEARCH_TEXT = {
   overview: "guided ten step actigraphy application provenance preprocessing activity magnitude preview cleaning masking sleep wake classification light temperature sensors metrics results export csv json plots diagnostics github documentation",
   workflow: appConfig.workflow.map((step) => `${step.id} ${step.title} ${step.description}`).join(" "),
-  preprocessing: "pre-processing preprocessing minimum valid hours valid day 16 hours consecutive days two days sri rhythm metrics longest run missing data gaps non-wear masks minimum sleep-window coverage 80 percent expected epochs recorded scorable tst waso sleep efficiency customize threshold",
+  preprocessing: "pre-processing preprocessing recommended settings threshold minimum valid hours valid day quality window calendar day recording aligned 24 hour initial qc 16 hours consecutive windows two days sri rhythm metrics longest run missing data gaps non-wear masks minimum sleep-window coverage 80 percent expected epochs recorded scorable tst waso sleep efficiency customize",
   files: `${FILE_ROWS.flat().join(" ")} encoding utf-8 windows-1252 cp1252 localized actiware french german data_offset generic csv manual mapping nhanes paxhr paxhd seqn paxmtsh`,
   activity: ACTIVITY_MAPPING_OPTIONS.map((option) => `${option.label} ${option.units} ${option.description}`).join(" "),
   cleaning: "start stop recording interval support files masks masking exclusion non-wear file id per-file plot selection crossing midnight missing epochs unavailable not zero",
@@ -35,6 +36,7 @@ const NARRATIVE_SEARCH_TEXT = {
   diagnostics: "request id stages progress upload background job 413 500 503 504 timeout memory json diagnostic daily recording quality gaps warnings failed skipped passed",
   provenance: "pyactigraphy preprocessing provenance calibration filtering epochs timestamps gaps nonwear masks activity mapping units parameters software version citations reproducibility feedback storage",
   developers: "react vite fastapi uvicorn endpoint api jobs progress registries documentation maintenance github environment variable deployment architecture",
+  terms: "terms of use OBI Ontario Brain Institute CFA grant hosted transient temporary data retention privacy de-identification research educational medical device acceptable use diagnostics feedback",
 };
 
 const SECTIONS = [
@@ -50,6 +52,7 @@ const SECTIONS = [
   { id: "results", label: "Results & export" },
   { id: "diagnostics", label: "Diagnostics" },
   { id: "provenance", label: "Preprocessing & provenance" },
+  { id: "terms", label: "Terms of use" },
   { id: "developers", label: "Developer reference" },
 ];
 
@@ -172,19 +175,25 @@ export default function DocumentationPanel({ onClose }) {
     ),
     preprocessing: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Default data-quality rules">
+        <Card title="Recommended data-quality settings">
           <ul style={{ margin: 0, paddingLeft: 22 }}>
-            <li><strong>Valid day:</strong> at least 16 analyzable hours in the calendar day.</li>
-            <li><strong>Multi-day rhythm/SRI eligibility:</strong> at least 2 consecutive valid calendar days.</li>
-            <li><strong>Sleep-window coverage:</strong> at least 80% of expected epochs remain recorded and scorable.</li>
+            <li><strong>Recommended valid-window minimum:</strong> at least 16 analyzable hours.</li>
+            <li><strong>Recommended multi-window rhythm/SRI eligibility:</strong> at least 2 consecutive valid quality windows.</li>
+            <li><strong>Recommended sleep-window coverage:</strong> at least 80% of expected epochs remain recorded and scorable.</li>
           </ul>
-          <p style={{ marginBottom: 0 }}>The defaults remain active unless “Modify the standard data-quality thresholds” is enabled.</p>
+          <p style={{ marginBottom: 0 }}>These are configurable starting points. Enable “Customize the recommended data-quality thresholds” when a protocol or sensitivity analysis requires different criteria.</p>
         </Card>
-        <Card title="What minimum sleep-window coverage means">
-          Coverage is calculated for each diary-defined or automatically estimated sleep window. The expected number of epochs is compared with epochs still available after recording gaps, start/stop truncation, detected non-wear, and manual masks. A threshold of <Code>0.8</Code> means at least 80% must remain. Windows below the threshold are excluded from TST, WASO, sleep efficiency, and other window-dependent summaries instead of being filled or treated as zero activity.
+        <Card title="Initial QC before preprocessing decisions">
+          Step 2 loads each uploaded recording and reports recorded time, gaps, detected/mapped non-wear, and effective coverage for every candidate quality window. This first inspection occurs before uploaded/manual masks and start/stop limits. Final QC is recalculated during analysis after all selected preprocessing has been applied.
         </Card>
-        <Card title="Consecutive-day requirement">
-          The backend uses the longest uninterrupted calendar-day run. Two valid days separated by an invalid or missing day do not meet a two-consecutive-day requirement. SRI additionally requires valid scored epoch pairs exactly 24 hours apart, so eligibility does not guarantee an SRI value when paired data are insufficient.
+        <Card title="Calendar days or recording-aligned windows">
+          <strong>Calendar day</strong> is the recommended default: midnight-to-midnight windows preserve clock-day interpretation for daily summaries and circadian timing. <strong>Recording-aligned 24-hour windows</strong> begin at the first retained timestamp and are available as a sensitivity option for short or deployment-anchored recordings. For a complete 4 PM-to-4 PM recording, calendar mode yields an 8-hour first date and a 16-hour second date, while recording-aligned mode yields one complete 24-hour quality window. Results and exports record the selected basis.
+        </Card>
+        <Card title="What recommended minimum sleep-window coverage means">
+          Coverage is calculated for each diary-defined or automatically estimated sleep window. The expected number of epochs is compared with epochs still available after recording gaps, start/stop truncation, detected non-wear, and manual masks. A recommended threshold of <Code>0.8</Code> means at least 80% must remain. Windows below the configured threshold are excluded from TST, WASO, sleep efficiency, and other window-dependent summaries instead of being filled or treated as zero activity.
+        </Card>
+        <Card title="Consecutive-window requirement">
+          The backend uses the longest uninterrupted run under the selected quality-window basis. Two valid windows separated by an invalid or missing window do not meet a two-consecutive-window requirement. SRI additionally requires valid scored epoch pairs exactly 24 hours apart, so eligibility does not guarantee an SRI value when paired data are insufficient.
         </Card>
       </div>
     ),
@@ -290,7 +299,7 @@ export default function DocumentationPanel({ onClose }) {
           </ul>
         </Card>
         <Card title="Quality tables">
-          Daily Recording Quality separates expected time, gaps, detected/mapped non-wear, manual masks, and analyzable time. It reports total valid days, longest consecutive valid-day run, and resolved thresholds. Sleep-window QC reports expected, available, and coverage proportions for each candidate window.
+          Recording Quality by 24-hour Window separates expected time, gaps, detected/mapped non-wear, manual masks, and analyzable time. It reports the selected calendar-day or recording-aligned basis, total valid windows, longest consecutive valid-window run, and resolved recommended/customized thresholds. Sleep-window QC reports expected, available, and coverage proportions for each candidate window.
         </Card>
       </div>
     ),
@@ -307,6 +316,14 @@ export default function DocumentationPanel({ onClose }) {
         </Card>
       </div>
     ),
+    terms: (
+      <div style={{ display: "grid", gap: 14 }}>
+        <Card title="Hosting and funding">
+          This web tool is hosted by the Ontario Brain Institute (OBI), with development supported through the CFA grant.
+        </Card>
+        <TermsOfUseContent compact />
+      </div>
+    ),
     developers: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Application architecture">
@@ -317,6 +334,7 @@ export default function DocumentationPanel({ onClose }) {
             ["GET /api/version", "Deployment version and enabled feature flags."],
             ["GET /api/progress/{request_id}", "Live analysis progress."],
             ["GET /api/jobs/{job_id}", "Poll background status and retrieve a completed result."],
+            ["POST /api/jobs/qc/initial", "Start initial per-window data-coverage QC for Step 2."],
             ["POST /api/jobs/preview/basic", "Start activity preview."],
             ["POST /api/jobs/light/preview", "Start embedded/separate light preview."],
             ["POST /api/jobs/light/analyze", "Run selected light metrics."],

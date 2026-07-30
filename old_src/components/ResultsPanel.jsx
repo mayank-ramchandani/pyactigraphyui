@@ -241,28 +241,31 @@ function SleepWindowDetailsCard({ details }) {
 function DataQualityCard({ dataQuality }) {
   if (!dataQuality || !Array.isArray(dataQuality.daily_qc)) return null;
   const settings = dataQuality.settings || {};
+  const windowMode = dataQuality.valid_day_window_mode || settings.valid_day_window_mode || "calendar_day";
+  const windowLabel = windowMode === "recording_anchored" ? "recording-aligned 24-hour windows" : "calendar days";
+  const singularWindowLabel = windowMode === "recording_anchored" ? "quality window" : "day";
   return (
     <div style={{ border: "1px solid #bbf7d0", borderRadius: 16, padding: 16, background: "#f0fdf4", marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <div style={{ fontWeight: 800 }}>Daily Recording Quality</div>
-        <InfoBubble text="Recorded hours exclude true recording gaps. Analyzable hours additionally exclude detected/mapped non-wear and manual masks. Invalid days remain on the timeline as missing and do not contribute zero activity." />
+        <div style={{ fontWeight: 800 }}>Recording Quality by 24-hour Window</div>
+        <InfoBubble text="Recorded hours exclude true recording gaps. Analyzable hours additionally exclude detected/mapped non-wear and manual masks. Invalid quality windows remain on the timeline as missing and do not contribute zero activity." />
       </div>
       <div style={{ color: "#475569", lineHeight: 1.6, fontSize: 14, marginBottom: 12 }}>
-        Valid days: <strong>{dataQuality.valid_days ?? 0}</strong> of {dataQuality.calendar_days ?? 0}; minimum {settings.minimum_valid_hours_per_day ?? 16} h/day. Longest consecutive run: <strong>{dataQuality.longest_consecutive_valid_days ?? dataQuality.valid_days ?? 0}</strong> day(s). Completely unrecorded days: {dataQuality.completely_missing_days ?? 0}. Rhythm/SRI minimum: {settings.minimum_consecutive_valid_days_for_rhythm ?? settings.minimum_valid_days_for_rhythm ?? 2} consecutive valid days.
+        Valid {windowLabel}: <strong>{dataQuality.valid_quality_windows ?? dataQuality.valid_days ?? 0}</strong> of {dataQuality.quality_windows ?? dataQuality.calendar_days ?? 0}; recommended/configured minimum {settings.minimum_valid_hours_per_day ?? 16} h per {singularWindowLabel}. Longest consecutive run: <strong>{dataQuality.longest_consecutive_valid_days ?? dataQuality.valid_days ?? 0}</strong> window(s). Completely unrecorded windows: {dataQuality.completely_missing_days ?? 0}. Recommended/configured rhythm/SRI minimum: {settings.minimum_consecutive_valid_days_for_rhythm ?? settings.minimum_valid_days_for_rhythm ?? 2} consecutive valid windows.
       </div>
       <div style={{ overflowX: "auto", maxHeight: 420, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
           <thead>
             <tr>
               {[
-                "Date", "Recorded h", "Gap h", "Detected non-wear h", "Manual mask h", "Analyzable h", "Valid day", "Reason",
-              ].map((label) => <th key={label} style={{ textAlign: label === "Date" || label === "Reason" ? "left" : "right", padding: 8, borderBottom: "1px solid #bbf7d0" }}>{label}</th>)}
+                windowMode === "recording_anchored" ? "Quality window" : "Date", "Recorded h", "Gap h", "Detected non-wear h", "Manual mask h", "Analyzable h", "Valid", "Reason",
+              ].map((label, index, labels) => <th key={label} style={{ textAlign: index === 0 || index === labels.length - 1 ? "left" : "right", padding: 8, borderBottom: "1px solid #bbf7d0" }}>{label}</th>)}
             </tr>
           </thead>
           <tbody>
             {dataQuality.daily_qc.map((row) => (
-              <tr key={row.date}>
-                <td style={{ padding: 8, borderTop: "1px solid #dcfce7" }}>{row.date}</td>
+              <tr key={row.window_start || row.date}>
+                <td style={{ padding: 8, borderTop: "1px solid #dcfce7", overflowWrap: "anywhere" }}>{row.window_label || row.date}</td>
                 {["recorded_hours", "recording_gap_hours", "detected_nonwear_hours", "manual_mask_hours", "analyzable_hours"].map((key) => (
                   <td key={key} style={{ padding: 8, borderTop: "1px solid #dcfce7", textAlign: "right" }}>{formatSigFigNumber(row[key])}</td>
                 ))}
@@ -548,9 +551,9 @@ export default function ResultsPanel({
             marginBottom: 16,
             padding: 12,
             borderRadius: 12,
-            border: "1px solid #fed7aa",
-            background: "#fff7ed",
-            color: "#9a3412",
+            border: "1px solid #fde68a",
+            background: "#fffbeb",
+            color: "#92400e",
             fontSize: 14,
           }}
         >
@@ -607,7 +610,7 @@ export default function ResultsPanel({
                   {completedBatchResults.map((item, idx) => (
                     <tr key={`${item.fileName}-${idx}`}>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", fontWeight: 700, overflowWrap: "anywhere", fontSize: 13 }}>{item.fileName}</td>
-                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", color: isCompletedStatus(item.status) ? (item.status === "completed_with_warnings" ? "#9a3412" : "#166534") : "#991b1b", overflowWrap: "anywhere", fontSize: 13 }}>
+                      <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", color: isCompletedStatus(item.status) ? (item.status === "completed_with_warnings" ? "#a16207" : "#166534") : "#991b1b", overflowWrap: "anywhere", fontSize: 13 }}>
                         {isCompletedStatus(item.status) ? statusLabel(item.status) : item.error || "Failed"}
                       </td>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", fontSize: 13, overflowWrap: "anywhere" }}>
@@ -915,12 +918,12 @@ export default function ResultsPanel({
             </div>
           )}
 
-          <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#fff7ed" }}>
+          <div style={{ border: "1px solid #fde68a", borderRadius: 16, padding: 16, background: "#fffbeb" }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Quick QC</div>
             {qcWarnings.length === 0 ? (
               <div style={{ color: "#475569" }}>No QC warnings.</div>
             ) : (
-              <ul style={{ margin: 0, paddingLeft: 18, color: "#7c2d12" }}>
+              <ul style={{ margin: 0, paddingLeft: 18, color: "#92400e" }}>
                 {qcWarnings.map((item, idx) => (
                   <li key={idx}>{item}</li>
                 ))}

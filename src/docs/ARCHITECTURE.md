@@ -143,4 +143,4 @@ The panel always renders a GitHub documentation link. `VITE_GITHUB_DOCS_URL` can
 
 ## Feedback administration
 
-`POST /api/feedback` appends reports to `${APP_DATA_DIR}/feedback.jsonl`. The frontend review surface is available at `/?feedback-admin=1`; it calls the token-protected list and export endpoints. In hosted deployments, `APP_DATA_DIR` should point to a mounted persistent volume.
+`POST /api/feedback` requires a valid contact email and appends reports to `${APP_DATA_DIR}/feedback.jsonl`. Feedback records and their attached technical context have a fixed 30-day retention period. The backend removes expired records at startup, every 24 hours, and before submit/list/export operations. The frontend review surface is available at `/?feedback-admin=1`; it calls the token-protected list and export endpoints. In hosted deployments, `APP_DATA_DIR` should point to a mounted persistent volume.

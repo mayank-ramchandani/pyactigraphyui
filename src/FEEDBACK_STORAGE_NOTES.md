@@ -28,12 +28,24 @@ APP_DATA_DIR=/data/actigraphy-ui
 
 The backend, not Vercel, stores the report. The storage location therefore follows the backend selected by `VITE_API_BASE_URL`.
 
+## Required email and 30-day retention
+
+A valid contact email is required so the Centre for Analytics team can follow up about the submitted issue, question, or suggestion. The email address is stored with the report.
+
+Each feedback record, its contact email, and its attached technical context are retained for 30 days from the UTC submission timestamp. Records whose retention period has elapsed are removed from `feedback.jsonl` by:
+
+- cleanup when the backend starts;
+- automatic cleanup every 24 hours while the backend is running; and
+- cleanup before a feedback submission is appended or feedback is listed/exported.
+
+The cleanup rewrites the JSONL file atomically with only current records. Records with missing or invalid submission timestamps are also removed rather than retained indefinitely.
+
 ## Information stored with each report
 
 The form does not upload raw actigraphy data. It stores the user's message plus diagnostic context:
 
 - feedback ID and UTC submission time;
-- category and optional contact email;
+- category and required contact email, used to follow up about the report;
 - current workflow step and client URL;
 - selected file names, extensions, sizes, and analysis selection state;
 - current endpoint, request ID, job/progress state, and visible errors;

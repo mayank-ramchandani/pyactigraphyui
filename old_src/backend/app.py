@@ -28,7 +28,7 @@ from .analysis import (
     manipulate_light_data,
 )
 from .qc import quick_qc
-from .data_quality import apply_data_quality_control
+from .data_quality import apply_data_quality_control, inspect_initial_data_coverage
 from .io_helpers import (
     build_baseraw_from_dataframe,
     detect_csv_mapping,
@@ -756,6 +756,48 @@ def preview_basic(
             status_code=500,
             content={"detail": "Server error: {}".format(str(e))}
         )
+    finally:
+        _cleanup_temp_paths([tmp_path])
+
+
+@app.post("/api/qc/initial")
+def initial_data_qc(
+    file: UploadFile = File(...),
+    activityMapping: str = Form("auto"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
+):
+    """Inspect per-day coverage immediately after loading a recording.
+
+    This endpoint intentionally runs before uploaded/manual masking and final
+    preprocessing so Step 2 can show the user what was actually recorded.
+    """
+
+    tmp_path = None
+    try:
+        parsed_csv_mapping = _clean_csv_mapping(csvMapping)
+        tmp_path = _write_upload_to_temp(file)
+        requested_mapping = normalize_activity_mapping(activityMapping)
+        raw, reader_type = _load_native_supported_file(
+            tmp_path,
+            activity_mapping=requested_mapping,
+            csv_mapping=parsed_csv_mapping,
+            csv_separator=csvSeparator,
+        )
+        payload = inspect_initial_data_coverage(raw)
+        return _safe_json_response(
+            status_code=200,
+            content={
+                **payload,
+                "detected_input_type": reader_type,
+                "native_reader_used": reader_type != "tabular_mapped",
+                "activity_mapping": raw_mapping_metadata(raw),
+            },
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"detail": f"Server error: {exc}"})
     finally:
         _cleanup_temp_paths([tmp_path])
 
@@ -1887,6 +1929,24 @@ def analyze_basic(
     return _safe_json_response(status_code=status_code, content=response_content)
 
 
+def _background_initial_qc_worker(primary_spec: dict, options: dict) -> dict:
+    uploads, opened = _uploads_from_job_specs([primary_spec])
+    try:
+        response = initial_data_qc(
+            file=uploads[0],
+            activityMapping=options.get("activityMapping", "auto"),
+            csvMapping=options.get("csvMapping", "{}"),
+            csvSeparator=options.get("csvSeparator", ","),
+        )
+        return _response_outcome(response)
+    finally:
+        for handle in opened:
+            try:
+                handle.close()
+            except Exception:
+                pass
+
+
 def _background_preview_worker(primary_spec: dict, options: dict) -> dict:
     uploads, opened = _uploads_from_job_specs([primary_spec])
     try:
@@ -2084,6 +2144,57 @@ def background_job_status(job_id: str):
         payload["result_http_status"] = int(stored_result.get("http_status", 500))
         payload["result"] = stored_result.get("content", {})
     return _safe_json_response(status_code=200, content=payload)
+
+
+@app.post("/api/jobs/qc/initial")
+def start_background_initial_qc(
+    file: UploadFile = File(...),
+    activityMapping: str = Form("auto"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
+    jobId: Optional[str] = Form(None),
+):
+    created_job_id = None
+    try:
+        created_job_id, directory = create_job_record(
+            "initial_qc",
+            requested_job_id=jobId,
+            request_id=jobId,
+            source_file_name=file.filename,
+        )
+        primary_spec = _write_upload_to_job(file, directory, "primary")
+        options = {
+            "activityMapping": activityMapping,
+            "csvMapping": csvMapping,
+            "csvSeparator": csvSeparator,
+        }
+        submit_job(
+            created_job_id,
+            lambda: _background_initial_qc_worker(primary_spec, options),
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "ok": True,
+                "job_id": created_job_id,
+                "request_id": created_job_id,
+                "status": "queued",
+                "status_url": f"/api/jobs/{created_job_id}",
+                "runtime": job_runtime_info(),
+            },
+        )
+    except Exception as exc:
+        if created_job_id:
+            try:
+                update_job(
+                    created_job_id,
+                    status="failed",
+                    message=str(exc),
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                )
+            except Exception:
+                pass
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Could not start initial QC job: {exc}"})
 
 
 @app.post("/api/jobs/preview/basic")

@@ -45,6 +45,10 @@
     "documentationCenter": {
       "enabled": true,
       "description": "In-app user, methods, diagnostics, limitations, and developer documentation with full-content search."
+    },
+    "termsOfUse": {
+      "enabled": true,
+      "description": "OBI hosting, CFA grant support, transient raw-file processing, privacy, acceptable-use, and scientific-responsibility terms."
     }
   },
   "workflow": [
@@ -58,7 +62,7 @@
       "id": "2",
       "key": "preprocessing",
       "title": "Pre-processing",
-      "description": "Review or customize valid-day hours, consecutive-day requirements, sleep-window coverage, and non-wear handling."
+      "description": "Review initial per-file coverage, choose calendar-day or recording-aligned 24-hour QC windows, and use or customize the recommended validity and non-wear settings."
     },
     {
       "id": "3",
@@ -70,7 +74,7 @@
       "id": "4",
       "key": "preview",
       "title": "Activity Preview",
-      "description": "Inspect the selected activity basis, dates, gaps, and recording structure before defining intervals."
+      "description": "Dynamically search uploaded files, distinguish duplicate filenames, and inspect the selected activity basis, dates, gaps, and recording structure."
     },
     {
       "id": "5",
@@ -172,6 +176,6 @@
     "diaryHelp": "Sleep diary files contain reported sleep timing, naps, or in-bed intervals.",
     "sstHelp": "Start/stop files define the actual effective recording interval, such as when the device was really worn.",
     "algorithmHelp": "Sleep/rest algorithms classify the selected activity series and should be chosen before generating sleep-family metrics.",
-    "sleepCoverageHelp": "Minimum sleep-window coverage is the proportion of expected epochs inside a sleep window that remain recorded and scorable after gaps, non-wear, and masks. Windows below the threshold are excluded from sleep summaries."
+    "sleepCoverageHelp": "Recommended minimum sleep-window coverage is the configurable proportion of expected epochs inside a sleep window that must remain recorded and scorable after gaps, non-wear, and masks. Windows below the configured threshold are excluded from sleep summaries."
   }
 }

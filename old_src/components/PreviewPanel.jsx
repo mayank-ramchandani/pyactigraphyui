@@ -2,6 +2,13 @@ import React, { useMemo, useState } from "react";
 import ActivityMappingPanel, { activityMappingLabel } from "./ActivityMappingPanel";
 import { downloadBlob, downloadJson, previewToRows, rowsToCsv } from "../services/exportUtils";
 import {
+  buildFileEntries,
+  fileEntryLabel,
+  formatFileSize,
+  resolveFileSelection,
+  searchFileEntries,
+} from "../services/fileIdentityUtils";
+import {
   LineChart,
   Line,
   XAxis,
@@ -40,6 +47,115 @@ function formatValue(value) {
   return String(value);
 }
 
+
+function SearchableFilePicker({
+  label,
+  files,
+  selection,
+  onSelectionChange,
+  search,
+  allowEmpty = false,
+  emptyLabel = "Use selected actigraphy file",
+}) {
+  const entries = useMemo(() => buildFileEntries(files), [files]);
+  const results = useMemo(() => searchFileEntries(entries, search), [entries, search]);
+  const selectedEntry = useMemo(
+    () => resolveFileSelection(files, selection),
+    [files, selection]
+  );
+
+  return (
+    <div>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+      <div style={{ border: "1px solid #cbd5e1", borderRadius: 12, background: "white", overflow: "hidden" }}>
+        <div style={{ padding: 10, background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ color: "#64748b", fontSize: 12, marginBottom: 3 }}>Currently selected</div>
+          <div style={{ fontWeight: 800, overflowWrap: "anywhere" }}>
+            {selection && selectedEntry ? fileEntryLabel(selectedEntry) : emptyLabel}
+          </div>
+          {selection && selectedEntry && (
+            <div style={{ color: "#64748b", fontSize: 12, marginTop: 3 }}>
+              {formatFileSize(selectedEntry.file?.size)}
+              {selectedEntry.duplicateCount > 1 ? " · duplicate filenames are kept as separate uploads" : ""}
+            </div>
+          )}
+        </div>
+
+        <div role="listbox" aria-label={label} style={{ maxHeight: 230, overflowY: "auto", padding: 6 }}>
+          {allowEmpty && (
+            <button
+              type="button"
+              role="option"
+              aria-selected={!selection}
+              onClick={() => onSelectionChange("")}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                padding: "9px 10px",
+                borderRadius: 9,
+                border: "none",
+                background: !selection ? "#e0f2fe" : "transparent",
+                cursor: "pointer",
+                fontWeight: !selection ? 800 : 600,
+              }}
+            >
+              {emptyLabel}
+            </button>
+          )}
+
+          {results.map((entry) => {
+            const selected = entry.key === selection || (!String(selection).startsWith("upload-") && entry.file?.name === selection);
+            return (
+              <button
+                key={entry.key}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => onSelectionChange(entry.key)}
+                style={{
+                  width: "100%",
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                  gap: 10,
+                  alignItems: "center",
+                  textAlign: "left",
+                  padding: "9px 10px",
+                  borderRadius: 9,
+                  border: "none",
+                  background: selected ? "#e0f2fe" : "transparent",
+                  cursor: "pointer",
+                }}
+              >
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontWeight: selected ? 800 : 650, overflowWrap: "anywhere" }}>
+                    {entry.file?.name || "Unnamed file"}
+                  </span>
+                  <span style={{ display: "block", color: "#64748b", fontSize: 12, marginTop: 2 }}>
+                    {formatFileSize(entry.file?.size)}
+                    {entry.duplicateCount > 1 ? ` · duplicate ${entry.duplicateIndex} of ${entry.duplicateCount}` : ""}
+                  </span>
+                </span>
+                <span style={{ color: selected ? "#0369a1" : "#64748b", fontSize: 12, fontWeight: 800 }}>
+                  {selected ? "Selected" : "Choose"}
+                </span>
+              </button>
+            );
+          })}
+
+          {results.length === 0 && (
+            <div style={{ padding: 12, color: "#64748b", fontSize: 13 }}>
+              No files match this search. Try part of the filename, extension, or size.
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={{ color: "#64748b", fontSize: 12, marginTop: 5 }}>
+        Showing {results.length} of {entries.length} upload{entries.length === 1 ? "" : "s"}.
+      </div>
+    </div>
+  );
+}
+
 export default function PreviewPanel({
   title,
   mode = "activity",
@@ -62,17 +178,7 @@ export default function PreviewPanel({
   const [search, setSearch] = useState("");
   const [previewZoomKey, setPreviewZoomKey] = useState(0);
 
-  const filteredActigraphyFiles = useMemo(() => {
-    return actigraphyFiles.filter((file) =>
-      file.name.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [actigraphyFiles, search]);
 
-  const filteredLightFiles = useMemo(() => {
-    return lightFiles.filter((file) =>
-      file.name.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [lightFiles, search]);
 
   const activityPoints = previewData?.full_recording_preview || [];
   const lightPoints = previewData?.light_preview || [];
@@ -148,67 +254,41 @@ export default function PreviewPanel({
       )}
 
       <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
-        <input
-          type="text"
-          placeholder="Search files"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #cbd5e1",
-          }}
-        />
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontWeight: 700 }}>Search uploaded files</span>
+          <input
+            type="search"
+            placeholder="Search filename, extension, size, or duplicate number"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid #cbd5e1",
+            }}
+          />
+        </label>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>
-              {mode === "light" ? "Reference actigraphy file" : "Actigraphy file"}
-            </div>
-            <select
-              value={selectedPreviewFile}
-              onChange={(e) => setSelectedPreviewFile(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid #cbd5e1",
-                background: "white",
-              }}
-            >
-              <option value="">Select a file</option>
-              {filteredActigraphyFiles.map((file, idx) => (
-                <option key={`${file.name}-${idx}`} value={file.name}>
-                  {file.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div style={{ display: "grid", gridTemplateColumns: mode === "light" ? "repeat(2, minmax(0, 1fr))" : "1fr", gap: 12 }}>
+          <SearchableFilePicker
+            label={mode === "light" ? "Reference actigraphy file" : "Actigraphy file"}
+            files={actigraphyFiles}
+            selection={selectedPreviewFile}
+            onSelectionChange={setSelectedPreviewFile}
+            search={search}
+            emptyLabel="Select an actigraphy file"
+          />
 
           {mode === "light" && (
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Optional separate light file</div>
-              <select
-                value={selectedLightPreviewFile}
-                onChange={(e) => setSelectedLightPreviewFile(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #cbd5e1",
-                  background: "white",
-                }}
-              >
-                <option value="">
-                  {lightSourceMessage ? "Select a supported separate light file" : "Use selected actigraphy file"}
-                </option>
-                {filteredLightFiles.map((file, idx) => (
-                  <option key={`${file.name}-${idx}`} value={file.name}>
-                    {file.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SearchableFilePicker
+              label="Optional separate light file"
+              files={lightFiles}
+              selection={selectedLightPreviewFile}
+              onSelectionChange={setSelectedLightPreviewFile}
+              search={search}
+              allowEmpty
+              emptyLabel={lightSourceMessage ? "Select a supported separate light file" : "Use selected actigraphy file"}
+            />
           )}
         </div>
 

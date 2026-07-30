@@ -32,6 +32,8 @@ except Exception:  # pragma: no cover - deployment installs pyActigraphy
 DEFAULT_MIN_VALID_HOURS_PER_DAY = 16.0
 DEFAULT_MIN_VALID_DAYS_FOR_RHYTHM = 2
 DEFAULT_MIN_SLEEP_WINDOW_COVERAGE = 0.80
+DEFAULT_VALID_DAY_WINDOW_MODE = "calendar_day"
+VALID_DAY_WINDOW_MODES = {"calendar_day", "recording_anchored"}
 
 
 def _finite_number(value: Any, default: float, minimum: float, maximum: float) -> float:
@@ -92,9 +94,14 @@ def resolve_data_quality_settings(support_settings: Optional[dict] = None) -> Di
         1.0,
     )
 
+    requested_window_mode = str(masking.get("validDayWindowMode", DEFAULT_VALID_DAY_WINDOW_MODE) or "").strip().lower()
+    if requested_window_mode not in VALID_DAY_WINDOW_MODES:
+        requested_window_mode = DEFAULT_VALID_DAY_WINDOW_MODE
+
     return {
         "respect_detected_nonwear": bool(masking.get("respectNonwear", True)),
         "customize_data_quality_thresholds": customize_thresholds,
+        "valid_day_window_mode": requested_window_mode,
         "minimum_valid_hours_per_day": min_valid_hours,
         # Keep the legacy key for exported-config compatibility while making
         # the actual rule explicitly consecutive.
@@ -259,62 +266,94 @@ def _rounded_hours(epoch_count: int, epoch_hours: float) -> float:
     return round(float(epoch_count) * epoch_hours, 4)
 
 
-def _longest_consecutive_day_run(days: Iterable[pd.Timestamp]) -> int:
-    normalized = sorted({pd.Timestamp(day).normalize() for day in days})
-    if not normalized:
-        return 0
-    longest = current = 1
-    for previous, day in zip(normalized, normalized[1:]):
-        if day - previous == pd.Timedelta(days=1):
+def _longest_consecutive_valid_window_run(rows: Iterable[dict]) -> int:
+    """Return the longest uninterrupted run of valid quality windows."""
+
+    longest = current = 0
+    for row in rows:
+        if bool(row.get("valid_day")):
             current += 1
             longest = max(longest, current)
         else:
-            current = 1
+            current = 0
     return longest
 
 
-def _daily_quality_table(
+def _quality_window_bounds(index: pd.DatetimeIndex, mode: str) -> list[Tuple[pd.Timestamp, pd.Timestamp]]:
+    if mode == "recording_anchored":
+        start = index.min()
+        final_epoch = index.max()
+        bounds = []
+        cursor = start
+        while cursor <= final_epoch:
+            bounds.append((cursor, cursor + pd.Timedelta(hours=24)))
+            cursor = cursor + pd.Timedelta(hours=24)
+        return bounds
+
+    first_day = index.min().normalize()
+    last_day = index.max().normalize()
+    return [(day, day + pd.Timedelta(days=1)) for day in pd.date_range(first_day, last_day, freq="1D")]
+
+
+def _quality_window_table(
     series: pd.Series,
     native_wear: pd.Series,
     manual_wear: pd.Series,
     frequency: pd.Timedelta,
     minimum_valid_hours: float,
+    mode: str = DEFAULT_VALID_DAY_WINDOW_MODE,
 ) -> Tuple[list[dict], pd.Series, list[pd.Timestamp]]:
+    """Summarize coverage and construct the validity mask for 24-hour windows.
+
+    ``calendar_day`` uses midnight-to-midnight clock days.
+    ``recording_anchored`` uses consecutive 24-hour windows beginning at the
+    first timestamp retained after any start/stop restriction.
+    """
+
+    mode = mode if mode in VALID_DAY_WINDOW_MODES else DEFAULT_VALID_DAY_WINDOW_MODE
     raw_recorded = series.notna() & np.isfinite(series)
     detected_nonwear = raw_recorded & ~native_wear
     manually_masked = raw_recorded & native_wear & ~manual_wear
     analyzable = raw_recorded & native_wear & manual_wear
     epoch_hours = frequency.total_seconds() / 3600.0
 
-    first_day = series.index.min().normalize()
-    last_day = series.index.max().normalize()
-    days = pd.date_range(first_day, last_day, freq="1D")
     rows: list[dict] = []
-    valid_days: list[pd.Timestamp] = []
+    valid_starts: list[pd.Timestamp] = []
+    valid_window_mask = pd.Series(False, index=series.index, dtype=bool)
 
-    for day in days:
-        next_day = day + pd.Timedelta(days=1)
-        in_day = (series.index >= day) & (series.index < next_day)
-        recorded_hours = _rounded_hours(int(raw_recorded.loc[in_day].sum()), epoch_hours)
-        nonwear_hours = _rounded_hours(int(detected_nonwear.loc[in_day].sum()), epoch_hours)
-        manual_hours = _rounded_hours(int(manually_masked.loc[in_day].sum()), epoch_hours)
-        analyzable_hours = _rounded_hours(int(analyzable.loc[in_day].sum()), epoch_hours)
+    for position, (window_start, window_stop) in enumerate(_quality_window_bounds(series.index, mode), start=1):
+        in_window = (series.index >= window_start) & (series.index < window_stop)
+        recorded_hours = _rounded_hours(int(raw_recorded.loc[in_window].sum()), epoch_hours)
+        nonwear_hours = _rounded_hours(int(detected_nonwear.loc[in_window].sum()), epoch_hours)
+        manual_hours = _rounded_hours(int(manually_masked.loc[in_window].sum()), epoch_hours)
+        analyzable_hours = _rounded_hours(int(analyzable.loc[in_window].sum()), epoch_hours)
         missing_hours = round(max(0.0, 24.0 - recorded_hours), 4)
         is_valid = analyzable_hours + 1e-9 >= minimum_valid_hours
         if is_valid:
-            valid_days.append(day)
+            valid_starts.append(window_start)
+            valid_window_mask.loc[in_window] = True
 
         reasons = []
         if not is_valid:
             reasons.append(
-                f"analyzable coverage {analyzable_hours:g} h is below the {minimum_valid_hours:g} h threshold"
+                f"analyzable coverage {analyzable_hours:g} h is below the recommended/configured {minimum_valid_hours:g} h threshold"
             )
         if recorded_hours == 0:
             reasons.append("no recording data")
 
+        if mode == "calendar_day":
+            label = window_start.date().isoformat()
+        else:
+            label = f"Window {position}: {window_start.isoformat()} to {window_stop.isoformat()}"
+
         rows.append(
             {
-                "date": day.date().isoformat(),
+                "date": window_start.date().isoformat(),
+                "window_number": position,
+                "window_label": label,
+                "window_start": window_start.isoformat(),
+                "window_stop": window_stop.isoformat(),
+                "window_mode": mode,
                 "expected_hours": 24.0,
                 "recorded_hours": recorded_hours,
                 "recording_gap_hours": missing_hours,
@@ -326,13 +365,59 @@ def _daily_quality_table(
             }
         )
 
-    valid_day_set = {day.date() for day in valid_days}
-    valid_day_mask = pd.Series(
-        [timestamp.date() in valid_day_set for timestamp in series.index],
-        index=series.index,
-        dtype=bool,
-    )
-    return rows, analyzable & valid_day_mask, valid_days
+    return rows, analyzable & valid_window_mask, valid_starts
+
+
+def inspect_initial_data_coverage(raw: Any) -> Dict[str, Any]:
+    """Return fast, pre-analysis coverage summaries for both supported day modes.
+
+    This inspection is intentionally performed before uploaded/manual exclusion
+    intervals are applied. Existing reader/mapped non-wear is reported so the
+    user can make an informed preprocessing choice before final analysis.
+    """
+
+    source = _numeric_activity_series(raw)
+    regular, frequency = _regularize_series(raw, source)
+    existing_mask = _reader_mask(raw, regular.index)
+    native_wear = existing_mask if existing_mask is not None else pd.Series(True, index=regular.index, dtype=bool)
+    manual_wear = pd.Series(True, index=regular.index, dtype=bool)
+
+    modes = {}
+    for mode in ("calendar_day", "recording_anchored"):
+        rows, _, valid_starts = _quality_window_table(
+            regular,
+            native_wear=native_wear,
+            manual_wear=manual_wear,
+            frequency=frequency,
+            minimum_valid_hours=DEFAULT_MIN_VALID_HOURS_PER_DAY,
+            mode=mode,
+        )
+        modes[mode] = {
+            "window_count": len(rows),
+            "valid_at_recommended_threshold": len(valid_starts),
+            "invalid_at_recommended_threshold": len(rows) - len(valid_starts),
+            "longest_consecutive_valid_windows": _longest_consecutive_valid_window_run(rows),
+            "windows": rows,
+        }
+
+    recorded_epochs = int((regular.notna() & np.isfinite(regular)).sum())
+    epoch_hours = frequency.total_seconds() / 3600.0
+    return {
+        "inspection_stage": "initial_after_load_before_manual_preprocessing",
+        "recommended_minimum_valid_hours": DEFAULT_MIN_VALID_HOURS_PER_DAY,
+        "recording_start": regular.index[0].isoformat(),
+        "recording_end": regular.index[-1].isoformat(),
+        "epoch_seconds": round(frequency.total_seconds(), 6),
+        "timeline_hours": round((len(regular) * epoch_hours), 4),
+        "recorded_hours": _rounded_hours(recorded_epochs, epoch_hours),
+        "recording_gap_hours": _rounded_hours(len(regular) - recorded_epochs, epoch_hours),
+        "detected_nonwear_available": existing_mask is not None,
+        "modes": modes,
+        "note": (
+            "This initial QC is descriptive. Final QC is recalculated after start/stop restrictions, "
+            "uploaded/manual masks, and the selected recommended or customized preprocessing settings."
+        ),
+    }
 
 
 def _copy_ui_metadata(source: Any, target: Any) -> None:
@@ -400,12 +485,13 @@ def apply_data_quality_control(raw: Any, support_settings: Optional[dict] = None
     manual_intervals = getattr(raw, "_ui_mask_intervals", None) or []
     manual_wear = _manual_interval_mask(regular.index, manual_intervals)
 
-    daily_rows, final_mask, valid_days = _daily_quality_table(
+    daily_rows, final_mask, valid_days = _quality_window_table(
         regular,
         native_wear=native_wear,
         manual_wear=manual_wear,
         frequency=frequency,
         minimum_valid_hours=settings["minimum_valid_hours_per_day"],
+        mode=settings["valid_day_window_mode"],
     )
     analysis_raw = _analysis_raw_with_mask(raw, regular, final_mask, frequency)
 
@@ -418,27 +504,33 @@ def apply_data_quality_control(raw: Any, support_settings: Optional[dict] = None
     qc_warnings = []
     if invalid_days:
         qc_warnings.append(
-            f"Excluded {len(invalid_days)} day(s) with less than {settings['minimum_valid_hours_per_day']:g} analyzable hours."
+            f"Excluded {len(invalid_days)} quality window(s) with less than the recommended/configured {settings['minimum_valid_hours_per_day']:g} analyzable hours."
         )
     if completely_missing_days:
         qc_warnings.append(
-            f"Found {len(completely_missing_days)} completely unrecorded day(s); they remain missing and do not become zero activity."
+            f"Found {len(completely_missing_days)} completely unrecorded quality window(s); they remain missing and do not become zero activity."
         )
-    longest_consecutive_valid_days = _longest_consecutive_day_run(valid_days)
+    longest_consecutive_valid_days = _longest_consecutive_valid_window_run(daily_rows)
     if longest_consecutive_valid_days < settings["minimum_valid_days_for_rhythm"]:
         qc_warnings.append(
-            f"The longest run is {longest_consecutive_valid_days} consecutive valid day(s); multi-day rhythm "
+            f"The longest run is {longest_consecutive_valid_days} consecutive valid quality window(s); multi-window rhythm "
             f"and SRI results require at least {settings['minimum_valid_days_for_rhythm']} consecutive valid "
-            "days and will be unavailable."
+            "quality windows and will be unavailable."
         )
 
     payload = {
         "settings": settings,
+        "valid_day_window_mode": settings["valid_day_window_mode"],
+        "quality_window_label": "calendar days" if settings["valid_day_window_mode"] == "calendar_day" else "recording-aligned 24-hour windows",
         "recording_start": regular.index[0].isoformat(),
         "recording_end": regular.index[-1].isoformat(),
         "epoch_seconds": round(frequency.total_seconds(), 6),
+        # ``calendar_days`` is retained for backward-compatible exports. In
+        # recording-aligned mode it contains the quality-window count.
         "calendar_days": len(daily_rows),
+        "quality_windows": len(daily_rows),
         "valid_days": len(valid_days),
+        "valid_quality_windows": len(valid_days),
         "longest_consecutive_valid_days": longest_consecutive_valid_days,
         "invalid_days": len(invalid_days),
         "completely_missing_days": len(completely_missing_days),

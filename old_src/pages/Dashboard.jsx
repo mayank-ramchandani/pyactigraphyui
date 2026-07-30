@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import appConfig from "../config/appConfig.json";
 import metricRegistry from "../config/metricRegistry.json";
@@ -23,6 +23,7 @@ import AuthBar from "../components/AuthBar";
 import RunHistoryPanel from "../components/RunHistoryPanel";
 import FeedbackButton from "../components/FeedbackButton";
 import DocumentationPanel from "../components/DocumentationPanel";
+import TermsOfUseContent from "../components/TermsOfUseContent";
 
 import {
   getDefaultAlgorithm,
@@ -31,6 +32,7 @@ import {
 } from "../services/configUtils";
 import { buildAnalysisPayload } from "../services/analysisConfigUtils";
 import { supabase, supabaseConfigured } from "../services/supabaseClient";
+import { buildFileEntries, fileSelectionKey, resolveFileSelection } from "../services/fileIdentityUtils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
 const ENABLE_AUTH_RUNS = import.meta.env.VITE_ENABLE_AUTH_RUNS === "true";
@@ -146,6 +148,7 @@ function clientFailureDiagnostics(error, file, endpoint) {
 export default function Dashboard() {
   const [currentStep, setCurrentStep] = useState("1");
   const [documentationOpen, setDocumentationOpen] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
   const [maxUnlockedStep, setMaxUnlockedStep] = useState("1");
   const [visitedSteps, setVisitedSteps] = useState(["1"]);
 
@@ -161,6 +164,10 @@ export default function Dashboard() {
   const [selectedPreviewFile, setSelectedPreviewFile] = useState("");
   const [selectedLightPreviewFile, setSelectedLightPreviewFile] = useState("");
   const [selectedAnalysisFileNames, setSelectedAnalysisFileNames] = useState([]);
+  const [initialQcByFile, setInitialQcByFile] = useState({});
+  const [initialQcLoadingByFile, setInitialQcLoadingByFile] = useState({});
+  const [initialQcErrorByFile, setInitialQcErrorByFile] = useState({});
+  const initialQcRequestedRef = useRef(new Set());
 
   const [analysisMode, setAnalysisMode] = useState("standard");
   const [analysisScope, setAnalysisScope] = useState("metric");
@@ -236,6 +243,7 @@ export default function Dashboard() {
       manualIntervals: [],
       respectNonwear: true,
       customizeDataQualityThresholds: false,
+      validDayWindowMode: "calendar_day",
       minimumValidHoursPerDay: 16,
       minimumValidDaysForRhythm: 2,
       minimumSleepWindowCoverage: 0.8,
@@ -299,20 +307,23 @@ export default function Dashboard() {
   const actigraphyFiles = uploadedFiles.actigraphy || [];
   const lightFiles = uploadedFiles.light || [];
 
-  const actigraphyFile =
-    actigraphyFiles.find((file) => file.name === selectedPreviewFile) ||
-    actigraphyFiles[0] ||
-    null;
+  const actigraphySelection = resolveFileSelection(actigraphyFiles, selectedPreviewFile);
+  const actigraphyFile = actigraphySelection?.file || null;
 
-  const requestedLightFile =
-    lightFiles.find((file) => file.name === selectedLightPreviewFile) ||
-    lightFiles[0] ||
-    actigraphyFile ||
-    null;
+  const requestedLightSelection = selectedLightPreviewFile
+    ? resolveFileSelection(lightFiles, selectedLightPreviewFile)
+    : null;
+  const requestedLightFile = requestedLightSelection?.file || actigraphyFile || lightFiles[0] || null;
   const lightFile = requestedLightFile;
+  const lightFileKey =
+    requestedLightSelection?.key ||
+    actigraphySelection?.key ||
+    (lightFiles[0] ? fileSelectionKey(lightFiles[0], 0) : "");
   const lightInspectionMatchesSelection =
     Boolean(lightFile) &&
-    lightPreviewData?.light_preview_file_name === lightFile.name &&
+    (lightPreviewData?.light_preview_file_key
+      ? lightPreviewData.light_preview_file_key === lightFileKey
+      : lightPreviewData?.light_preview_file_name === lightFile.name) &&
     Boolean(lightPreviewData?.light_detection?.inspected);
   const selectedFileHasNoLight =
     lightInspectionMatchesSelection &&
@@ -614,6 +625,61 @@ export default function Dashboard() {
     }
   };
 
+  useEffect(() => {
+    if (currentStep !== "2" || !actigraphyFiles.length) return undefined;
+
+    let cancelled = false;
+    const entries = buildFileEntries(actigraphyFiles);
+
+    const inspectFilesSequentially = async () => {
+      for (const entry of entries) {
+        if (cancelled) return;
+        const requestToken = `${entry.key}:${activityMapping}:${showManualMapping ? JSON.stringify(csvMapping) : "native"}:${csvSeparator}`;
+        if (initialQcRequestedRef.current.has(requestToken)) continue;
+        initialQcRequestedRef.current.add(requestToken);
+        setInitialQcLoadingByFile((previous) => ({ ...previous, [entry.key]: true }));
+        setInitialQcErrorByFile((previous) => ({ ...previous, [entry.key]: "" }));
+
+        try {
+          const formData = new FormData();
+          formData.append("file", entry.file);
+          formData.append("activityMapping", activityMapping);
+          formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
+          formData.append("csvSeparator", csvSeparator);
+          const data = await runBackgroundFormJob({
+            path: "api/jobs/qc/initial",
+            formData,
+            jobId: createRequestId(),
+          });
+          if (!cancelled) {
+            setInitialQcByFile((previous) => ({
+              ...previous,
+              [entry.key]: { ...data, source_file_name: entry.file.name },
+            }));
+          }
+        } catch (error) {
+          initialQcRequestedRef.current.delete(requestToken);
+          if (!cancelled) {
+            setInitialQcErrorByFile((previous) => ({
+              ...previous,
+              [entry.key]: error?.message || "Initial data-coverage QC could not be completed.",
+            }));
+          }
+        } finally {
+          if (cancelled) initialQcRequestedRef.current.delete(requestToken);
+          if (!cancelled) {
+            setInitialQcLoadingByFile((previous) => ({ ...previous, [entry.key]: false }));
+          }
+        }
+      }
+    };
+
+    void inspectFilesSequentially();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStep, actigraphyFiles, activityMapping, showManualMapping, csvMapping, csvSeparator]);
+
   const goToStep = (stepId) => {
     if (Number(stepId) <= Number(maxUnlockedStep)) {
       const resolvedStepId = String(stepId);
@@ -676,6 +742,28 @@ export default function Dashboard() {
     setPreviewError("");
   };
 
+  const handlePreviewFileSelectionChange = (nextSelection) => {
+    setSelectedPreviewFile(nextSelection);
+    const entry = resolveFileSelection(actigraphyFiles, nextSelection);
+    const cached =
+      activityPreviewByFile[nextSelection] ||
+      (!String(nextSelection || "").startsWith("upload-") && entry
+        ? activityPreviewByFile[entry.file?.name]
+        : null);
+    setPreviewData(cached || null);
+    setPreviewLoaded(Boolean(cached));
+    setLightPreviewLoaded(false);
+    setLightPreviewData(null);
+    setPreviewError("");
+  };
+
+  const handleLightPreviewFileSelectionChange = (nextSelection) => {
+    setSelectedLightPreviewFile(nextSelection);
+    setLightPreviewLoaded(false);
+    setLightPreviewData(null);
+    setPreviewError("");
+  };
+
   const handleActivityMappingChange = (nextMapping) => {
     setActivityMapping(nextMapping);
     setPreviewActivityMapping(nextMapping);
@@ -686,13 +774,20 @@ export default function Dashboard() {
     setSummaryResults({});
     setMultiFileResults([]);
     setAnalysisError("");
+    setInitialQcByFile({});
+    setInitialQcErrorByFile({});
+    initialQcRequestedRef.current = new Set();
   };
 
   const handleActigraphyFilesChange = (files) => {
     setUploadedFiles((prev) => ({ ...prev, actigraphy: files }));
-    setSelectedPreviewFile(files?.[0]?.name || "");
+    setSelectedPreviewFile(files?.[0] ? fileSelectionKey(files[0], 0) : "");
     setSelectedLightPreviewFile("");
     setSelectedAnalysisFileNames((files || []).map((file) => file.name));
+    setInitialQcByFile({});
+    setInitialQcLoadingByFile({});
+    setInitialQcErrorByFile({});
+    initialQcRequestedRef.current = new Set();
     resetPreviewAndResults();
 
     setShowManualMapping(false);
@@ -713,11 +808,10 @@ export default function Dashboard() {
     setShowManualMapping(true);
   };
 
-  const loadActivityPreviewForFile = async (fileName = selectedPreviewFile) => {
-    const targetFile =
-      actigraphyFiles.find((file) => file.name === fileName) ||
-      actigraphyFile;
-    if (!targetFile) return null;
+  const loadActivityPreviewForFile = async (selection = selectedPreviewFile) => {
+    const targetEntry = resolveFileSelection(actigraphyFiles, selection) || actigraphySelection;
+    const targetFile = targetEntry?.file || null;
+    if (!targetFile || !targetEntry) return null;
 
     try {
       setPreviewLoading(true);
@@ -740,10 +834,18 @@ export default function Dashboard() {
         jobId: previewJobId,
       });
 
-      const labeledData = { ...data, preview_file_name: targetFile.name };
-      setSelectedPreviewFile(targetFile.name);
+      const labeledData = {
+        ...data,
+        preview_file_name: targetFile.name,
+        preview_file_key: targetEntry.key,
+      };
+      setSelectedPreviewFile(targetEntry.key);
       setPreviewData(labeledData);
-      setActivityPreviewByFile((prev) => ({ ...prev, [targetFile.name]: labeledData }));
+      setActivityPreviewByFile((prev) => ({
+        ...prev,
+        [targetEntry.key]: labeledData,
+        [targetFile.name]: labeledData,
+      }));
       setPreviewLoaded(true);
       unlockStep("4");
       return labeledData;
@@ -794,6 +896,7 @@ export default function Dashboard() {
       const labeledData = {
         ...data,
         light_preview_file_name: lightFile.name,
+        light_preview_file_key: lightFileKey,
       };
       setLightPreviewData(labeledData);
       setLightPreviewLoaded(true);
@@ -1398,6 +1501,10 @@ export default function Dashboard() {
         onSettingsChange={(settings) =>
           setSupportFileSettings((previous) => ({ ...previous, masking: settings }))
         }
+        actigraphyFiles={actigraphyFiles}
+        initialQcByFile={initialQcByFile}
+        initialQcLoadingByFile={initialQcLoadingByFile}
+        initialQcErrorByFile={initialQcErrorByFile}
       />
     );
   } else if (currentStep === "3") {
@@ -1419,10 +1526,10 @@ export default function Dashboard() {
         previewData={previewData}
         actigraphyFiles={actigraphyFiles}
         selectedPreviewFile={selectedPreviewFile}
-        setSelectedPreviewFile={setSelectedPreviewFile}
+        setSelectedPreviewFile={handlePreviewFileSelectionChange}
         lightFiles={lightFiles}
         selectedLightPreviewFile={selectedLightPreviewFile}
-        setSelectedLightPreviewFile={setSelectedLightPreviewFile}
+        setSelectedLightPreviewFile={handleLightPreviewFileSelectionChange}
         activityMapping={previewActivityMapping}
         setActivityMapping={handlePreviewActivityMappingChange}
         onPreview={onActivityPreview}
@@ -1505,7 +1612,7 @@ export default function Dashboard() {
         lightFiles={lightFiles}
         onLightFilesChange={(files) => {
           setUploadedFiles((previous) => ({ ...previous, light: files }));
-          setSelectedLightPreviewFile(files?.[0]?.name || "");
+          setSelectedLightPreviewFile(files?.[0] ? fileSelectionKey(files[0], 0) : "");
           setLightPreviewLoaded(false);
           setLightPreviewData(null);
         }}
@@ -1522,10 +1629,10 @@ export default function Dashboard() {
           previewData: lightPreviewData,
           actigraphyFiles,
           selectedPreviewFile,
-          setSelectedPreviewFile,
+          setSelectedPreviewFile: handlePreviewFileSelectionChange,
           lightFiles,
           selectedLightPreviewFile,
-          setSelectedLightPreviewFile,
+          setSelectedLightPreviewFile: handleLightPreviewFileSelectionChange,
           lightSourceAvailable: Boolean(lightFile),
           lightSourceMessage,
           onPreview: onLightPreview,
@@ -1540,7 +1647,7 @@ export default function Dashboard() {
         lightSourceMessage={lightSourceMessage}
         onLightInspection={(data) => {
           if (!lightFile || data?.light_detection?.available !== false) return;
-          setLightPreviewData({ ...data, light_preview_file_name: lightFile.name });
+          setLightPreviewData({ ...data, light_preview_file_name: lightFile.name, light_preview_file_key: lightFileKey });
           setLightPreviewLoaded(true);
         }}
       />
@@ -1626,6 +1733,13 @@ export default function Dashboard() {
               Guided 10-step actigraphy workflow covering preprocessing, activity estimation, cleaning, sleep-wake classification, other sensors, analysis, results, and export.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setTermsOpen(true)}
+            style={{ padding: "10px 14px", borderRadius: 12, background: "white", color: "#0f172a", border: "1px solid #cbd5e1", cursor: "pointer", fontWeight: 700 }}
+          >
+            Terms of Use
+          </button>
           <button
             type="button"
             onClick={() => setDocumentationOpen((value) => !value)}
@@ -1751,6 +1865,32 @@ export default function Dashboard() {
         </div>
         )}
       </div>
+
+
+      {termsOpen && (
+        <div
+          role="presentation"
+          onClick={() => setTermsOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(15, 23, 42, 0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="terms-of-use-title"
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: "min(920px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "#f8fafc", borderRadius: 20, padding: 20, boxShadow: "0 28px 80px rgba(15,23,42,0.35)" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 14 }}>
+              <div>
+                <div style={{ color: "#64748b", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>OBI-hosted web application</div>
+                <h2 id="terms-of-use-title" style={{ margin: "5px 0 0" }}>Terms of Use</h2>
+              </div>
+              <button type="button" onClick={() => setTermsOpen(false)} aria-label="Close terms of use" style={{ width: 36, height: 36, borderRadius: 999, border: "none", background: "#e2e8f0", cursor: "pointer", fontSize: 22 }}>×</button>
+            </div>
+            <TermsOfUseContent />
+          </div>
+        </div>
+      )}
 
       <FeedbackButton
         buildApiUrl={buildApiUrl}

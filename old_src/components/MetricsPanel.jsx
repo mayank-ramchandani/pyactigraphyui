@@ -480,7 +480,7 @@ export default function MetricsPanel({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1.4fr 1fr 90px",
+              gridTemplateColumns: "minmax(0, 1fr) 110px",
               background: "#e2e8f0",
               padding: "10px 12px",
               fontWeight: 700,
@@ -488,7 +488,6 @@ export default function MetricsPanel({
             }}
           >
             <div>Algorithm</div>
-            <div>Context</div>
             <div>Select</div>
           </div>
 
@@ -507,7 +506,7 @@ export default function MetricsPanel({
                 <label
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1.4fr 1fr 90px",
+                    gridTemplateColumns: "minmax(0, 1fr) 110px",
                     padding: "12px",
                     alignItems: "center",
                     fontSize: 14,
@@ -535,11 +534,9 @@ export default function MetricsPanel({
                         cursor: "pointer",
                       }}
                     >
-                      Details
+                      Context / details
                     </button>
                   </div>
-
-                  <div style={{ color: "#475569", lineHeight: 1.5 }}>{algo.context}</div>
 
                   <div>
                     <input
@@ -1229,7 +1226,7 @@ export default function MetricsPanel({
               {detailsAlgorithm.note && <div>{detailsAlgorithm.note}</div>}
 
               {(detailsAlgorithm.warnings || []).length > 0 && (
-                <div style={{ padding: 12, borderRadius: 12, background: "#fff7ed", border: "1px solid #fed7aa", color: "#9a3412" }}>
+                <div style={{ padding: 12, borderRadius: 12, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e" }}>
                   <strong>Warnings:</strong> {detailsAlgorithm.warnings.join(" ")}
                 </div>
               )}

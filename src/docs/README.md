@@ -14,7 +14,7 @@ This directory is the long-form GitHub documentation for the Actigraphy Dashboar
 | [Architecture](ARCHITECTURE.md) | Developers | Frontend/backend modules, current workflow components, registries, and API endpoints |
 | [Deployment](DEPLOYMENT.md) | Operators | Environment variables, GitHub documentation link, Azure/proxy concerns, storage, and release checks |
 | [Documentation maintenance](DOCUMENTATION_MAINTENANCE.md) | Maintainers | Synchronizing in-app full-content search and GitHub documentation |
-| [Terms of use](TERMS_OF_USE.md) | All users | OBI hosting, CFA support, transient raw-file processing, privacy, acceptable use, and scientific responsibility |
+| [Terms of use](TERMS_OF_USE.md) | All users | OBI hosting, Centre for Analytics support, transient raw-file processing, privacy, acceptable use, and scientific responsibility |
 | [Implementation update — 2026-07-27](IMPLEMENTATION_UPDATE_2026-07-27.md) | Maintainers | File-by-file summary, API changes, deployment notes, and verification for this release |
 | [Change log](CHANGELOG.md) | Everyone | User-visible method and application changes |
 

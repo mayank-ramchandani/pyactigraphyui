@@ -19,6 +19,15 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
 
   const submitFeedback = async (event) => {
     event.preventDefault();
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setStatus("Please enter your email address so we can contact you about your feedback.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setStatus("Please enter a valid email address.");
+      return;
+    }
     if (!message.trim()) {
       setStatus("Please describe the issue or suggestion before submitting.");
       return;
@@ -30,7 +39,7 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
       const payload = {
         category,
         message: message.trim(),
-        email: email.trim() || null,
+        email: normalizedEmail,
         user_id: user?.id || null,
         user_email: user?.email || null,
         current_step: context.currentStep || null,
@@ -125,7 +134,7 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
               <div>
                 <h2 style={{ margin: 0, color: "#0f172a" }}>Send feedback</h2>
                 <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14, lineHeight: 1.5 }}>
-                  Report upload, preview, analysis, or deployment issues. Raw files are not sent; the form includes filenames, selected settings, progress, and current errors to help diagnose the report.
+                  Report upload, preview, analysis, or deployment issues. Your email address is required so the Centre for Analytics team can contact you about the report. Raw files are not sent; the form includes filenames, selected settings, progress, and current errors to help diagnose the report. Feedback submissions and attached technical context are stored for 30 days and then automatically deleted.
                 </p>
               </div>
               <button
@@ -159,13 +168,19 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
             </label>
 
             <label style={{ display: "grid", gap: 6, color: "#334155", fontWeight: 700, fontSize: 14 }}>
-              Email, optional
+              Email address (required)
               <input
+                type="email"
+                required
+                autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="name@example.com"
                 style={{ padding: 10, borderRadius: 10, border: "1px solid #cbd5e1" }}
               />
+              <span style={{ color: "#64748b", fontWeight: 400, fontSize: 12, lineHeight: 1.4 }}>
+                We use this address only to contact you about your feedback. The submission is retained for 30 days.
+              </span>
             </label>
 
             <label style={{ display: "grid", gap: 6, color: "#334155", fontWeight: 700, fontSize: 14 }}>
