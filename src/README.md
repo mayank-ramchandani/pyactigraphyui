@@ -1,67 +1,48 @@
 # Actigraphy Dashboard
 
-A React/Vite and FastAPI application for importing actigraphy recordings, applying transparent preprocessing and file-specific cleaning, estimating an activity basis, classifying sleep/wake, analysing activity/light outcomes, reviewing quality diagnostics, and exporting results.
+A web application for importing actigraphy recordings, reviewing data quality, selecting transparent preprocessing and activity measures, classifying sleep/wake, calculating activity and light outcomes, and exporting reproducible results.
 
-## Current ten-page workflow
+## User workflow
 
-1. Import Actigraphy Files
+1. Importing Actigraphy Files
 2. Pre-processing
-3. Estimating Activity Metric / Magnitude of Acceleration
+3. Estimating Activity Metric
 4. Activity Preview
 5. Cleaning and Masking
-6. Sleep-Wake Classification
+6. Sleep-wake Classification
 7. Other Sensors
-8. Analysis Setup
+8. Analysis Set-up
 9. Generate Results
 10. Export Outputs
 
-After an actigraphy file is imported, pages 2–9 can be opened directly from the left workflow. Page 10 unlocks only after results are generated successfully.
+After an actigraphy file is uploaded, Steps 2–9 can be opened directly from the left workflow. Export unlocks after results are generated successfully.
 
-Page 2 keeps the project standards active unless the user explicitly enables custom thresholds: 16 analyzable hours per valid day, two consecutive valid days for multi-day rhythm/SRI eligibility, and 80% minimum sleep-window coverage. Sleep-window coverage is the proportion of expected epochs inside a proposed sleep window that remain available and scorable after gaps, non-wear, and masks.
+## User documentation
 
-## Documentation
-
-Start with the [documentation index](docs/README.md).
+Start with the [Actigraphy Dashboard user documentation](docs/README.md).
 
 - [User guide](docs/USER_GUIDE.md)
-- [Preprocessing validity rules](docs/PREPROCESSING_VALIDITY_RULES.md)
-- [File formats](docs/FILE_FORMATS.md)
-- [Activity processing](docs/ACTIVITY_PROCESSING.md)
+- [Preprocessing and data-quality settings](docs/PREPROCESSING_VALIDITY_RULES.md)
+- [Supported file formats](docs/FILE_FORMATS.md)
+- [Choosing an activity measure](docs/ACTIVITY_PROCESSING.md)
 - [Metrics and algorithms](docs/METRICS_AND_ALGORITHMS.md)
-- [Diagnostics and troubleshooting](docs/DIAGNOSTICS_AND_TROUBLESHOOTING.md)
-- [Preprocessing and provenance](docs/PREPROCESSING_AND_PROVENANCE.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Deployment](docs/DEPLOYMENT.md)
-- [Documentation maintenance](docs/DOCUMENTATION_MAINTENANCE.md)
-- [Change log](docs/CHANGELOG.md)
+- [Methods and reproducibility](docs/PREPROCESSING_AND_PROVENANCE.md)
+- [Troubleshooting](docs/DIAGNOSTICS_AND_TROUBLESHOOTING.md)
+- [Terms of use](docs/TERMS_OF_USE.md)
+- [What’s new](docs/CHANGELOG.md)
 
-The in-app **Documentation** page searches full explanatory content as well as workflow labels, formats, algorithms, metrics, families, diagnostics, and developer guidance. It always displays a clickable GitHub documentation link. Configure the exact targets with:
 
-```text
-VITE_GITHUB_REPOSITORY_URL=https://github.com/owner/repository
-VITE_GITHUB_DOCS_URL=https://github.com/owner/repository/tree/main/src/docs
-```
+## Recommended first analysis
 
-## Core design principles
+- Use de-identified files.
+- Keep the recommended preprocessing settings unless the study protocol requires different criteria.
+- Use the recommended source / processed acc activity measure unless a specific signal is required.
+- Preview every recording before analysis.
+- Review all warnings, missing metrics, valid-window decisions, and sleep-window exclusions.
+- Save the exported configuration and quality-control information with the result tables.
 
-- Preserve file-level provenance and resolved settings in every analysis output.
-- Keep activity-basis estimation explicit and show the resolved signal, engine, units, and epoch.
-- Offer six activity choices: recommended/automatic, processed acceleration, ENMO, MAD, PIM, and ZCM.
-- Keep missing data, excluded non-wear, and manual masks as missing rather than zero activity.
-- Report total valid days and the longest uninterrupted valid-day run.
-- Exclude sleep windows below the configured coverage threshold rather than silently treating missing epochs as sleep or wake.
-- Allow partial results when one metric fails while retaining structured diagnostics.
-- Do not create fallback sleep windows when Crespo or Roenneberg returns no usable window.
-- Inspect light capability from file content rather than extension alone; no-light files remain valid for activity analysis.
-- Label temperature and generic sensor analysis as future functionality until calculations are implemented.
-- Use pyActigraphy as the computational basis and retain complete preprocessing and provenance with each result.
+## Scientific basis
 
-## Version confirmation
+The application uses pyActigraphy for native readers and downstream actigraphy methods. Raw accelerometer files are first converted to the selected epoch-level activity measure. Missing data, non-wear, and masks remain unavailable rather than being converted to zero activity.
 
-After deployment, open:
-
-```text
-GET /api/version
-```
-
-Confirm the expected `app_version`, `git_commit`, and feature flags before testing large files.
+See the [Methods and reproducibility guide](docs/PREPROCESSING_AND_PROVENANCE.md) for details.

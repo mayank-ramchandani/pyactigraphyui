@@ -1,128 +1,70 @@
-# File formats and signal availability
+# Supported file formats
 
-Page 1 imports **actigraphy files only**. Optional start/stop and masking files are added on page 5, sleep diaries on page 6, and separate light or future temperature/other-sensor files on page 7. Support depends on both the extension and the actual columns or channels available in the file.
+Upload actigraphy recordings on **Step 1**. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 7.
 
+Support depends on both the file extension and the signals or columns actually contained in the file.
 
-| Format | Typical content | Default analysis basis | Optional mappings | Important notes |
-|---|---|---|---|---|
-| GENEActiv `.bin` | Raw X/Y/Z and embedded light/temperature | Processed `acc` | ENMO, MAD, PIM, ZCM | Large files use streamed decoding. Light preview exposes `LIGHT` (`log10(lux + 1)`) and `LIGHT_LUX` (lux) when available. |
-| Axivity `.cwa` | Raw X/Y/Z | Processed `acc` through supported conversion | Existing ENMO, MAD, PIM, or ZCM only when emitted in an uploaded converted time-series | Java and Oxford `accelerometer` dependencies may be required. The standard server conversion currently emits epoch-level `acc`. |
-| ActiGraph `.gt3x` | Raw calibrated X/Y/Z; optional timestamped lux records | Processed `acc` | ENMO, MAD, PIM, ZCM, 30 Hz ActiGraph-style counts | `log.bin` activity is streamed directly to epochs. Official type-`0x05` lux records are inspected and streamed separately when present; no-light files skip light outputs without affecting activity. |
-| ActiGraph `.agd` | Device count/activity series | Source/device activity | Normally none | Preferred when the analysis is intended to remain on the ActiGraph count scale. |
-| Actiwatch `.awd` and other native pyActigraphy formats | Device activity | Source/device activity | Native reader modes where available; ATR supports PIM/ZCM | Reader and metric availability depend on the corresponding pyActigraphy class. |
-| Oxford `*timeSeries.csv(.gz)` | Epoch-level `acc` and related columns | Existing `acc` column | Existing ENMO, MAD, PIM, or ZCM columns | The selected existing column is used directly and recorded in provenance. |
-| Philips Actiware/RPX CSV | Localized epoch activity with optional white/RGB light | Source activity | Existing light channels | English, French, and German exports are parsed directly. UTF-8, UTF-8 BOM, Windows-1252, and compatible Latin-1 text are accepted. |
-| Generic CSV/TSV | User-defined timestamp/activity/light | Source activity when supplied | Manual timestamp, time, activity, light, temperature, and non-wear mapping | Automatic detection is attempted first; manual mapping is available on page 1. |
-| NHANES `PAXHR_H` | Multi-participant hourly summary | `PAXMTSH` only after participant/time-index preparation | `PAXLXSH` is an hourly light sum, not epoch lux | Filter one `SEQN`, merge `PAXFDAY`/`PAXFTIME`, and construct a documented participant-relative time index from `PAXSSNHP`. The cohort file is not analysed directly as one recording. |
-| Excel/ODS | Tabular activity or XYZ | Source activity when supplied | Conditional | Very large spreadsheets are not recommended for raw high-frequency data. |
+| Format | Typical content | Recommended activity basis | User notes |
+|---|---|---|---|
+| GENEActiv `.bin` | Raw X/Y/Z acceleration, light, and temperature | Recommended source / processed acc | ENMO, MAD, PIM, and ZCM are available. Embedded light is used when present. |
+| Axivity `.cwa` | Raw X/Y/Z acceleration | Processed acc | Other measures require corresponding columns in a converted time-series file. |
+| ActiGraph `.gt3x` | Raw X/Y/Z acceleration, with optional lux | Recommended source / processed acc | A file without light can still be analysed for activity. |
+| ActiGraph `.agd` | Device activity counts | Source/device activity | Use when the analysis should remain on the ActiGraph count scale. |
+| Actiwatch `.awd` and other native pyActigraphy formats | Device activity | Source/device activity | Available options depend on the information supported by the reader. |
+| Oxford `*timeSeries.csv(.gz)` | Epoch-level processed acceleration | Existing acc column | Existing ENMO, MAD, PIM, or ZCM columns can also be selected. |
+| Philips Actiware/RPX CSV | Epoch activity with optional white/RGB light | Source activity | English, French, and German exports are supported. |
+| Generic CSV/TXT | User-defined timestamp, activity, and sensor columns | Mapped activity column | Automatic detection is attempted first; manual mapping is available. |
+| NHANES `PAXHR_H` | Hourly summaries for multiple participants | PAXMTSH after preparation | Prepare one participant and a participant-relative time index before upload. |
+| Excel/ODS | Tabular activity data | Mapped source activity | Avoid very large spreadsheets for raw high-frequency acceleration. |
 
-All formats enter the same downstream missingness, mask, valid-day, and
-sleep-window coverage stage once a scalar activity series is available. The
-signal basis differs by format; the validity rules do not.
+## CSV and TXT files
 
-| Input path | Recording gaps | Automatic/mapped non-wear |
-|---|---|---|
-| Raw GT3X streaming | Missing epochs preserved | Not inferred from low activity |
-| Direct GENEActiv BIN streaming | Missing epochs preserved | Not inferred from low activity |
-| Converted BIN/CWA or Oxford time-series | Missing timestamps/values preserved | Used only when supplied by the series/reader |
-| Native pyActigraphy formats | Missing values preserved | Existing reader mask respected when available and enabled |
-| Mapped tabular input | Missing values preserved | `nonwear`/`mask`/`offwrist`: 1 means excluded; `wear`/`worn`: 1 means worn |
+The application attempts to identify:
 
+- timestamp or separate date/time columns;
+- activity;
+- light;
+- temperature;
+- wear/non-wear or mask indicators.
 
-## Localized Actiware/RPX CSV exports
+Enable manual mapping when the suggestions are incorrect. Always confirm the resulting preview before analysis.
 
-Actiware CSV exports can place metadata before the epoch table and can localize
-column names such as `Date`, `Heure`, `Activité`, `Datum`, `Zeit`, and
-`Aktivität`. The backend now:
+A generic CSV containing X/Y/Z values should not be treated as calibrated acceleration unless the units, sampling frequency, timestamp alignment, and calibration are known.
 
-- detects UTF-8, UTF-8 with BOM, Windows-1252, UTF-16, and a lossless Latin-1 fallback;
-- locates the epoch table by semantic date/time/activity headers rather than a fixed row offset;
-- bypasses the pyActigraphy RPX `data_offset` path for localized CSV exports;
-- parses decimal-comma activity and light values;
-- preserves white, red, green, and blue light channels when present; and
-- treats a valid no-light export as an activity recording with light analysis skipped.
+## Localized Actiware/RPX exports
 
-## NHANES PAXHR_H preparation
+English, French, and German epoch exports are supported. The importer can handle common UTF-8 and Windows-1252 encodings, metadata rows before the epoch table, decimal-comma values, and white/red/green/blue light channels when present.
 
-`PAXHR_H` is a survey-level hour-summary file containing many participants, not
-a single timestamped device recording. The importer identifies its characteristic
-columns and returns a preparation message instead of the former generic-tabular
-error. Before using it in this application:
+A valid Actiware file without light remains usable for activity analysis.
 
-1. filter to one `SEQN`;
-2. merge `PAXFDAY` (starting day of week) and `PAXFTIME` (first recording
-   time) from `PAXHD_H`;
-3. use `PAXSSNHP` to construct a participant-relative hourly time index;
-4. choose and document a synthetic anchor date consistent with the reported
-   day of week, because the public files do not include the actual calendar date;
-5. map `PAXMTSH` as the activity series; and
-6. document that the signal is an hourly MIMS sum, not raw acceleration or
-   device counts.
+## NHANES PAXHR_H
 
-For minute-resolution rhythm or sleep analysis, prefer the corresponding
-participant-level minute data or original GT3X data when available.
+`PAXHR_H` is a cohort-level hourly summary file, not one continuous actigraphy recording. Before using it:
 
-## Raw X/Y/Z is not a pyActigraphy activity series
+1. select one participant (`SEQN`);
+2. obtain the starting day/time information needed to construct the sequence;
+3. create and document a participant-relative hourly time index;
+4. map `PAXMTSH` as activity; and
+5. document that the signal is an hourly MIMS summary rather than raw acceleration or device counts.
 
-Most pyActigraphy metrics operate on one timestamp-indexed activity series. Three raw axes must first be converted into a scalar epoch-level signal such as processed `acc`, ENMO, MAD, PIM, ZCM, vector magnitude, or source device counts.
+Do not analyse all participants as one time series.
 
-## Units and calibration
+## Missing data and non-wear
 
-For XYZ-derived calculations, the application must know or correctly infer:
+Once an activity series is available, all formats use the same downstream rules:
 
-- acceleration units;
-- calibration or scale factors;
-- sampling frequency;
-- timestamp alignment;
-- epoch duration;
-- gaps and incomplete epochs.
+- missing timestamps and non-finite values remain missing;
+- recorded zeros remain valid recorded values;
+- non-wear is applied only when an indicator is available and enabled;
+- manual masks remain file-specific;
+- valid-window and sleep-window coverage rules are applied consistently.
 
-A generic CSV containing arbitrary X/Y/Z values should not be treated as calibrated acceleration without explicit metadata.
+## Light data
 
-## Large GT3X recordings
+Light availability is determined from the signals inside the file. When no usable light is found, the light preview and light metrics are skipped while activity analysis continues.
 
-The backend does not construct a whole-recording raw Pandas DataFrame. It keeps
-only a bounded X/Y/Z chunk and the epoch-level output. Diagnostics include raw
-samples reduced, events read, checksum failures, impossible timestamps skipped,
-missing output epochs, calibration method, and requested/resolved mapping.
+Confirm the channel and units before setting light thresholds. Supported files may expose lux, log-transformed light, white light, or RGB channels.
 
-Large recordings are submitted as background preview/analysis jobs. The server
-returns a job ID after receiving the upload, and the frontend polls for progress
-and the final result while decoding and metrics continue outside the original
-HTTP request. The browser-to-server upload itself must still complete within the
-hosting platform's ingress deadline.
+## Large recordings
 
-## Light source routing
-
-Light capability is determined from file contents and reader channels, not the
-extension alone. When no separate light file is selected, the selected
-actigraphy file is inspected:
-
-- current-format GT3X archives are scanned for checksum-valid `log.bin` record
-  type `0x05`, defined by ActiGraph as a two-byte little-endian lux value;
-- GENEActiv `.bin` and native pyActigraphy readers expose their available
-  embedded channels;
-- files without usable light return `light_detection.status = not_present`,
-  and light preview/metrics are skipped while activity processing continues.
-
-GT3X lux values are averaged into 30-second epochs by default and exposed as
-`LIGHT_LUX` (lux) and `LIGHT` (`log10(lux + 1)`). Real gaps remain missing.
-Light-only GT3X inspection never decodes X/Y/Z activity payloads.
-
-Large light preview, channel discovery, and batch light analysis use background
-jobs. One preview load returns the standard plot, available channels, and the
-initial multichannel/RGB preview. All selected light metrics are calculated
-from one loaded recording in one background job rather than one upload/decode
-per metric.
-
-Legacy GT3X archives containing `activity.bin`/`lux.bin` instead of `log.bin`
-remain outside this streaming reader.
-
-Format references:
-
-- [ActiGraph current GT3X log-record format](https://github.com/actigraph/GT3X-File-Format)
-- [ActiGraph legacy NHANES GT3X format](https://github.com/actigraph/NHANES-GT3X-File-Format)
-
-## Oxford time-series pathway
-
-An Oxford `*timeSeries.csv(.gz)` upload uses its existing epoch-level activity columns directly. The selected column name, units, epoch duration, and mapping are retained in the result provenance. Raw files instead use the bounded-memory decoder/converter available for that format.
+Large raw files can take longer to upload, preview, and analyse. Keep the browser page open during processing and avoid starting multiple large runs at the same time. When a large file repeatedly fails, record the file format, file size, workflow step, request ID, and exact error before submitting feedback.

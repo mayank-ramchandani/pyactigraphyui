@@ -36,7 +36,7 @@ const NARRATIVE_SEARCH_TEXT = {
   diagnostics: "request id stages progress upload background job 413 500 503 504 timeout memory json diagnostic daily recording quality gaps warnings failed skipped passed",
   provenance: "pyactigraphy preprocessing provenance calibration filtering epochs timestamps gaps nonwear masks activity mapping units parameters software version citations reproducibility feedback storage",
   developers: "react vite fastapi uvicorn endpoint api jobs progress registries documentation maintenance github environment variable deployment architecture",
-  terms: "terms of use OBI Ontario Brain Institute CFA grant hosted transient temporary data retention privacy de-identification research educational medical device acceptable use diagnostics feedback",
+  terms: "terms of use OBI Ontario Brain Institute Centre for Analytics hosted transient temporary data retention privacy de-identification research educational medical device acceptable use diagnostics feedback",
 };
 
 const SECTIONS = [
@@ -312,14 +312,14 @@ export default function DocumentationPanel({ onClose }) {
           Results retain reader/file format, requested and resolved activity mapping, source column or raw-processing engine, units, sample rate, epoch duration, calibration/filter details, start/stop limits, non-wear and masks, valid-day decisions, sleep-window coverage, algorithm parameters, application version, Git commit, and diagnostic stages. Missing and excluded epochs remain unavailable rather than becoming zero activity.
         </Card>
         <Card title="Feedback location">
-          Feedback is appended to <Code>{"${APP_DATA_DIR}/feedback.jsonl"}</Code>. Configure persistent storage and <Code>FEEDBACK_ADMIN_TOKEN</Code>, then open <Code>/?feedback-admin=1</Code> in the frontend to search, inspect, and export reports. The protected <Code>GET /api/admin/feedback</Code> and <Code>GET /api/admin/feedback/export</Code> endpoints remain available for direct access. Reports include selected settings, filenames, progress, request ID, and visible errors, but not raw files.
+          Feedback is appended to <Code>{"${APP_DATA_DIR}/feedback.jsonl"}</Code>. A contact email is required, and each submission plus its attached technical context is retained for 30 days before automatic deletion. Configure persistent storage and <Code>FEEDBACK_ADMIN_TOKEN</Code>, then open <Code>/?feedback-admin=1</Code> in the frontend to search, inspect, and export current reports. The protected <Code>GET /api/admin/feedback</Code> and <Code>GET /api/admin/feedback/export</Code> endpoints remain available for direct access. Reports include selected settings, filenames, progress, request ID, and visible errors, but not raw files.
         </Card>
       </div>
     ),
     terms: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Hosting and funding">
-          This web tool is hosted by the Ontario Brain Institute (OBI), with development supported through the CFA grant.
+          This web tool is hosted by the Ontario Brain Institute (OBI), with development supported through the Centre for Analytics.
         </Card>
         <TermsOfUseContent compact />
       </div>

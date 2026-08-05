@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-07-30 — Feedback contact and retention
+
+- Made the feedback contact email mandatory in both the frontend form and backend API validation so the Centre for Analytics team can follow up.
+- Added clear feedback-form and Terms of Use wording that feedback, the email address, and attached technical context are retained for 30 days.
+- Added application-level feedback expiry at startup, every 24 hours, and before submit/list/export operations; expired JSONL records are removed atomically.
+- Replaced CFA wording with Centre for Analytics in the Terms of Use and related documentation.
+
 ## 2026-07-27 — Initial QC, flexible quality windows, dynamic file search, and terms
 
 - Added Step 2 initial per-file coverage QC before final preprocessing decisions.
@@ -8,7 +15,7 @@
 - Replaced Step 4 filename selects with dynamic search result lists that distinguish duplicate filenames using stable upload identity and metadata.
 - Removed the heterogeneous Context column from algorithm selection and moved context into the Context / details dialog.
 - Changed advisory processing/QC warning styling to yellow while retaining red for true failures and invalid quality windows.
-- Added in-app and repository Terms of Use covering OBI hosting, CFA grant support, transient raw inputs, diagnostic/feedback metadata, de-identification, acceptable use, and scientific responsibility.
+- Added in-app and repository Terms of Use covering OBI hosting, Centre for Analytics support, transient raw inputs, diagnostic/feedback metadata, de-identification, acceptable use, and scientific responsibility.
 
 ## 2026-07-24 — PIM/ZCM, Cosinor family, feedback access, and preprocessing provenance
 

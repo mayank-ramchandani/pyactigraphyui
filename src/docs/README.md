@@ -1,28 +1,34 @@
-# Documentation index
+# Actigraphy Dashboard user documentation
 
-This directory is the long-form GitHub documentation for the Actigraphy Dashboard. The in-app Documentation page provides a searchable operational reference and links directly to this directory.
+This directory contains the public documentation for researchers and analysts using the Actigraphy Dashboard. It focuses on completing the workflow, choosing appropriate settings, understanding outputs, and resolving common user-level problems.
 
-| Document | Audience | Purpose |
-|---|---|---|
-| [User guide](USER_GUIDE.md) | Analysts and researchers | Current ten-page workflow, direct navigation, and interpretation checks |
-| [Preprocessing validity rules](PREPROCESSING_VALIDITY_RULES.md) | Analysts and researchers | Valid-day hours, consecutive-day requirements, sleep-window coverage, missingness, and related choices |
-| [File formats](FILE_FORMATS.md) | Analysts and developers | Supported signals, readers, embedded light, and format-specific behaviour |
-| [Activity processing](ACTIVITY_PROCESSING.md) | Researchers and developers | Six activity-basis options, raw preprocessing, processed `acc`, ENMO, MAD, PIM, ZCM, epochs, and units |
-| [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) | Researchers | Analysis families, individual metrics, sleep/rest algorithms, parameters, and outputs |
-| [Diagnostics and troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) | Analysts and operators | Progress, background jobs, QC, transport failures, logs, and debugging |
-| [Preprocessing and provenance](PREPROCESSING_AND_PROVENANCE.md) | Researchers and reviewers | pyActigraphy foundation, preprocessing sequence, mappings, missingness, and result provenance |
-| [Architecture](ARCHITECTURE.md) | Developers | Frontend/backend modules, current workflow components, registries, and API endpoints |
-| [Deployment](DEPLOYMENT.md) | Operators | Environment variables, GitHub documentation link, Azure/proxy concerns, storage, and release checks |
-| [Documentation maintenance](DOCUMENTATION_MAINTENANCE.md) | Maintainers | Synchronizing in-app full-content search and GitHub documentation |
-| [Terms of use](TERMS_OF_USE.md) | All users | OBI hosting, Centre for Analytics support, transient raw-file processing, privacy, acceptable use, and scientific responsibility |
-| [Implementation update — 2026-07-27](IMPLEMENTATION_UPDATE_2026-07-27.md) | Maintainers | File-by-file summary, API changes, deployment notes, and verification for this release |
-| [Change log](CHANGELOG.md) | Everyone | User-visible method and application changes |
+## Start here
 
-## Current application workflow
+1. Read the [User guide](USER_GUIDE.md) for the complete ten-step workflow.
+2. Review [Preprocessing and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) before changing the recommended defaults.
+3. Check [Supported file formats](FILE_FORMATS.md) and [Choosing an activity measure](ACTIVITY_PROCESSING.md) when preparing data.
+4. Use [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) to understand the available analyses.
+5. Use [Troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) when a result is missing or a run fails.
+
+## Documentation by task
+
+| I need to… | Read… |
+|---|---|
+| Complete an analysis from upload to export | [User guide](USER_GUIDE.md) |
+| Decide whether to keep or change the recommended quality thresholds | [Preprocessing and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) |
+| Confirm whether a recording or CSV layout is supported | [Supported file formats](FILE_FORMATS.md) |
+| Choose between processed acceleration, ENMO, MAD, PIM, ZCM, or source counts | [Choosing an activity measure](ACTIVITY_PROCESSING.md) |
+| Understand RA, IS, IV, SRI, sleep metrics, fragmentation, or Cosinor | [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) |
+| Understand how preprocessing choices are recorded | [Methods and reproducibility](PREPROCESSING_AND_PROVENANCE.md) |
+| Resolve warnings, unavailable metrics, upload errors, or missing sleep windows | [Troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) |
+| Review privacy, data handling, and acceptable use | [Terms of use](TERMS_OF_USE.md) |
+| See recent user-visible changes | [What’s new](CHANGELOG.md) |
+
+## Workflow
 
 1. Importing Actigraphy Files
 2. Pre-processing
-3. Estimating Activity Metric / Magnitude of Acceleration
+3. Estimating Activity Metric
 4. Activity Preview
 5. Cleaning and Masking
 6. Sleep-wake Classification
@@ -31,19 +37,15 @@ This directory is the long-form GitHub documentation for the Actigraphy Dashboar
 9. Generate Results
 10. Export Outputs
 
-After actigraphy files are imported, pages 2–9 are directly clickable in the left workflow. Export unlocks after results are generated.
+After at least one actigraphy file is uploaded, Steps 2–9 can be opened directly from the left workflow. Export unlocks after results are generated successfully.
 
-## Documentation conventions
+## Key terms
 
-- **Source/device activity** means an activity or count series supplied by the source file.
-- **Raw acceleration** means high-frequency X/Y/Z measurements and is not itself a single pyActigraphy activity series.
-- **Processed `acc`** means epoch-level, gravity-adjusted acceleration from an existing Oxford `acc` column or the bounded-memory raw-sample pathway recorded in diagnostics.
-- **Activity mapping** means the scalar activity basis supplied to rest/activity metrics.
-- **Valid quality window** means a calendar day or recording-aligned 24-hour window meeting the configured analyzable-hours threshold.
-- **Consecutive valid windows** means one uninterrupted run under the selected window basis.
-- **Sleep-window coverage** means the proportion of expected epochs inside a sleep window that remain recorded and scorable after gaps, non-wear, and masks.
-- **Window** means a full-timestamp rest/sleep interval; no heuristic fallback window is inserted.
-- **Localized RPX CSV** means an Actiware export whose metadata/header labels may be English, French, or German and whose encoding may be UTF-8 or Windows-1252.
-- **Mapped tabular activity** means a timestamped activity column used as supplied and labelled with the selected mapping; raw-sample reconstruction is not performed.
+- **Activity measure:** the one-dimensional epoch-level series used for actigraphy calculations, such as device counts, processed acceleration, ENMO, MAD, PIM, or ZCM.
+- **Analyzable time:** recorded time that remains after gaps, non-wear, start/stop limits, and masks are applied.
+- **Valid quality window:** a calendar day or recording-aligned 24-hour window that meets the selected minimum analyzable-hours threshold.
+- **Sleep-window coverage:** the proportion of expected epochs inside a sleep window that remain available and scorable.
+- **Unavailable result:** a metric that could not be calculated because required data, valid windows, sleep windows, or supported signals were not available.
+- **Warning:** processing continued, but the result or data quality requires review.
 
-Last consolidated: **2026-07-27**.
+Last updated: **2026-08-05**.

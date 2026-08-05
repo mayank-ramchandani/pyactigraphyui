@@ -2,7 +2,7 @@
 
 ## Hosting and funding
 
-This web tool is hosted by the **Ontario Brain Institute (OBI)**, with development supported through the **CFA grant**. Use of the service is subject to applicable OBI, institutional, research-ethics, privacy, data-governance, and legal requirements.
+This web tool is hosted by the **Ontario Brain Institute (OBI)**, with development supported through the **Centre for Analytics**. Use of the service is subject to applicable OBI, institutional, research-ethics, privacy, data-governance, and legal requirements.
 
 ## Research and educational purpose
 
@@ -20,7 +20,7 @@ Job status and result JSON are also transient and become eligible for cleanup af
 
 ## Diagnostics and feedback metadata
 
-Operational diagnostics may retain non-raw technical metadata such as filenames, sizes, selected settings, reader type, processing stages, errors, request IDs, and summary results when persistent application storage is configured. Feedback is stored separately and may include the context attached to a report. Do not place participant identifiers, raw measurements, or other sensitive content in filenames or feedback text. Administrators should apply an appropriate access and retention policy to these records.
+Operational diagnostics may retain non-raw technical metadata such as filenames, sizes, selected settings, reader type, processing stages, errors, request IDs, and summary results when persistent application storage is configured. Feedback is stored separately and may include the technical context attached to a report. A contact email address is required so the Centre for Analytics team can follow up about the submission. Feedback, the contact email address, and attached technical context are retained for **30 days from submission** and then automatically deleted. Do not place participant identifiers, raw measurements, or other sensitive content in filenames or feedback text.
 
 ## Recommended settings and scientific responsibility
 

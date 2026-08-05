@@ -19,27 +19,27 @@ export default function TermsOfUseContent({ compact = false }) {
       )}
 
       <TermSection title="Research and educational use">
-        The application supports actigraphy preprocessing, quality control, analysis, visualization, and export. It is not a medical device, does not provide a diagnosis or treatment recommendation, and is not a substitute for clinical judgment. Users remain responsible for selecting methods and interpreting outputs appropriately for their study or service context.
+        The application supports actigraphy preprocessing, quality control, analysis, visualization, and export. It is not a medical device, does not provide a diagnosis or treatment recommendation, and is not a substitute for clinical judgment. Users remain responsible for choosing methods and interpreting outputs appropriately for their study or service context.
       </TermSection>
 
       <TermSection title="Authority to upload and de-identification">
-        Upload only data that you are authorized to process. Follow the consent, research-ethics, privacy, data-sharing, and security requirements that apply to your organization and project. Remove direct identifiers from recordings, filenames, diaries, support files, free-text feedback, and exported configurations before upload. Do not use the service for identifiable clinical records unless your approved governance explicitly permits it.
+        Upload only data that you are authorized to process. Follow the consent, research-ethics, privacy, data-sharing, and security requirements that apply to your organization and project. Remove direct identifiers from recordings, filenames, diaries, support files, free-text feedback, and exported configurations before upload.
       </TermSection>
 
-      <TermSection title="Transient processing and retention">
-        Raw uploaded recording and support files are copied into a temporary processing/job area only to perform the requested operation and are deleted before the request or background job is reported as completed or failed. Job status and result JSON are transient and become eligible for cleanup after the configured job-retention period; the current code default is six hours, although the OBI deployment may configure a different period. Browser state is also temporary unless a user explicitly downloads an export or an optional authenticated run-history feature is enabled.
+      <TermSection title="Temporary processing">
+        Uploaded recording and support files are used temporarily to complete the requested preview or analysis and are deleted after processing. Processing status and result data are also temporary. Download any outputs that you need to retain.
       </TermSection>
 
-      <TermSection title="Technical metadata, diagnostics, and feedback">
-        Operational diagnostics may retain non-raw technical information such as filenames, file sizes, selected settings, reader type, processing stages, errors, request IDs, and summary results when the deployment uses persistent application storage. Feedback is stored separately and may include the technical context attached to the report. A contact email address is required so the Centre for Analytics team can follow up about the submission. Feedback, the contact email address, and attached technical context are retained for 30 days from submission and then automatically deleted. Do not place participant identifiers, raw measurements, or other sensitive content in filenames or feedback text.
+      <TermSection title="Technical context and feedback">
+        Feedback may include non-raw technical information such as filenames, file sizes, selected settings, processing stages, errors, request IDs, and summary results. A contact email address is required so the Centre for Analytics team can follow up. Feedback, the email address, and attached technical context are retained for 30 days from submission and then automatically deleted. Do not include participant identifiers, raw measurements, or other sensitive information in filenames or feedback text.
       </TermSection>
 
       <TermSection title="Recommended settings and scientific responsibility">
-        Values labelled “recommended” are configurable starting points, not mandatory standards for every device, population, protocol, or research question. The tool records the resolved settings and processing provenance, but users are responsible for prespecifying or justifying their choices, reviewing QC findings, and reporting exclusions and sensitivity analyses accurately.
+        Values labelled “recommended” are configurable starting points, not mandatory standards for every device, population, protocol, or research question. Users are responsible for prespecifying or justifying their choices, reviewing quality-control findings, and reporting exclusions and sensitivity analyses accurately.
       </TermSection>
 
       <TermSection title="Availability, outputs, and third-party software">
-        The service is provided on an as-available basis. Processing may be interrupted by upload limits, platform maintenance, capacity, networking, unsupported files, or dependency behaviour. Review outputs and diagnostics before relying on them. The application uses open-source packages, including pyActigraphy and format-specific readers, under their respective licences and citation requirements.
+        The service is provided on an as-available basis. Processing may be interrupted by upload limits, maintenance, capacity, networking, unsupported files, or dependency behaviour. Review outputs and diagnostics before relying on them. The application uses open-source packages, including pyActigraphy and format-specific readers, under their respective licences and citation requirements.
       </TermSection>
 
       <TermSection title="Acceptable use">

@@ -48,7 +48,7 @@
     },
     "termsOfUse": {
       "enabled": true,
-      "description": "OBI hosting, CFA grant support, transient raw-file processing, privacy, acceptable-use, and scientific-responsibility terms."
+      "description": "OBI hosting, Centre for Analytics support, transient raw-file processing, privacy, acceptable-use, and scientific-responsibility terms."
     }
   },
   "workflow": [

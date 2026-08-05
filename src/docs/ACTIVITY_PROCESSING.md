@@ -1,69 +1,69 @@
-# Activity processing and mapping
+# Choosing an activity measure
 
-Activity mapping is configured on **page 3: Estimating Activity Metric / Magnitude of Acceleration**. The selected epoch-level series is used for activity preview and becomes the basis supplied to pyActigraphy rest–activity metrics.
+The activity measure is selected on **Step 3: Estimating Activity Metric**. It becomes the epoch-level signal used by the selected rest-activity analyses.
 
-## pyActigraphy basis
+## Recommended choice
 
-The application uses pyActigraphy for native readers and downstream actigraphy calculations. Raw tri-axial files require a one-dimensional epoch series first; the web backend performs that bounded-memory preprocessing and then attaches the resolved signal and units to the pyActigraphy-compatible raw object.
+Use **Recommended source / processed acc** unless the study protocol requires a specific measure.
 
-- Documentation: https://ghammad.github.io/pyActigraphy/
-- Source: https://github.com/ghammad/pyActigraphy
-- Package paper: https://doi.org/10.1371/journal.pcbi.1009514
+- Files that already contain device activity or counts use that source series.
+- Supported raw `.bin`, `.cwa`, and `.gt3x` files use an epoch-level processed acceleration series.
 
-## Six activity-basis options
+This setting provides a consistent default while preserving the original count scale when a file is already count-based.
 
-| Option | Processing behaviour | Units |
+## Available measures
+
+| Measure | What it represents | Typical units |
 |---|---|---|
-| Recommended source / processed `acc` | Uses the file's source/device activity when available; raw `.bin`, `.cwa`, and `.gt3x` use epoch-level processed acceleration. | Source-dependent or mg |
-| Processed acceleration (`acc`) | Uses an Oxford `acc` column when supplied, or filtered vector magnitude minus 1 g, negative values truncated, and averaged by epoch. | mg |
-| MAD | Mean absolute deviation of vector magnitude within each epoch. | mg |
-| ENMO | Mean positive Euclidean Norm Minus One within each epoch. | mg |
-| PIM | Integral of absolute dynamic vector magnitude across each epoch. | mg·s/epoch |
-| ZCM | Count of dead-band sign changes in dynamic vector magnitude across each epoch. | crossings/epoch |
+| Recommended source / processed acc | Source activity when supplied; otherwise processed epoch-level acceleration | Source-dependent or mg |
+| Processed acceleration (acc) | Gravity-adjusted acceleration summarized by epoch | mg |
+| ENMO | Positive Euclidean Norm Minus One summarized by epoch | mg |
+| MAD | Mean amplitude deviation of vector magnitude within an epoch | mg |
+| PIM | Integrated dynamic movement intensity within an epoch | mg·s/epoch |
+| ZCM | Frequency of dead-band zero crossings within an epoch | crossings/epoch |
 
-The backend records both the requested and resolved mapping, activity column or raw-sample engine, units, epoch duration, and mapping-specific parameters.
+## How to choose
 
-## Raw accelerometer preprocessing
+Choose a specific measure when:
 
-For supported raw `.bin` and `.gt3x` inputs, the memory-safe path performs the following steps without materializing the full recording:
+- it is required by the study protocol;
+- you need comparability with a previous analysis;
+- a validated threshold or interpretation is tied to that signal;
+- the selected file already contains the desired epoch-level column.
 
-1. decode and calibrate X/Y/Z samples;
-2. calculate vector magnitude;
-3. apply a fourth-order 20 Hz low-pass filter when the sample rate permits for processed `acc`, PIM, and ZCM;
-4. calculate the selected signal:
-   - processed `acc`: `max(filtered VM − 1 g, 0)`;
-   - ENMO: `max(VM − 1 g, 0)`;
-   - MAD: mean absolute deviation of VM;
-   - PIM: sum/integral of `abs(filtered VM − 1 g)` over time;
-   - ZCM: sign-change count for `filtered VM − 1 g` outside the configured dead band;
-5. aggregate directly into output epochs;
-6. retain genuine timestamp gaps as missing epochs.
+Do not compare thresholds across counts, mg, mg·s/epoch, and crossings/epoch as though they were the same scale.
 
-PIM and ZCM preserve accumulator state across contiguous chunks. ZCM resets sign continuity across gaps so missing recording periods do not create artificial crossings. The default ZCM dead band is 4 mg and can be changed with `ACTIVITY_ZCM_THRESHOLD_MG`.
+## Raw accelerometer files
 
-## Format-specific behaviour
+Raw X/Y/Z acceleration must be reduced to one scalar epoch-level series before pyActigraphy metrics can be calculated. Depending on the selected measure, the application calibrates the axes, calculates vector magnitude, applies the relevant signal processing, summarizes by epoch, and preserves genuine recording gaps as missing.
 
-- **GT3X:** `log.bin` activity events are decoded in bounded chunks. Calibrated axes are reduced immediately to the selected activity basis. Compatible 30 Hz source-count processing remains available through the source/original mapping.
-- **GENEActiv BIN:** pages are decoded directly, with light and temperature summarized alongside the activity series. Activity aggregation is streamed by epoch.
-- **Axivity CWA:** processing uses the supported Oxford accelerometer conversion path, whose standard server output is epoch-level `acc`. ENMO, MAD, PIM, or ZCM can be selected only when the uploaded converted time-series explicitly contains that column.
-- **Oxford `timeSeries.csv(.gz)`:** existing `acc`, ENMO, MAD, PIM, or ZCM columns are used directly when selected.
-- **Actiwatch ATR:** explicit PIM and ZCM requests are passed to pyActigraphy's native ATR reader mode.
-- **Generic mapped tabular input:** the mapped activity column is used as supplied and labelled with the requested basis; no raw XYZ reconstruction is performed.
+The exact resolved measure, units, epoch duration, and processing details are included with the results.
 
-## Missingness, masks, and valid days
+## Existing time-series columns
 
-After the scalar series is built, every file follows the common preprocessing sequence:
+For Oxford time-series and mapped tabular files, an existing acc, ENMO, MAD, PIM, ZCM, or activity column can be used directly. Confirm that the column units and epoch duration are correct before analysis.
 
-1. regularize timestamps at the detected epoch duration;
-2. preserve absent/non-finite epochs as missing;
-3. apply per-file start/stop limits;
-4. combine mapped/reader non-wear and manual/uploaded masks;
-5. calculate recorded, gap, non-wear, masked, and analyzable hours by calendar day;
-6. exclude days below the configured valid-day threshold;
-7. apply the same availability state to sleep-window coverage and downstream metrics.
+Mapping a generic activity column labels and uses that column as supplied. It does not reconstruct raw X/Y/Z processing.
 
-Recorded zeros remain data. Missing, masked, and non-wear epochs remain unavailable.
+## Missingness and masks
 
-## Thresholds and binarization
+After the activity series is created:
 
-Counts, mg, mg·s/epoch, and crossings/epoch are different scales. Binarization thresholds therefore remain explicit configuration values and are stored with the result. Continuous analysis is available for RA, IS, IV, M10, L5, and related measures; binarization can be enabled when the selected method requires it.
+1. timestamps are regularized at the detected epoch duration;
+2. missing values remain missing;
+3. start/stop limits are applied;
+4. non-wear and masks are applied;
+5. quality-window and sleep-window coverage are calculated;
+6. eligible metrics are run.
+
+Recorded zeros remain data. Missing, masked, and non-wear epochs do not become zero activity.
+
+## Binarization and thresholds
+
+Some analyses can use continuous activity, while others may use a thresholded active/rest series. Keep thresholds tied to the selected signal and units. The chosen binarization setting and threshold are included in the exported analysis configuration.
+
+## pyActigraphy references
+
+- [pyActigraphy documentation](https://ghammad.github.io/pyActigraphy/)
+- [pyActigraphy source code](https://github.com/ghammad/pyActigraphy)
+- [pyActigraphy package paper](https://doi.org/10.1371/journal.pcbi.1009514)

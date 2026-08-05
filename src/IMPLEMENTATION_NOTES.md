@@ -2,9 +2,9 @@
 
 This file previously described an early converter-only build and is retained to prevent old repository links from becoming misleading. The current architecture and deployment guidance are maintained in:
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [internal_docs/ARCHITECTURE.md](internal_docs/ARCHITECTURE.md)
 - [docs/FILE_FORMATS.md](docs/FILE_FORMATS.md)
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- [internal_docs/DEPLOYMENT.md](internal_docs/DEPLOYMENT.md)
 - [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Current status

@@ -177,6 +177,7 @@ export default function FeedbackAdminPanel() {
             <SummaryCard label="Matching reports" value={metadata.matching_count || 0} />
             <SummaryCard label="Feedback file size" value={formatBytes(metadata.file_size_bytes)} />
             <SummaryCard label="Persistent storage" value={metadata.storage_persistent ? "Configured" : "Temporary / local"} />
+            <SummaryCard label="Retention" value={`${metadata.retention_days || 30} days`} />
             <SummaryCard label="Storage path" value={metadata.storage_path || "Unknown"} compact />
           </section>
         )}

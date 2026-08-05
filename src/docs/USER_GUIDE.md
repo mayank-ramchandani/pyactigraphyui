@@ -1,175 +1,162 @@
 # User guide
 
-The current interface uses a ten-page workflow. After at least one actigraphy file is imported, pages 2–9 are directly clickable in the left workflow. Page 10 remains locked until results are generated.
+This guide follows the ten pages in the application. For a standard first analysis, keep the recommended preprocessing and activity settings, preview every recording, review warnings, and export the configuration with the results.
+
+## Before you begin
+
+- Upload only data that you are authorized to process.
+- Remove names, health-card numbers, dates of birth, and other direct identifiers from filenames and support files.
+- Prepare one or more actigraphy recordings in a supported format.
+- Use the same file extension when uploading multiple files together.
+- Keep sleep diaries, start/stop files, masks, and separate sensor files ready if they are part of the study protocol.
 
 ## 1. Importing Actigraphy Files
 
-Upload one or more **actigraphy recordings only** on this page. Multiple files are supported when they use the same extension.
+Upload one or more actigraphy recordings. Supporting files are added later, beside the setting they affect:
 
-Optional inputs are deliberately moved to the page where they are used:
+- start/stop files and masks: Step 5;
+- sleep diaries: Step 6;
+- separate light or other sensor files: Step 7.
 
-- start/stop and masking files: page 5;
-- sleep diaries: page 6;
-- separate light, temperature, and other sensor files: page 7.
+For CSV or TXT files, the application attempts to detect timestamp, activity, light, temperature, and non-wear columns. Enable manual mapping only when the detected columns are incorrect.
 
-Generic CSV files are inspected automatically. Enable manual column mapping on this page only when timestamp and activity detection is incorrect. The mapping panel can inspect timestamp, separate time, activity, light, temperature, and non-wear columns.
-
-Localized Philips Actiware/RPX CSV exports in English, French, or German are parsed directly, including UTF-8 and Windows-1252 files. Metadata rows before the epoch table are skipped automatically, decimal-comma values are converted safely, and embedded white/RGB light channels are retained.
-
-`PAXHR_H.csv` from NHANES is not one actigraphy recording: it contains hourly summaries for many participants and has no standalone timestamp column. The app now identifies it and explains that one `SEQN` must be selected, `PAXFDAY`/`PAXFTIME` merged from `PAXHD_H`, and a participant-relative time index constructed from `PAXSSNHP` before `PAXMTSH` can be mapped. The public files do not disclose the actual calendar date, so any synthetic anchor date must be documented.
+After upload, confirm that each file appears in the list and that duplicate filenames can be distinguished by their file ID.
 
 ## 2. Pre-processing
 
-Review the recommended data-quality settings and the initial file-coverage QC:
+Review the initial recording-coverage table and the recommended settings:
 
-- **16 analyzable hours** is the recommended threshold for a valid quality window;
-- **calendar-day windows** (midnight to midnight) are the recommended default for day-level summaries;
-- **recording-aligned 24-hour windows** are available as an explicit sensitivity option for partial first/last calendar dates;
-- **2 consecutive valid windows** is the recommended minimum for multi-day rhythm metrics and SRI eligibility;
-- **80% sleep-window coverage** is required for window-dependent sleep summaries;
-- detected or mapped non-wear is respected by default.
+- at least **16 analyzable hours** for a valid quality window;
+- **calendar-day windows** as the recommended default;
+- at least **2 consecutive valid quality windows** for multi-day rhythm metrics and SRI eligibility;
+- at least **80% sleep-window coverage** for sleep summaries;
+- detected or mapped non-wear respected when available.
 
-Enable **Customize recommended data-quality settings** when the study protocol or a planned sensitivity analysis requires different thresholds or window alignment.
+Choose recording-aligned 24-hour windows only when the study is intentionally organized around deployment time or when you are performing a sensitivity analysis for short recordings.
 
-### Minimum sleep-window coverage
+Customize the recommended thresholds only when your protocol or analysis plan specifies different values.
 
-Coverage is the proportion of expected epochs inside a diary-defined or automatically estimated sleep window that remain recorded and scorable after:
+## 3. Estimating Activity Metric
 
-- recording gaps;
-- start/stop truncation;
-- detected non-wear;
-- manually selected masks.
+For most analyses, choose **Recommended source / processed acc**. It uses the file’s existing activity series when available and produces processed epoch-level acceleration for supported raw accelerometer files.
 
-A threshold of `0.8` means at least 80% of expected epochs must remain. A window below the threshold is excluded from TST, WASO, sleep efficiency, and other window-dependent summaries rather than filled or treated as zero activity.
+Other choices are:
 
-## 3. Estimating Activity Metric / Magnitude of Acceleration
+- **Processed acceleration (acc):** gravity-adjusted epoch-level acceleration;
+- **ENMO:** positive Euclidean Norm Minus One;
+- **MAD:** mean amplitude deviation;
+- **PIM:** integrated dynamic movement intensity within each epoch;
+- **ZCM:** movement-frequency measure based on zero crossings.
 
-Choose one of six activity-basis options:
-
-1. **Recommended source / processed `acc`**: source/device activity for files that supply it and epoch-level processed acceleration for raw `.bin`, `.cwa`, and `.gt3x` files. For `.cwa`, the server Oxford conversion currently supplies `acc`; other mappings require matching columns in an uploaded converted time-series.
-2. **Processed acceleration (`acc`)**: an existing Oxford `acc` column or the bounded-memory filtered vector-magnitude pathway.
-3. **ENMO**: epoch mean of positive Euclidean Norm Minus One.
-4. **MAD**: mean absolute deviation of vector magnitude within each epoch.
-5. **PIM**: integral of absolute dynamic vector magnitude within each epoch.
-6. **ZCM**: dead-band zero-crossing count of dynamic vector magnitude within each epoch.
-
-The selected series becomes the basis for pyActigraphy rest/activity metrics. The result and diagnostics retain the requested/resolved mapping, units, epoch duration, and raw-processing details.
+The selected measure becomes the activity basis for the chosen rest-activity metrics. Thresholds must match the selected units.
 
 ## 4. Activity Preview
 
-Preview is optional but recommended. It is required for later plot-based interval selection.
-
-Check:
+Preview each recording before analysis. Check:
 
 - recording start and stop dates;
-- clock or timezone shifts;
-- long gaps;
-- constant or all-zero periods;
+- expected recording duration;
+- long gaps or missing periods;
+- constant or all-zero sections;
 - implausible spikes;
-- whether the selected file name matches the intended recording.
+- clock or timezone shifts;
+- whether the selected file and activity measure are correct.
 
-Large raw recordings use background preview jobs so decoding can continue beyond ordinary request timeouts.
+The preview is also needed for plot-based interval selection in later steps.
 
 ## 5. Cleaning and Masking
 
-This page contains two related sections.
+### Recording start and stop
 
-### Recording Start / Stop
+Use start/stop intervals to define the effective recording period for each file. Intervals can be uploaded or selected from the activity plot. Full timestamps are supported, including intervals that cross midnight.
 
-Upload start/stop files or create per-file intervals using timestamp fields and the activity plot. These intervals define the effective recording period before masks and sleep windows are applied.
+### Masks and non-wear
 
-Full timestamps are used. An interval beginning at 23:00 and ending at 02:00 on the next calendar date crosses midnight correctly.
+Use masks to exclude known invalid or non-wear periods. Confirm that each interval is assigned to the correct file ID.
 
-### Masking and Non-wear
-
-Upload exclusion files, respect detected non-wear, or create per-file masks using the activity plot. File IDs are retained so one recording’s interval is not applied to another.
-
-Missing, non-wear, and masked epochs remain unavailable. They are never converted to zero activity.
+Missing, masked, and non-wear epochs remain unavailable. They are not converted to zero activity.
 
 ## 6. Sleep-wake Classification
 
-### Sleep diary and custom windows
+Upload a sleep diary or create file-specific bedtime and wake-time windows when available.
 
-Upload diary windows or create per-file bedtime/wake-time intervals using timestamps and the activity plot. Diary windows may represent night sleep, naps, time in bed, lights-off/rise time, or other supported states.
+Choose the sleep/rest classification method required by the protocol. When no diary window is available, Crespo_AoT or Roenneberg_AoT can estimate a main rest window. The application does not create a lowest-activity fallback window if the selected method finds no usable interval.
 
-### Sleep/rest algorithms
+A sleep result may be unavailable when:
 
-Choose the classification algorithm on this page. Available algorithms and their parameters are defined in `config/algorithmRegistry.json`.
-
-When no diary window is available, the app can use pyActigraphy `Crespo_AoT` or `Roenneberg_AoT` to estimate the main rest window. No lowest-activity fallback window is inserted. If the selected method returns no usable window, window-dependent sleep metrics are reported as unavailable.
+- no sleep window was supplied or detected;
+- the classification method could not score the signal;
+- the window did not meet the configured coverage threshold.
 
 ## 7. Other Sensors
 
 ### Light
 
-Use light embedded in the selected actigraphy file or upload a separate light file. The page supports:
+Use light embedded in a supported actigraphy file or upload a separate light file. Review the available channels and preview the signal before selecting light metrics.
 
-- light-channel inspection;
-- light preview;
-- multichannel/RGB preview where available;
-- light-metric selection and settings.
-
-Selected light metrics run when page 9 generates the main results. A file with no usable light still proceeds through activity analysis; light outputs are skipped with a diagnostic message.
+A file with no usable light still proceeds through activity analysis. Only the light outputs are skipped.
 
 ### Temperature and additional sensors
 
-Temperature and other sensor files can be attached for future workflow development. Their filenames and basic file metadata are retained in the exported analysis configuration, but the current version does **not** calculate temperature or generic sensor metrics and labels these uploads as future analysis.
+Temperature and other sensor files can be attached for record-keeping, but the current version does not calculate temperature or generic sensor metrics. These files are labelled as not yet analysed.
 
 ## 8. Analysis Set-up
 
-Choose family-level or metric-level processing in either Standard or Custom mode, then configure shared or metric-specific parameters. Core families expand to their registered pyActigraphy metrics, and the Cosinor family runs a fixed 24-hour `pyActigraphy.analysis.Cosinor` model. This page only configures the analysis; it does not run it.
+Use **Standard mode** for common analysis groups and recommended starting parameters. Use **Custom mode** when individual metrics or protocol-specific settings are required.
 
-For processed `acc`, ENMO, MAD, PIM, or ZCM, choose continuous or binarized processing explicitly. Threshold values remain tied to the selected signal and units and are retained in the analysis configuration.
+Available families include:
 
-Use **Next** or click **Generate Results** in the left workflow to continue to page 9.
+- amplitude;
+- rhythm;
+- sleep;
+- fragmentation;
+- Cosinor.
+
+Step 8 configures the analysis. It does not run it.
 
 ## 9. Generate Results
 
-This page contains the only **Generate Results** action. Select the uploaded files to analyse, then run the pipeline.
+Select the files to analyse and choose **Generate Results**.
 
-The page displays:
+Review:
 
-- upload and background-job progress;
 - file-level status;
 - summary values and plots;
-- multi-file tables;
 - daily recording-quality information;
-- total valid days and longest consecutive valid-day run;
-- sleep-window coverage and exclusion decisions;
-- QC warnings;
-- requested and resolved activity mapping;
-- structured diagnostics;
+- total valid windows and longest consecutive valid-window run;
+- sleep-window coverage and exclusions;
+- warnings and unavailable metrics;
+- requested and resolved activity measure;
 - light results when supported.
 
-Results remain on page 9 for review. Successful generation unlocks page 10.
+A warning means processing continued but something requires review. A failed status means the affected stage could not produce a usable result. Other successful outputs may still be available.
 
 ## 10. Export Outputs
 
-Download configured outputs such as result summaries, CSV-compatible tables, JSON analysis configuration, QC information, and diagnostic reports. Exports should retain:
+Download the outputs needed for analysis and reporting. Keep the exported configuration and quality-control information with the result tables.
 
-- source filename/file ID;
-- requested and resolved activity mapping;
-- units and epoch duration;
-- selected sleep/rest algorithm;
-- metric and algorithm parameters;
+Exports can include:
+
+- result summaries and CSV-ready tables;
+- plots;
+- selected files and file IDs;
+- activity measure, units, and epoch duration;
 - preprocessing thresholds and intervals;
-- result values and warnings;
-- application/build version.
+- sleep/rest algorithms and parameters;
+- warnings and unavailable-result explanations;
+- application version and reproducibility information.
 
-## Reproducible processing check
+## Final review checklist
 
-1. Confirm the detected reader, timestamp range, epoch duration, and resolved activity mapping in the preview.
-2. Review daily gaps, non-wear, masks, valid-day decisions, and sleep-window coverage.
-3. Confirm that selected files, family/metric settings, and algorithm parameters appear in the analysis configuration.
-4. Retain result tables, QC warnings, structured diagnostics, application version, and Git commit with each batch.
-5. Use the same stored configuration when processing additional files in the same analysis.
+Before using the results:
 
+1. Confirm the correct files and recording dates were analysed.
+2. Review gaps, non-wear, masks, and valid-window decisions.
+3. Review sleep-window coverage and any excluded windows.
+4. Confirm that the activity measure and thresholds match the study plan.
+5. Review every warning, failed stage, and unavailable metric.
+6. Save the result tables, configuration, quality-control outputs, and version information together.
 
-## Reviewing submitted feedback (administrators)
+## Getting help
 
-Configure `FEEDBACK_ADMIN_TOKEN` and open `/?feedback-admin=1` on the deployed frontend. The protected review screen supports full-text search, category filtering, complete report inspection, and CSV/JSONL download. Feedback remains stored in `${APP_DATA_DIR}/feedback.jsonl`; a contact email is required, and submissions are automatically deleted 30 days after submission. Use persistent mounted storage in deployment.
-
-
-## Terms of use
-
-The persistent **Terms of Use** button and the Documentation section explain OBI hosting, Centre for Analytics support, transient raw-file processing, technical metadata/feedback retention, de-identification expectations, acceptable use, and the research/educational nature of the tool. See [TERMS_OF_USE.md](TERMS_OF_USE.md).
+Use the feedback form when a problem cannot be resolved from the troubleshooting guide. Include the workflow step, affected filename, file format, selected activity measure, request ID, and exact visible message. Do not include participant identifiers or raw measurements in the feedback text.

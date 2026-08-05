@@ -1,8 +1,8 @@
 # Terms of use
 
-## Hosting and funding
+## Hosting and support
 
-This web tool is hosted by the **Ontario Brain Institute (OBI)**, with development supported through the **Centre for Analytics**. Use of the service is subject to applicable OBI, institutional, research-ethics, privacy, data-governance, and legal requirements.
+This web tool is hosted by the **Ontario Brain Institute (OBI)**, with development supported through the **Centre for Analytics**. Use of the service is subject to applicable institutional, research-ethics, privacy, data-governance, and legal requirements.
 
 ## Research and educational purpose
 
@@ -10,25 +10,25 @@ The application supports actigraphy preprocessing, quality control, analysis, vi
 
 ## Authority to upload and de-identification
 
-Upload only data that you are authorized to process. Remove direct identifiers from recordings, filenames, diaries, support files, feedback, and exported configurations. Do not upload identifiable clinical records unless an approved governance process explicitly permits their use in this service.
+Upload only data that you are authorized to process. Remove direct identifiers from recordings, filenames, diaries, support files, feedback, and exported configurations before upload.
 
-## Transient raw-file processing
+## Temporary processing
 
-Raw uploaded recordings and support files are copied into a temporary processing/job area only to perform the requested operation. Those input files are deleted before the request or background job is reported as completed or failed.
+Uploaded recording and support files are used temporarily to complete the requested preview or analysis and are deleted after processing. Processing status and result data are also temporary. Download any outputs that need to be retained.
 
-Job status and result JSON are also transient and become eligible for cleanup after the configured job-retention period. The current code default is six hours (`ANALYSIS_JOB_TTL_SECONDS=21600`), although the deployed service may configure a different period. Browser state is temporary unless the user downloads an export or an optional authenticated run-history feature is enabled.
+## Technical context and feedback
 
-## Diagnostics and feedback metadata
+Feedback may include non-raw technical information such as filenames, file sizes, selected settings, processing stages, errors, request IDs, and summary results. A contact email address is required so the Centre for Analytics team can follow up.
 
-Operational diagnostics may retain non-raw technical metadata such as filenames, sizes, selected settings, reader type, processing stages, errors, request IDs, and summary results when persistent application storage is configured. Feedback is stored separately and may include the technical context attached to a report. A contact email address is required so the Centre for Analytics team can follow up about the submission. Feedback, the contact email address, and attached technical context are retained for **30 days from submission** and then automatically deleted. Do not place participant identifiers, raw measurements, or other sensitive content in filenames or feedback text.
+Feedback, the contact email address, and attached technical context are retained for **30 days from submission** and then automatically deleted. Do not include participant identifiers, raw measurements, or other sensitive information in filenames or feedback text.
 
 ## Recommended settings and scientific responsibility
 
-Values labelled **recommended** are configurable starting points, not mandatory standards for every device, population, protocol, or research question. The application records the resolved settings and processing provenance. Users remain responsible for prespecifying or justifying their choices, reviewing QC findings, and accurately reporting exclusions and sensitivity analyses.
+Values labelled **recommended** are configurable starting points, not mandatory standards for every device, population, protocol, or research question. Users remain responsible for justifying their choices, reviewing quality-control findings, and reporting exclusions and sensitivity analyses accurately.
 
 ## Availability and outputs
 
-The service is provided on an as-available basis. Processing may be interrupted by upload limits, platform maintenance, capacity, networking, unsupported files, or dependency behaviour. Users should review outputs and diagnostics before relying on them.
+The service is provided on an as-available basis. Processing may be interrupted by upload limits, maintenance, capacity, networking, unsupported files, or dependency behaviour. Review outputs and quality-control messages before relying on them.
 
 ## Third-party software
 

@@ -1,233 +1,88 @@
-# Diagnostics and troubleshooting
+# Troubleshooting
 
-## Where diagnostics appear
-
-Page 9 generates and displays results, daily recording quality, sleep-window coverage decisions, warnings, and per-stage diagnostics. Page 10 exports configured result and diagnostic outputs after a successful run. Preprocessing thresholds are changed on page 2; start/stop and masks on page 5; sleep windows and algorithms on page 6.
-
-## Structured diagnostic report
-
-Each backend-generated analysis response includes a per-file `diagnostics` object. The Results page can display and download the report.
-
-Captured information includes:
-
-- request ID and endpoint;
-- filename, extension, content type, size, and optional SHA-256;
-- reader and raw-object class;
-- recording dates, epochs, gaps, duplicates, missingness, zero fraction, and channels;
-- requested and resolved activity mapping;
-- stage runtime, memory, and temporary-disk information;
-- suppressed exceptions and tracebacks;
-- converter command, return code, and stdout/stderr tails;
-- QC warnings and cleanup results.
-- `dataQuality` settings and per-day recorded, gap, non-wear, mask, and analyzable hours.
+Results, quality-control messages, and per-stage statuses appear on **Step 9: Generate Results**. Use this guide to decide what to review or retry.
 
 ## Status meanings
 
-| Status | Meaning |
-|---|---|
-| `passed` | Stage completed normally. |
-| `warning` | Processing continued but returned no usable value/window or recovered from an issue. |
-| `failed` | Stage raised an exception or produced an invalid result. |
-| `skipped` | A prerequisite or supported method was unavailable. |
-| `completed_with_warnings` | Results were returned, but at least one stage requires review. |
+| Status | Meaning | User action |
+|---|---|---|
+| Passed | The stage completed normally | No action is required |
+| Warning | Processing continued, but a value or quality issue needs review | Read the message and confirm whether the output is suitable |
+| Failed | The stage could not produce a usable result | Review the file, selected settings, and exact error |
+| Skipped | A required signal, window, or supported method was unavailable | Confirm that the necessary data and settings were supplied |
+| Completed with warnings | Results were returned, but one or more issues require review | Do not ignore the warnings when interpreting or reporting results |
 
-Quality control is non-fatal. A QC implementation error should be captured without discarding successful metric calculations.
+## First checks after a problem
 
-## Live progress
+1. Confirm that the correct file and activity measure were selected.
+2. Review the activity preview for gaps, zeros, date problems, or an unexpectedly short recording.
+3. Review daily quality, valid-window counts, and the longest consecutive run.
+4. Review sleep-window coverage when a sleep metric is missing.
+5. Retry once with one file and only the essential metrics.
+6. Record the request ID and exact message if the problem repeats.
 
-The frontend supplies a request ID and polls:
+## Common messages
 
-```text
-GET /api/progress/{request_id}
-```
+### File too large or HTTP 413
 
-Progress can include:
+The upload was rejected before processing began. Try a smaller file when possible. When contacting the service team, include the file format, file size, workflow step, and exact message.
 
-- browser upload bytes;
-- current backend stage and human-readable detail;
-- current stage number and total;
-- overall and current-file percentage;
-- GENEActiv pages and samples decoded.
-- GT3X events read, raw samples reduced, and `log.bin` completion percentage.
+### HTTP 500, 503, or 504
 
-The percentage represents pipeline completion, not estimated time remaining. A long raw-decoding stage can dominate elapsed time.
+The service encountered an error, timeout, or temporary interruption. Retry once, preferably with one file. If the error repeats, submit feedback with the request ID, filename, file size, selected activity measure, and exact message.
 
-Large activity preview, light preview, and analysis requests first return a job
-ID and then poll:
+### Background job not found
 
-```text
-GET /api/jobs/{job_id}
-```
+The saved preview or analysis job is no longer available. Start the operation again and keep the page open during processing. Avoid refreshing, closing the tab, or starting several large jobs at once.
 
-Job states are `queued`, `running`, `completed`, or `failed`. Completed endpoint
-results are stored under the job record so a 240-second ingress timeout cannot
-discard a successful long-running analysis.
+### No light data
 
-Progress records are stored under:
+No usable light channel was found. This does not prevent activity analysis. Upload a separate light file only when light outcomes are required.
 
-```text
-${APP_DATA_DIR:-/tmp/actigraphy-ui-data}/progress/
-```
+### CSV encoding or column-detection problem
 
-In a multi-replica deployment, use shared storage, one replica, or sticky routing so the polling request can locate the same progress record.
+For older or localized CSV files, confirm that the current application version is being used. Enable manual CSV mapping and select the correct timestamp, activity, light, temperature, and non-wear columns.
 
-Job records and results are stored under:
+### NHANES PAXHR_H has no timestamp
 
-```text
-${APP_DATA_DIR:-/tmp/actigraphy-ui-data}/jobs/
-```
+PAXHR_H contains hourly summaries for many participants. Prepare one participant at a time and construct a documented participant-relative time index before mapping PAXMTSH as activity.
 
-### Background job was not found
+### Metric is unavailable or null
 
-The upload and polling requests reached different backend state. Common causes
-are multiple replicas with replica-local storage, multiple active revisions,
-scale-to-zero/restart, or `APP_DATA_DIR` pointing at a directory that is not an
-actual mounted share. Use single revision mode, minimum and maximum replicas of
-one for the local executor, and `APP_DATA_DIR=/data/actigraphy-ui` backed by an
-Azure Files mount. Session affinity can reduce cross-replica routing but does
-not preserve jobs if a replica is replaced.
+Review whether the metric requires:
 
-The status endpoint now retries transient missing-job responses in the bundled
-frontend and reports the accepting and polling replica/revision when state is
-still unavailable after the grace period.
+- more valid data;
+- a longer consecutive valid-window run;
+- a sleep window;
+- higher sleep-window coverage;
+- a supported activity signal;
+- a compatible threshold or parameter.
 
-## Common failures
-
-### HTTP 413
-
-The upload was rejected before FastAPI processed it. Check every proxy/ingress layer, not only application code:
-
-- Nginx `client_max_body_size`;
-- Azure ingress limits;
-- upstream gateway limits;
-- frontend host/proxy limits.
-
-### Plain-text HTTP 500
-
-Ordinary Python exceptions should be converted to JSON. A plain `Internal Server Error` after that safeguard may indicate:
-
-- worker/container termination;
-- memory pressure;
-- process restart;
-- reverse-proxy failure;
-- an exception before the application handler is reached.
-
-Inspect Azure/container logs using the request time and filename.
-
-### Exit code 137 or abrupt restart
-
-Commonly associated with an operating-system or container memory kill. Python cannot return a structured traceback after the process is terminated.
-
-For GT3X, confirm that diagnostics report
-`pygt3x_low_level_streaming_epoch_aggregation`. If they report a whole-file
-`to_pandas` path, the deployed backend is not this memory-safe revision.
-
-### HTML returned instead of JSON
-
-Usually an Nginx, ingress, hosting, timeout, or platform error page. Capture HTTP status, content type, and the first portion of the response body.
-
-### HTTP 504 with `stream timeout`
-
-Azure Container Apps HTTP ingress ends a request after 240 seconds. Confirm the
-deployed `/api/version` response includes
-`background_preview_analysis_jobs: true`, and confirm the frontend calls the
-`/api/jobs/...` endpoints. A 504 on the job-start request means the upload itself
-did not finish within the ingress window; use a faster connection or direct
-resumable Blob upload for that case.
-
-For light preview, also confirm `/api/version` includes
-`background_light_preview_jobs: true` and the frontend calls
-`/api/jobs/light/preview`. The synchronous `/api/light/preview` compatibility
-route can still exceed the ingress deadline for a large supported raw file.
-Selected light metrics should call `/api/jobs/light/analyze`, which uploads and
-loads the recording once for the complete metric selection.
-
-### GT3X reports no embedded light measurements
-
-This is a successful content inspection, not an activity-reader failure. The
-light-only reader scanned the complete `log.bin` and found no checksum-valid,
-plausible type-`0x05` lux records. Light preview and metrics are skipped;
-activity preview and analysis remain available.
-
-When light is expected, inspect the response's `light_detection.gt3x` fields:
-
-- `lux_records` should be greater than zero;
-- `events_read` confirms the log was scanned;
-- `record_type` should be `0x05`;
-- `serial_number` and `device` should match the intended recording.
-
-If the archive contains `lux.bin` instead of `log.bin`, it uses the legacy GT3X
-layout and requires a compatible legacy converter.
-
-
-### CSV reports `utf-8` decode errors
-
-Older Actiware exports may be encoded as Windows-1252 and can contain byte
-`0xA0` for a non-breaking space. The current loader detects UTF-8/UTF-8 BOM,
-Windows-1252, UTF-16, and Latin-1-compatible text before parsing. If this error
-persists after deployment, confirm the backend revision includes the localized
-CSV reader and that the request reached the updated container.
-
-### Actiware CSV reports `data_offset` referenced before assignment
-
-French and German Actiware/RPX exports do not always match the fixed English
-metadata layout expected by the native pyActigraphy RPX reader. The application
-now detects the localized epoch-table header and parses it directly, so CSV RPX
-files no longer use that `data_offset` code path. Native `.rpx` files still use
-the installed pyActigraphy reader.
-
-### `PAXHR_H.csv` is rejected or has no timestamp
-
-This is a cohort-level NHANES hour-summary dataset, not a single recording.
-Filter to one `SEQN`, merge `PAXFDAY` and `PAXFTIME` from `PAXHD_H`,
-and use the 80 Hz starting sample number `PAXSSNHP` to build a
-participant-relative hourly time index. The public files do not disclose the
-actual calendar date, so use and document a synthetic anchor date consistent
-with the reported day of week. Map `PAXMTSH` as activity and do not analyse all
-participants as one time series. The column-inspection endpoint returns this
-guidance directly.
-
-### Generic CSV column detection is incorrect
-
-Enable **Manually map CSV columns** on page 1. The frontend calls
-`POST /api/tabular/columns`, displays the detected encoding and suggested
-columns, and lets the user select timestamp, optional separate time, activity,
-light, temperature, and non-wear fields.
-
-### Metric returns `null`
-
-Review the metric stage and suppressed exceptions. The metric can be unsupported for the raw-object type, require more days, require sleep windows, or have returned a value that could not be converted to the expected result shape.
-
-Also inspect `dataQuality`: multi-day rhythm/SRI metrics are unavailable below
-the configured minimum consecutive-valid-day run, and TST/WASO/sleep efficiency are
-unavailable when no sleep window meets the coverage threshold.
+The unavailable-result message should identify the main reason.
 
 ### RA equals 1
 
-Review `ra_components`. A zero L5 with positive M10 produces RA = 1. Compare continuous and binarized results and verify the threshold scale.
+RA equals 1 when L5 is zero and M10 is positive. Review M10 and L5, their timing, the activity measure and units, thresholding, gaps, non-wear, and masks before interpreting the value.
 
-### Crespo/Roenneberg detects no windows
+### Crespo_AoT or Roenneberg_AoT finds no window
 
-Review gaps, wear, duration, activity basis, units, resampling, thresholds, and detected onset/offset arrays. A no-window result is not proof that no sleep occurred.
+The selected method did not find a usable main rest interval. Review recording duration, gaps, wear time, the activity measure, and the detected onset/offset information. A no-window result does not prove that no sleep occurred. Use a diary-defined window when one is available.
 
-## Persistent logs
+### Sleep metrics are excluded for low coverage
 
-Completed reports are appended to:
+The sleep interval did not retain enough scorable epochs after gaps, non-wear, start/stop limits, and masks. Review the sleep-window quality table. Change the threshold only when justified by the protocol or a planned sensitivity analysis.
 
-```text
-${APP_DATA_DIR:-/tmp/actigraphy-ui-data}/diagnostics.jsonl
-```
+## Submitting useful feedback
 
-Relevant environment variables include:
+Include:
 
-```text
-DIAGNOSTIC_LOG_MAX_MB=50
-DIAGNOSTIC_SHA256_MAX_MB=512
-DIAGNOSTIC_TRACEBACK_CHARS=12000
-DIAGNOSTIC_SUPPRESSED_ERROR_LIMIT=30
-GENEACTIV_DIAGNOSTIC_PAGE_INTERVAL=5000
-GT3X_PROGRESS_EVENT_INTERVAL=100000
-ANALYSIS_PROGRESS_TTL_SECONDS=21600
-ANALYSIS_JOB_MAX_WORKERS=1
-ANALYSIS_JOB_TTL_SECONDS=21600
-```
+- workflow step;
+- affected filename and format;
+- file size;
+- selected activity measure;
+- selected sleep algorithm or metric, when relevant;
+- request ID;
+- exact visible message;
+- whether the problem repeats with one file.
+
+Do not include participant identifiers, raw measurements, or other sensitive information in the feedback text. A contact email is required so the team can follow up. Feedback and attached technical context are retained for 30 days.
