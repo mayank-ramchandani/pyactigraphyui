@@ -1,112 +1,90 @@
 # Metrics and algorithms
 
-The current workflow separates sleep-wake classification from metric selection:
+Sleep-window and classification choices are made on **Step 6**. Analysis families and individual metrics are selected on **Step 8**. Results are generated on **Step 9**.
 
-- **page 6** selects sleep diaries/custom windows, automatic window estimation, and the sleep/rest algorithm;
-- **page 8** selects analysis families or individual metrics and their parameters;
-- **page 9** runs the analysis and displays results.
+## Analysis families
 
-The machine-readable registries are:
+| Family | Included outputs | What it describes |
+|---|---|---|
+| Amplitude | RA and period-specific RA | Difference between the most and least active parts of the day |
+| Rhythm | IS, IV, and related mean/period-specific forms | Day-to-day stability and within-day fragmentation |
+| Sleep | SRI, TST, WASO, sleep efficiency | Sleep timing, duration, continuity, and regularity |
+| Fragmentation | kRA and kAR | Transitions between rest and activity states |
+| Cosinor | Mesor, amplitude, acrophase, fit statistics | A fitted 24-hour rhythmic pattern |
 
-- `config/metricRegistry.json`
-- `config/algorithmRegistry.json`
-- `config/analysisFamilyRegistry.json`
-- `config/sharedParamRegistry.json`
+Additional advanced families may appear in the interface. Review their availability and output status before using them.
 
 ## Rest-activity metrics
 
 | Metric | Meaning |
 |---|---|
-| RA | Relative amplitude derived from M10 and L5 of the cyclic average daily profile. |
-| IS | Interdaily stability, describing consistency of the 24-hour pattern across days. |
-| IV | Intradaily variability, describing fragmentation or transitions within the day. |
-| ISm / IVm | Mean forms returned by the corresponding pyActigraphy methods. |
-| ISp / IVp / RAp | Period-specific outputs that may be vectors rather than scalars. |
+| RA | Relative amplitude between the most active 10 hours (M10) and least active 5 hours (L5) of the average day |
+| IS | Interdaily stability: repeatability of the 24-hour activity pattern across days |
+| IV | Intradaily variability: fragmentation or transitions within the day |
+| ISm / IVm | Mean forms calculated across multiple resampling frequencies |
+| ISp / IVp / RAp | Period-specific values that may contain multiple outputs |
 
 ### Relative amplitude
 
-```text
-RA = (M10 - L5) / (M10 + L5)
-```
+`RA = (M10 - L5) / (M10 + L5)`
 
-RA can equal 1 when L5 is zero and M10 is positive. Review M10/L5 values and start times, activity mapping, units, binarization, thresholds, gaps, non-wear, and masks before interpretation.
+RA can equal 1 when L5 is zero and M10 is positive. Before interpreting an extreme value, review M10 and L5, their start times, the activity measure and units, binarization, thresholds, gaps, non-wear, and masks.
 
 ## Fragmentation metrics
 
 | Metric | Meaning |
 |---|---|
-| kRA | Transition probability from rest to activity under the selected threshold/scoring setup. |
-| kAR | Transition probability from activity to rest under the selected threshold/scoring setup. |
+| kRA | Rest-to-activity transition probability summary |
+| kAR | Activity-to-rest transition probability summary |
 
-Availability depends on the raw-object interface and selected activity scale.
+Fragmentation measures depend on the active/rest classification settings. Confirm that the threshold and signal units are appropriate.
 
 ## Sleep metrics
 
 | Metric | Meaning |
 |---|---|
-| SRI | Sleep Regularity Index over valid scored epoch pairs exactly 24 hours apart. |
-| TST | Observed sleep time within an eligible selected window. |
-| WASO | Observed wake after observed sleep onset within an eligible window. |
-| Sleep efficiency | Sleep minutes divided by observed/scored window minutes. |
+| SRI | Similarity of sleep/wake state at the same time on consecutive days |
+| TST | Total sleep time within the analysed sleep window |
+| WASO | Wake time after sleep onset within the analysed sleep window |
+| Sleep efficiency | Proportion of the sleep interval scored as sleep |
 
-The pyActigraphy SRI definition ranges from -100 to 100; 100 means every available 24-hour pair has the same sleep/wake state. SRI is unavailable below the configured consecutive-valid-day requirement and may remain unavailable when no valid 24-hour pairs remain.
+Sleep metrics require a usable sleep window and enough scorable coverage. SRI also requires valid 24-hour epoch pairs.
 
 ## Sleep/rest algorithms
 
-The algorithm registry currently exposes Cole-Kripke, Sadeh, Oakley, Scripps, Crespo, and Roenneberg entries. The selected activity mapping, units, epoch duration, algorithm, and parameters are stored together so the calculation context remains explicit. Sleep/rest algorithms are called through the corresponding pyActigraphy methods where available.
+| Algorithm | Typical context | Important note |
+|---|---|---|
+| Cole-Kripke | Adult actigraphy | Common adult epoch-by-epoch rest/activity scoring option |
+| Sadeh | Pediatric and adolescent actigraphy | Often used in younger populations |
+| Oakley | Actiware-related workflows | Confirm compatibility with the selected activity scale |
+| Scripps | Additional comparison scoring | Useful when comparing several scoring approaches |
+| Crespo | Pattern-based rest/activity detection | Crespo_AoT can estimate a main rest window when no diary is available |
+| Roenneberg | Trend-based consolidated-rest detection | Roenneberg_AoT can estimate a main nocturnal rest interval |
 
-## Diary/custom and automatic sleep windows
+No lowest-activity fallback window is inserted when Crespo_AoT or Roenneberg_AoT returns no usable onset and offset.
 
-Page 6 accepts uploaded diaries and per-file custom plot-selected windows. When no diary window is available, `Crespo_AoT` or `Roenneberg_AoT` may estimate onset/offset windows through the Raw-like adapter.
+## Why a metric may be unavailable
 
-The application:
+A metric can be unavailable because:
 
-- validates onset/offset pairs;
-- filters by configured minimum and maximum duration;
-- records method and parameters;
-- applies the page-2 sleep-window coverage threshold;
-- does not insert a fallback window.
+- the recording does not contain enough valid data;
+- the longest consecutive valid-window run is too short;
+- a required sleep window is missing or below the coverage threshold;
+- the selected signal or file format does not support the calculation;
+- a metric-specific parameter could not be applied;
+- the algorithm returned no usable result.
 
-A recording may return no usable window because of insufficient day/night contrast, gaps, non-wear, short duration, constant activity, unsuitable scale or threshold, resampling choices, or detector parameters. Roenneberg should generally be evaluated with 10-minute resampling as an initial configuration.
+Review the quality tables and the metric-specific message before changing settings.
 
-## Sleep-window coverage
+## Reporting
 
-At the default coverage threshold of 0.80:
+Keep the following with each result:
 
-- at least 80% of expected epochs in each sleep window must remain recorded and scorable;
-- missing epochs are ignored rather than scored as wake;
-- TST is observed sleep time and is not inflated to compensate for gaps;
-- WASO counts observed wake after observed sleep onset;
-- sleep efficiency uses observed/scored minutes as the denominator;
-- scheduled window duration is returned separately;
-- excluded windows retain an explicit QC reason.
-
-## Analysis Set-up
-
-Page 8 supports standard/default selection or custom family-level/metric-level selection. Shared parameters and metric-specific overrides are resolved into the analysis payload. Page 8 does not generate results.
-
-## Reporting requirements
-
-Every result should include:
-
-- file ID and source filename;
-- device/file format;
-- requested and resolved activity mapping;
-- units and epoch duration;
-- preprocessing thresholds and intervals;
-- sleep-window source;
-- algorithm and parameters;
-- binarization and thresholds;
-- application and dependency versions;
-- QC and diagnostic warnings.
-
-
-## pyActigraphy computational basis
-
-Native readers, non-parametric rest–activity metrics, Crespo_AoT/Roenneberg_AoT procedures, and Cosinor modelling are based on pyActigraphy. The application resolves preprocessing and activity mapping before calling these methods and retains the resolved configuration with each result.
-
-- Documentation: https://ghammad.github.io/pyActigraphy/
-- Source: https://github.com/ghammad/pyActigraphy
-- Package paper: https://doi.org/10.1371/journal.pcbi.1009514
-
-The **Cosinor** family uses `pyActigraphy.analysis.Cosinor` with a fixed 24-hour single-component period and reports mesor, amplitude, acrophase, derived peak clock time, BIC, reduced chi-square, valid epochs, and epoch frequency.
+- metric or analysis family;
+- activity measure and units;
+- epoch duration;
+- continuous or binarized processing and threshold;
+- sleep window source and classification algorithm;
+- metric-specific parameters;
+- valid-window and sleep-window coverage settings;
+- warnings and unavailable-result reasons.

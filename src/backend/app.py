@@ -17,6 +17,11 @@ import uuid
 import logging
 import re
 import threading
+import copy
+import smtplib
+from email.message import EmailMessage
+
+import pandas as pd
 
 from pydantic import BaseModel, Field
 
@@ -214,6 +219,55 @@ def _append_feedback_record(record: dict) -> Path:
     return path
 
 
+FEEDBACK_NOTIFICATION_TO = os.getenv("FEEDBACK_NOTIFICATION_TO", "mramchandani@stjoes.ca").strip()
+
+
+def _send_feedback_notification(record: dict) -> Dict[str, Any]:
+    """Send a deliberately minimal feedback notification.
+
+    The user's free-text feedback and diagnostic/configuration payload are not
+    included in the email. Full feedback remains available only in the
+    protected feedback store.
+    """
+    recipient = FEEDBACK_NOTIFICATION_TO
+    host = os.getenv("SMTP_HOST", "").strip()
+    sender = os.getenv("SMTP_FROM", "").strip()
+    if not recipient or not host or not sender:
+        return {"sent": False, "reason": "smtp_not_configured"}
+
+    port = int(os.getenv("SMTP_PORT", "587") or 587)
+    username = os.getenv("SMTP_USERNAME", "").strip()
+    password = os.getenv("SMTP_PASSWORD", "")
+    use_tls = os.getenv("SMTP_USE_TLS", "true").strip().lower() not in {"0", "false", "no"}
+
+    message = EmailMessage()
+    message["Subject"] = f"PyActigraphy UI feedback submitted — {record.get('current_step') or 'step unknown'}"
+    message["From"] = sender
+    message["To"] = recipient
+    message.set_content(
+        "A new PyActigraphy UI feedback submission was received.\n\n"
+        f"Feedback ID: {record.get('id') or 'Not available'}\n"
+        f"User email: {record.get('email') or 'Not available'}\n"
+        f"File: {record.get('file_name') or 'Not available'}\n"
+        f"Step: {record.get('current_step') or 'Not available'}\n"
+        f"Category: {record.get('category') or 'Not available'}\n\n"
+        "The feedback text and detailed diagnostic context are intentionally not included in this email. "
+        "Review the protected feedback administration page if more detail is needed.\n"
+    )
+
+    try:
+        with smtplib.SMTP(host, port, timeout=15) as client:
+            if use_tls:
+                client.starttls()
+            if username:
+                client.login(username, password)
+            client.send_message(message)
+        return {"sent": True}
+    except Exception as exc:
+        logging.getLogger("actigraphy.feedback").exception("Feedback notification email failed.")
+        return {"sent": False, "reason": type(exc).__name__}
+
+
 def _validate_feedback_email(value: Any) -> str:
     email = str(value or "").strip()
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
@@ -355,6 +409,8 @@ def version():
             "feedback_admin_export": True,
             "feedback_email_required": True,
             "feedback_retention_30_days": True,
+            "feedback_notification_email": True,
+            "participant_file_concatenation": True,
             "preview_analysis_mapping_decoupled": True,
             "documentation_center": True,
             "generic_csv_mapping": True,
@@ -394,11 +450,13 @@ async def submit_feedback(payload: FeedbackPayload):
     })
 
     path = _append_feedback_record(record)
+    notification = await asyncio.to_thread(_send_feedback_notification, record)
     return {
         "ok": True,
         "id": record["id"],
         "storage_file": path.name,
         "retention_days": FEEDBACK_RETENTION_DAYS,
+        "notification_sent": bool(notification.get("sent")),
     }
 
 
@@ -1822,9 +1880,125 @@ def _estimate_analysis_stage_total(metric_requests, family_requests, analysis_sc
     sleep_setup_stages = 2 if sleep_count else 0
     return base_pipeline_stages + rest_count + sleep_setup_stages + sleep_count
 
+def _activity_series_for_concatenation(raw: Any) -> pd.Series:
+    data = None
+    try:
+        data = getattr(raw, "raw_data", None)
+    except Exception:
+        data = None
+    if data is None:
+        data = getattr(raw, "data", None)
+    if isinstance(data, pd.DataFrame):
+        numeric = data.select_dtypes(include="number")
+        if numeric.shape[1] == 0:
+            raise ValueError("A selected file does not expose a numeric activity series.")
+        preferred = next((c for c in ["VM", "vm", "activity", "Activity", "data", "counts", "acc", "ACC_mg", "ENMO_mg", "MAD_mg"] if c in numeric.columns), numeric.columns[0])
+        data = numeric[preferred]
+    if not isinstance(data, pd.Series):
+        data = pd.Series(data)
+    series = pd.to_numeric(data, errors="coerce").copy()
+    if not isinstance(series.index, pd.DatetimeIndex):
+        series.index = pd.to_datetime(series.index, errors="coerce")
+    series = series.loc[~pd.isna(series.index)].sort_index()
+    if len(series) < 2:
+        raise ValueError("Each file in a joined participant analysis must contain at least two timestamped activity epochs.")
+    return series
+
+
+def _median_epoch(series: pd.Series) -> pd.Timedelta:
+    diffs = series.index.to_series().diff().dropna()
+    diffs = diffs[diffs > pd.Timedelta(0)]
+    if diffs.empty:
+        raise ValueError("Could not determine the sampling interval for one of the selected files.")
+    return pd.Timedelta(diffs.median())
+
+
+def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -> tuple[Any, Dict[str, Any]]:
+    if len(raw_items) < 2:
+        return raw_items[0], {"joined": False, "source_files": source_names}
+
+    series_items = [_activity_series_for_concatenation(raw) for raw in raw_items]
+    epochs = [_median_epoch(series) for series in series_items]
+    reference_epoch = epochs[0]
+    incompatible = [
+        source_names[index]
+        for index, epoch in enumerate(epochs)
+        if abs(epoch - reference_epoch) > max(pd.Timedelta(milliseconds=1), reference_epoch * 0.01)
+    ]
+    if incompatible:
+        raise ValueError(
+            "Joined participant analysis requires compatible sampling intervals across all files. "
+            f"Files with a different interval: {', '.join(incompatible)}."
+        )
+
+    combined = pd.concat(series_items).sort_index()
+    duplicate_rows = int(combined.index.duplicated(keep="first").sum())
+    combined = combined.loc[~combined.index.duplicated(keep="first")]
+    if len(combined) < 2:
+        raise ValueError("The joined participant timeline contains fewer than two unique timestamps.")
+
+    first = copy.copy(raw_items[0])
+    assigned = False
+    try:
+        first.data = combined
+        assigned = True
+    except Exception:
+        pass
+    if not assigned:
+        for attribute in ("_data", "data"):
+            try:
+                setattr(first, attribute, combined)
+                assigned = True
+                break
+            except Exception:
+                continue
+    if not assigned:
+        raise ValueError("This file type cannot currently be represented as one joined participant timeline.")
+
+    # Reader masks are file-local; concatenate them only when every file exposes one.
+    masks = []
+    for raw, series in zip(raw_items, series_items):
+        try:
+            mask = getattr(raw, "mask", None)
+        except Exception:
+            mask = None
+        if isinstance(mask, pd.DataFrame) and mask.shape[1]:
+            mask = mask.iloc[:, 0]
+        if isinstance(mask, pd.Series):
+            masks.append(pd.to_numeric(mask, errors="coerce").reindex(series.index))
+        else:
+            masks = []
+            break
+    if masks:
+        combined_mask = pd.concat(masks).sort_index()
+        combined_mask = combined_mask.loc[~combined_mask.index.duplicated(keep="first")].reindex(combined.index)
+        try:
+            first.mask = combined_mask
+        except Exception:
+            with contextlib.suppress(Exception):
+                setattr(first, "_mask", combined_mask)
+
+    metadata = dict(getattr(first, "metadata", None) or {})
+    metadata["participant_join"] = {
+        "joined": True,
+        "source_files": source_names,
+        "source_file_count": len(source_names),
+        "duplicate_timestamps_removed": duplicate_rows,
+        "epoch_seconds": float(reference_epoch.total_seconds()),
+        "start": combined.index.min().isoformat(),
+        "stop": combined.index.max().isoformat(),
+    }
+    with contextlib.suppress(Exception):
+        first.metadata = metadata
+    with contextlib.suppress(Exception):
+        first.name = " + ".join(source_names)
+    return first, metadata["participant_join"]
+
+
 @app.post("/api/analyze/basic")
 def analyze_basic(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
     activityTransform: str = Form("none"),
@@ -1875,6 +2049,7 @@ def analyze_basic(
                 algorithm=(algorithm_request or {}).get("id"),
                 analysis_window_mode=analysis_window_settings.get("mode", "full"),
                 activity_mapping_requested=requested_mapping,
+                participant_file_count=1 + len(additionalFiles or []),
                 support_file_counts={
                     "masking": len(maskingFiles or []),
                     "sleep_diary": len(sleepDiaryFiles or []),
@@ -1907,11 +2082,34 @@ def analyze_basic(
                 csv_mapping=parsed_csv_mapping,
                 csv_separator=csvSeparator,
             )
+            raw_items = [raw]
+            joined_source_names = [source_filename]
+            additional_reader_types = []
+            for additional_upload in additionalFiles or []:
+                additional_path = _write_upload_to_temp(additional_upload)
+                temp_paths.append(additional_path)
+                additional_raw, additional_reader = _load_native_supported_file(
+                    additional_path,
+                    activity_mapping=requested_mapping,
+                    csv_mapping=parsed_csv_mapping,
+                    csv_separator=csvSeparator,
+                )
+                raw_items.append(additional_raw)
+                joined_source_names.append(additional_upload.filename or Path(additional_path).name)
+                additional_reader_types.append(additional_reader)
+
+            participant_join = {"joined": False, "source_files": joined_source_names}
+            if len(raw_items) > 1:
+                if any(item != reader_type for item in additional_reader_types):
+                    raise ValueError("Joined participant analysis requires all selected files to use the same detected input type.")
+                raw, participant_join = _concatenate_raw_recordings(raw_items, joined_source_names)
+
             mapping_details = raw_mapping_metadata(raw)
             update_current_stage(
                 raw_class=type(raw).__name__,
                 raw_module=type(raw).__module__,
                 activity_mapping=mapping_details,
+                participant_join=participant_join,
             )
 
         with session.stage("input.inspect_recording", category="data_validation"):
@@ -2037,6 +2235,7 @@ def analyze_basic(
             "detected_input_type": reader_type,
             "native_reader_used": reader_type != "tabular_mapped",
             "activity_mapping": mapping_details,
+            "participant_join": participant_join,
         }
 
     except ValueError as exc:
@@ -2159,15 +2358,17 @@ def _background_light_worker(primary_spec: dict, operation: str, options: dict) 
                 pass
 
 
-def _background_analysis_worker(primary_spec: dict, support_specs: dict, options: dict) -> dict:
+def _background_analysis_worker(primary_spec: dict, additional_specs: List[dict], support_specs: dict, options: dict) -> dict:
     primary_uploads, primary_opened = _uploads_from_job_specs([primary_spec])
+    additional_uploads, additional_opened = _uploads_from_job_specs(additional_specs)
     masking_uploads, masking_opened = _uploads_from_job_specs(support_specs.get("masking"))
     diary_uploads, diary_opened = _uploads_from_job_specs(support_specs.get("sleep_diary"))
     start_stop_uploads, start_stop_opened = _uploads_from_job_specs(support_specs.get("start_stop"))
-    opened = primary_opened + masking_opened + diary_opened + start_stop_opened
+    opened = primary_opened + additional_opened + masking_opened + diary_opened + start_stop_opened
     try:
         response = analyze_basic(
             file=primary_uploads[0],
+            additionalFiles=additional_uploads or None,
             activityChannel=options.get("activityChannel", "VM"),
             activityMapping=options.get("activityMapping", "auto"),
             activityTransform=options.get("activityTransform", "none"),
@@ -2483,6 +2684,7 @@ def start_background_light_analysis(
 @app.post("/api/jobs/analyze/basic")
 def start_background_analyze_basic(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
     activityTransform: str = Form("none"),
@@ -2509,6 +2711,10 @@ def start_background_analyze_basic(
         )
         effective_request_id = requestId or created_job_id
         primary_spec = _write_upload_to_job(file, directory, "primary")
+        additional_specs = [
+            _write_upload_to_job(upload, directory, f"participant-{index}")
+            for index, upload in enumerate(additionalFiles or [])
+        ]
         support_specs = {"masking": [], "sleep_diary": [], "start_stop": []}
         for index, upload in enumerate(maskingFiles or []):
             support_specs["masking"].append(_write_upload_to_job(upload, directory, f"masking-{index}"))
@@ -2530,7 +2736,7 @@ def start_background_analyze_basic(
         }
         submit_job(
             created_job_id,
-            lambda: _background_analysis_worker(primary_spec, support_specs, options),
+            lambda: _background_analysis_worker(primary_spec, additional_specs, support_specs, options),
         )
         return JSONResponse(
             status_code=202,

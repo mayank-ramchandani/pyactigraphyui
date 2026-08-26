@@ -8,6 +8,7 @@ This guide follows the ten pages in the application. For a standard first analys
 - Remove names, health-card numbers, dates of birth, and other direct identifiers from filenames and support files.
 - Prepare one or more actigraphy recordings in a supported format.
 - Use the same file extension when uploading multiple files together.
+- On the Results page, multiple selected files can be analyzed separately (default) or explicitly joined as one participant timeline when they all belong to the same participant. Joined analysis preserves original timestamps and gaps, removes duplicate boundary timestamps, and requires compatible sampling intervals. Light metrics remain file-level and should be run separately.
 - Keep sleep diaries, start/stop files, masks, and separate sensor files ready if they are part of the study protocol.
 
 ## 1. Importing Actigraphy Files

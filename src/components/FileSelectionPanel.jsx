@@ -159,7 +159,7 @@ export default function FileSelectionPanel({
         <div style={{ fontWeight: 700 }}>
           <BubbleInfo
             label="Multiple-file analysis"
-            content="Multiple actigraphy files can be uploaded together when they use the same extension. Cleaning, masking, sleep windows, results, and exports retain the source file name so file-specific settings remain traceable."
+            content="Multiple actigraphy files can be uploaded together when they use the same extension. In Results, they can either be analyzed separately or explicitly joined into one timestamp-preserving timeline when all selected files belong to the same participant. Joined analysis requires compatible sampling intervals and preserves recording gaps."
           />
         </div>
       </div>

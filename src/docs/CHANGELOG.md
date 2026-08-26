@@ -1,3 +1,10 @@
+## 2026-08-26 — Participant-level file joining and feedback alerts
+
+- Added an opt-in Results-page mode to join multiple actigraphy files from the same participant into one timestamp-preserving analysis timeline.
+- Joined analysis validates compatible sampling intervals, preserves recording gaps, and removes duplicate boundary timestamps before metric calculation.
+- Added optional minimal feedback notification emails to the designated project contact; notifications contain only feedback ID, submitter email, filename, workflow step, and category.
+- Updated privacy wording so uploaded/job data and feedback are described as automatically deleted no later than 30 days, with temporary files potentially deleted sooner.
+
 # What’s new
 
 This page summarizes changes that affect users of the application. Internal deployment and implementation details are documented separately from the public user guide.

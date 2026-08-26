@@ -11,56 +11,54 @@ const DEFAULT_REPOSITORY_URL = "https://github.com/mayank-ramchandani/pyactigrap
 const DEFAULT_DOCS_URL = "https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs";
 
 const FILE_ROWS = [
-  ["GENEActiv .bin", "Raw tri-axial acceleration and embedded light", "Recommended processed acc, processed acceleration, ENMO, MAD, PIM, or ZCM", "Large previews and analyses use background/streamed paths where available."],
-  ["Axivity .cwa", "Raw tri-axial acceleration", "Recommended processed acc; other mappings only when emitted by the converted time-series", "The server Oxford conversion currently emits epoch-level acc. PIM/ZCM require supplied converted columns."],
-  ["ActiGraph .gt3x", "Raw tri-axial acceleration; optional lux records", "Recommended processed acc, processed acceleration, ENMO, MAD, PIM, or ZCM", "Light is inspected separately; absence of lux does not block activity analysis."],
-  ["ActiGraph .agd", "Device activity/counts", "Recommended source/device activity", "Preferred when the intended analysis scale is ActiGraph counts."],
-  ["Actiwatch .awd and native pyActigraphy formats", "Device activity", "Recommended source/device activity", "Availability depends on the matching pyActigraphy reader."],
-  ["Oxford timeSeries.csv(.gz)", "Epoch-level processed acceleration", "Existing acc, ENMO, MAD, PIM, or ZCM column", "The selected existing column and units are retained in result provenance."],
-  ["Philips Actiware/RPX CSV", "Localized epoch activity with optional white/RGB light", "Source activity", "English, French, and German exports are parsed directly in UTF-8 or Windows-1252."],
-  ["Generic CSV/TXT", "User-defined columns", "Mapped source activity", "Automatic detection or manual timestamp/activity/light mapping is available on Importing Actigraphy Files."],
-  ["NHANES PAXHR_H", "Multi-participant hourly summary", "PAXMTSH after participant/time-index preparation", "Filter one SEQN, merge PAXFDAY/PAXFTIME, and build a documented participant-relative time index from PAXSSNHP."],
+  ["GENEActiv .bin", "Raw X/Y/Z acceleration, with embedded light and temperature", "Recommended source / processed acc", "ENMO, MAD, PIM, and ZCM are available. Embedded light is used only when present."],
+  ["Axivity .cwa", "Raw X/Y/Z acceleration", "Processed acc", "Other activity measures are available when they are present in a converted time-series file."],
+  ["ActiGraph .gt3x", "Raw X/Y/Z acceleration, with optional lux", "Recommended source / processed acc", "Activity analysis still works when the file contains no light data."],
+  ["ActiGraph .agd", "Device activity counts", "Source/device activity", "Use this when the analysis should remain on the ActiGraph count scale."],
+  ["Actiwatch .awd and other native pyActigraphy formats", "Device activity", "Source/device activity", "Available options depend on the information contained in the file."],
+  ["Oxford timeSeries.csv(.gz)", "Epoch-level processed acceleration", "Existing acc column", "Existing ENMO, MAD, PIM, or ZCM columns can also be selected."],
+  ["Philips Actiware/RPX CSV", "Epoch activity with optional white/RGB light", "Source activity", "English, French, and German exports are supported, including Windows-1252 files."],
+  ["Generic CSV/TXT", "User-defined columns", "Mapped activity column", "The app detects columns automatically; manual mapping is available when needed."],
+  ["NHANES PAXHR_H", "Hourly summaries for multiple participants", "PAXMTSH after preparation", "Select one participant and create a documented participant-relative time index before upload."],
 ];
 
 const NARRATIVE_SEARCH_TEXT = {
-  overview: "guided ten step actigraphy application provenance preprocessing activity magnitude preview cleaning masking sleep wake classification light temperature sensors metrics results export csv json plots diagnostics github documentation",
+  overview: "start here user guide upload de-identified data recommended settings preview analysis results export research educational privacy feedback",
   workflow: appConfig.workflow.map((step) => `${step.id} ${step.title} ${step.description}`).join(" "),
-  preprocessing: "pre-processing preprocessing recommended settings threshold minimum valid hours valid day quality window calendar day recording aligned 24 hour initial qc 16 hours consecutive windows two days sri rhythm metrics longest run missing data gaps non-wear masks minimum sleep-window coverage 80 percent expected epochs recorded scorable tst waso sleep efficiency customize",
-  files: `${FILE_ROWS.flat().join(" ")} encoding utf-8 windows-1252 cp1252 localized actiware french german data_offset generic csv manual mapping nhanes paxhr paxhd seqn paxmtsh`,
-  activity: ACTIVITY_MAPPING_OPTIONS.map((option) => `${option.label} ${option.units} ${option.description}`).join(" "),
-  cleaning: "start stop recording interval support files masks masking exclusion non-wear file id per-file plot selection crossing midnight missing epochs unavailable not zero",
-  sleep: `${algorithmRegistry.algorithms.map((algorithm) => JSON.stringify(algorithm)).join(" ")} sleep diary custom windows plot bedtime wake time classification algorithm cole kripke sadeh oakley scripps crespo roenneberg no fallback`,
-  sensors: "other sensors light lux rgb channels preview exposure analysis threshold lmx temperature future version attachment embedded gt3x bin separate light file",
-  metrics: `${metricRegistry.metrics.map((metric) => JSON.stringify(metric)).join(" ")} ${analysisFamilyRegistry.families.map((family) => JSON.stringify(family)).join(" ")} analysis setup families individual metrics parameters ra is iv m10 l5 sri fragmentation`,
-  results: "generate results page nine view results plots tables csv json diagnostics quality control multi-file three significant figures export outputs page ten configuration",
-  diagnostics: "request id stages progress upload background job 413 500 503 504 timeout memory json diagnostic daily recording quality gaps warnings failed skipped passed",
-  provenance: "pyactigraphy preprocessing provenance calibration filtering epochs timestamps gaps nonwear masks activity mapping units parameters software version citations reproducibility feedback storage",
-  developers: "react vite fastapi uvicorn endpoint api jobs progress registries documentation maintenance github environment variable deployment architecture",
-  terms: "terms of use OBI Ontario Brain Institute Centre for Analytics hosted transient temporary data retention privacy de-identification research educational medical device acceptable use diagnostics feedback",
+  preprocessing: "pre-processing recommended settings 16 analyzable hours calendar day recording aligned 24 hour consecutive valid windows sleep coverage 80 percent gaps non-wear masks missing data",
+  files: `${FILE_ROWS.flat().join(" ")} encoding utf-8 windows-1252 localized actiware french german generic csv manual mapping nhanes paxhr`,
+  activity: `${ACTIVITY_MAPPING_OPTIONS.map((option) => `${option.label} ${option.units} ${option.description}`).join(" ")} recommended default processed acceleration enmo mad pim zcm source counts`,
+  cleaning: "recording start stop masking exclusion non-wear file-specific intervals crossing midnight missing epochs unavailable not zero",
+  sleep: `${algorithmRegistry.algorithms.map((algorithm) => JSON.stringify(algorithm)).join(" ")} sleep diary custom windows bedtime wake time crespo roenneberg no fallback coverage unavailable`,
+  sensors: "light lux rgb preview exposure temperature other sensors embedded separate file",
+  metrics: `${metricRegistry.metrics.map((metric) => JSON.stringify(metric)).join(" ")} ${analysisFamilyRegistry.families.map((family) => JSON.stringify(family)).join(" ")} analysis families metrics parameters relative amplitude ra is iv m10 l5 sri fragmentation cosinor`,
+  results: "generate results plots tables quality control warnings multi-file export csv json configuration three significant figures",
+  troubleshooting: "warning failed skipped 413 500 503 504 timeout background job no light csv metric unavailable relative amplitude sleep window feedback request id",
+  methods: "pyactigraphy methods reproducibility provenance activity mapping units parameters preprocessing masks valid windows software version citation data handling feedback 30 days",
+  terms: "terms of use Ontario Brain Institute Centre for Analytics privacy de-identification research educational medical device acceptable use feedback retention",
 };
 
 const SECTIONS = [
-  { id: "overview", label: "Overview" },
+  { id: "overview", label: "Start here" },
   { id: "workflow", label: "10-step workflow" },
   { id: "preprocessing", label: "Pre-processing" },
   { id: "files", label: "File formats" },
-  { id: "activity", label: "Activity metric" },
+  { id: "activity", label: "Choosing an activity measure" },
   { id: "cleaning", label: "Cleaning & masking" },
   { id: "sleep", label: "Sleep-wake classification" },
-  { id: "sensors", label: "Other sensors" },
+  { id: "sensors", label: "Light & other sensors" },
   { id: "metrics", label: "Metrics & analysis" },
   { id: "results", label: "Results & export" },
-  { id: "diagnostics", label: "Diagnostics" },
-  { id: "provenance", label: "Preprocessing & provenance" },
+  { id: "troubleshooting", label: "Troubleshooting" },
+  { id: "methods", label: "Methods & reproducibility" },
   { id: "terms", label: "Terms of use" },
-  { id: "developers", label: "Developer reference" },
 ];
 
 function Card({ title, children }) {
   return (
-    <section className="documentation-card" style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18, textAlign: "center" }}>
-      <h3 style={{ margin: "0 0 10px", fontSize: 18, color: "#0f172a" }}>{title}</h3>
-      <div style={{ color: "#475569", lineHeight: 1.65, fontSize: 14 }}>{children}</div>
+    <section className="documentation-card" style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18 }}>
+      <h3 style={{ margin: "0 0 10px", fontSize: 18, color: "#0f172a", textAlign: "center" }}>{title}</h3>
+      <div style={{ color: "#475569", lineHeight: 1.7, fontSize: 14, textAlign: "left" }}>{children}</div>
     </section>
   );
 }
@@ -72,7 +70,7 @@ function Table({ headers, rows }) {
         <thead>
           <tr style={{ background: "#f8fafc" }}>
             {headers.map((header) => (
-              <th key={header} style={{ textAlign: "center", padding: 10, borderBottom: "1px solid #e2e8f0", color: "#334155" }}>{header}</th>
+              <th key={header} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #e2e8f0", color: "#334155" }}>{header}</th>
             ))}
           </tr>
         </thead>
@@ -80,7 +78,7 @@ function Table({ headers, rows }) {
           {rows.map((row, rowIndex) => (
             <tr key={`${rowIndex}-${row[0]}`}>
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} style={{ padding: 10, verticalAlign: "top", textAlign: "center", borderBottom: rowIndex === rows.length - 1 ? "none" : "1px solid #f1f5f9", color: cellIndex === 0 ? "#0f172a" : "#475569", fontWeight: cellIndex === 0 ? 700 : 400 }}>
+                <td key={cellIndex} style={{ padding: 10, verticalAlign: "top", textAlign: "left", borderBottom: rowIndex === rows.length - 1 ? "none" : "1px solid #f1f5f9", color: cellIndex === 0 ? "#0f172a" : "#475569", fontWeight: cellIndex === 0 ? 700 : 400 }}>
                   {cell}
                 </td>
               ))}
@@ -102,13 +100,7 @@ function extractDocumentationText(value) {
   if (Array.isArray(value)) return value.map(extractDocumentationText).join(" ");
   if (React.isValidElement(value)) {
     const props = value.props || {};
-    return [
-      props.title,
-      props.label,
-      props.headers,
-      props.rows,
-      props.children,
-    ].map(extractDocumentationText).join(" ");
+    return [props.title, props.label, props.headers, props.rows, props.children].map(extractDocumentationText).join(" ");
   }
   if (typeof value === "object") {
     return Object.entries(value)
@@ -124,9 +116,7 @@ export default function DocumentationPanel({ onClose }) {
   const [query, setQuery] = useState("");
 
   const repositoryUrl = String(import.meta.env.VITE_GITHUB_REPOSITORY_URL || DEFAULT_REPOSITORY_URL).replace(/\/$/, "");
-  const derivedDocsUrl = repositoryUrl === DEFAULT_REPOSITORY_URL
-    ? DEFAULT_DOCS_URL
-    : `${repositoryUrl}/tree/main/src/docs`;
+  const derivedDocsUrl = repositoryUrl === DEFAULT_REPOSITORY_URL ? DEFAULT_DOCS_URL : `${repositoryUrl}/tree/main/src/docs`;
   const githubDocsUrl = String(import.meta.env.VITE_GITHUB_DOCS_URL || derivedDocsUrl).replace(/\/$/, "");
 
   const metricRows = metricRegistry.metrics.map((metric) => [
@@ -140,7 +130,7 @@ export default function DocumentationPanel({ onClose }) {
     algorithm.label,
     algorithm.context || "General actigraphy",
     algorithm.summary || algorithm.description || "",
-    algorithm.note || "Review parameters and activity scale.",
+    algorithm.note || "Review the selected parameters and activity scale.",
   ]);
 
   const familyRows = analysisFamilyRegistry.families.map((family) => [
@@ -152,201 +142,193 @@ export default function DocumentationPanel({ onClose }) {
   const sectionContent = {
     overview: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="What the application does">
-          The {appConfig.appName} guides users from file import through preprocessing, activity estimation, activity preview, cleaning, sleep-wake classification, optional sensor analysis, metric selection, result generation, and export. The backend retains source filenames, resolved activity mapping, preprocessing thresholds, algorithms, parameters, quality-control warnings, and diagnostics.
+        <Card title="What this application is for">
+          The {appConfig.appName} helps researchers import actigraphy recordings, review data quality, choose preprocessing and analysis settings, calculate activity and sleep-related measures, inspect results, and export a reproducible record of the analysis.
         </Card>
-        <Card title="Navigation">
-          After at least one actigraphy file is imported, pages 2 through 9 in the left workflow are directly clickable. Users may review pages in order or jump to a later setup page without repeatedly pressing Next. Page 10, Export Outputs, remains locked until results have been generated successfully.
+        <Card title="A simple way to get started">
+          <ol style={{ margin: 0, paddingLeft: 22 }}>
+            <li>Upload de-identified actigraphy files.</li>
+            <li>Keep the recommended preprocessing and activity settings unless your protocol requires something different.</li>
+            <li>Preview each recording and review gaps, dates, and signal quality.</li>
+            <li>Add cleaning intervals, sleep windows, or light data when applicable.</li>
+            <li>Select metrics, generate results, review warnings, and export the outputs.</li>
+          </ol>
         </Card>
-        <Card title="Documentation sources">
-          This page is the searchable in-application guide. The repository documentation contains expanded user, methods, deployment, architecture, troubleshooting, preprocessing, provenance, and change-history material. Documentation version: <strong>2026-07-24</strong>.
+        <Card title="Before uploading data">
+          Remove participant names, health-card numbers, dates of birth, and other direct identifiers from filenames and support files. This tool supports research and educational use; it does not provide a diagnosis or treatment recommendation.
         </Card>
       </div>
     ),
     workflow: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Current overall process">
-          <Table headers={["Step", "Page", "Purpose"]} rows={appConfig.workflow.map((step) => [step.id, step.title, step.description])} />
+        <Card title="The complete workflow">
+          <Table headers={["Step", "Page", "What you do"]} rows={appConfig.workflow.map((step) => [step.id, step.title, step.description])} />
         </Card>
-        <Card title="Where optional files are added">
-          The Importing Actigraphy Files page accepts actigraphy recordings only. Start/stop and mask files are added on Cleaning and Masking. Sleep diaries are added on Sleep-wake Classification. Separate light, temperature, and other sensor files are added on Other Sensors. This keeps every optional input beside the processing choice it affects.
+        <Card title="Where to add supporting files">
+          Upload actigraphy recordings on Step 1. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 7. Steps 2–9 can be opened from the left workflow after at least one actigraphy file is uploaded. Export unlocks after results are generated.
         </Card>
       </div>
     ),
     preprocessing: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Recommended data-quality settings">
+        <Card title="Recommended starting settings">
           <ul style={{ margin: 0, paddingLeft: 22 }}>
-            <li><strong>Recommended valid-window minimum:</strong> at least 16 analyzable hours.</li>
-            <li><strong>Recommended multi-window rhythm/SRI eligibility:</strong> at least 2 consecutive valid quality windows.</li>
-            <li><strong>Recommended sleep-window coverage:</strong> at least 80% of expected epochs remain recorded and scorable.</li>
+            <li><strong>Valid quality window:</strong> at least 16 analyzable hours.</li>
+            <li><strong>Multi-day rhythm and SRI eligibility:</strong> at least 2 consecutive valid quality windows.</li>
+            <li><strong>Sleep-window coverage:</strong> at least 80% of expected epochs remain available and scorable.</li>
           </ul>
-          <p style={{ marginBottom: 0 }}>These are configurable starting points. Enable “Customize the recommended data-quality thresholds” when a protocol or sensitivity analysis requires different criteria.</p>
+          <p style={{ marginBottom: 0 }}>Keep these settings for a standard analysis. Customize them only when your study protocol or sensitivity analysis specifies different criteria.</p>
         </Card>
-        <Card title="Initial QC before preprocessing decisions">
-          Step 2 loads each uploaded recording and reports recorded time, gaps, detected/mapped non-wear, and effective coverage for every candidate quality window. This first inspection occurs before uploaded/manual masks and start/stop limits. Final QC is recalculated during analysis after all selected preprocessing has been applied.
+        <Card title="Calendar day or recording-aligned window?">
+          <p><strong>Calendar day</strong> is the recommended default. It evaluates midnight-to-midnight periods and keeps daily summaries aligned with clock dates.</p>
+          <p style={{ marginBottom: 0 }}><strong>Recording-aligned 24-hour windows</strong> begin at the first retained timestamp. They can be useful for short recordings or studies organized around the device-deployment time. The selected approach is included in the results and exports.</p>
         </Card>
-        <Card title="Calendar days or recording-aligned windows">
-          <strong>Calendar day</strong> is the recommended default: midnight-to-midnight windows preserve clock-day interpretation for daily summaries and circadian timing. <strong>Recording-aligned 24-hour windows</strong> begin at the first retained timestamp and are available as a sensitivity option for short or deployment-anchored recordings. For a complete 4 PM-to-4 PM recording, calendar mode yields an 8-hour first date and a 16-hour second date, while recording-aligned mode yields one complete 24-hour quality window. Results and exports record the selected basis.
+        <Card title="How missing and excluded data are handled">
+          Recording gaps, detected non-wear, and manual masks remain unavailable. They are not changed to zero activity. Initial quality information appears on Step 2, and final quality is recalculated after start/stop limits and masks are applied.
         </Card>
-        <Card title="What recommended minimum sleep-window coverage means">
-          Coverage is calculated for each diary-defined or automatically estimated sleep window. The expected number of epochs is compared with epochs still available after recording gaps, start/stop truncation, detected non-wear, and manual masks. A recommended threshold of <Code>0.8</Code> means at least 80% must remain. Windows below the configured threshold are excluded from TST, WASO, sleep efficiency, and other window-dependent summaries instead of being filled or treated as zero activity.
-        </Card>
-        <Card title="Consecutive-window requirement">
-          The backend uses the longest uninterrupted run under the selected quality-window basis. Two valid windows separated by an invalid or missing window do not meet a two-consecutive-window requirement. SRI additionally requires valid scored epoch pairs exactly 24 hours apart, so eligibility does not guarantee an SRI value when paired data are insufficient.
+        <Card title="Sleep-window coverage">
+          Coverage compares the expected epochs inside a sleep window with the epochs still available after gaps, non-wear, start/stop limits, and masks. At the recommended threshold of <Code>0.8</Code>, at least 80% must remain. Lower-coverage windows are excluded from sleep summaries rather than filled in.
         </Card>
       </div>
     ),
     files: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Supported input patterns">
-          <Table headers={["Format", "Primary signal", "Available activity basis", "Notes"]} rows={FILE_ROWS} />
+        <Card title="Supported file patterns">
+          <Table headers={["Format", "Typical content", "Recommended activity basis", "What to know"]} rows={FILE_ROWS} />
         </Card>
-        <Card title="Localized Actiware/RPX CSV files">
-          Philips Actiware/RPX epoch exports are recognized in English, French, and German. UTF-8, UTF-8 with BOM, Windows-1252, and Latin-1-compatible text are decoded safely. The backend locates the actual epoch table instead of relying on pyActigraphy’s English-only data-offset assumptions, and retains white/RGB light channels when present.
+        <Card title="CSV and text files">
+          The application first tries to identify timestamp, activity, light, temperature, and non-wear columns automatically. Turn on manual CSV mapping only when the detected columns are incorrect. Confirm the preview before continuing.
         </Card>
-        <Card title="Generic CSV and TXT files">
-          Automatic detection is attempted first. When it is incorrect, enable manual CSV mapping on the Importing Actigraphy Files page and provide timestamp plus activity columns. Light, temperature, non-wear, and separate time columns can also be mapped where present.
+        <Card title="Localized Actiware/RPX files">
+          English, French, and German Actiware exports are supported. The importer can read common UTF-8 and Windows-1252 encodings and can retain white, red, green, and blue light channels when they are present.
         </Card>
-        <Card title="NHANES PAXHR_H">
-          PAXHR_H is a cohort-level hourly summary rather than one timestamped actigraphy recording. The application now identifies it and gives preparation guidance instead of a generic unsupported-file error. Filter to one participant (SEQN), merge PAXFDAY and PAXFTIME from PAXHD_H, and use PAXSSNHP to build a participant-relative hourly time index. Because the public files do not disclose the actual calendar date, use and document a synthetic anchor date consistent with the reported day of week, then map PAXMTSH as activity.
+        <Card title="NHANES PAXHR_H files">
+          PAXHR_H contains hourly summaries for many participants rather than one continuous recording. Prepare one participant at a time, construct a documented participant-relative time index, and map PAXMTSH as the activity column. Do not upload the full cohort file as one recording.
         </Card>
       </div>
     ),
     activity: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Six activity-basis options">
-          <Table headers={["Option", "Units", "Behaviour"]} rows={ACTIVITY_MAPPING_OPTIONS.map((option) => [option.label, option.units || "Source-dependent", option.description])} />
+        <Card title="Recommended choice for most users">
+          Choose <strong>Recommended source / processed acc</strong> unless your protocol requires a specific signal. It uses the activity series already supplied by count-based files and creates an epoch-level processed acceleration series for supported raw accelerometer files.
         </Card>
-        <Card title="Interpretation">
-          Raw X/Y/Z acceleration is reduced to one epoch-level scalar series before pyActigraphy metrics are calculated. The available bases are processed acceleration, ENMO, MAD, PIM, ZCM, and source/device activity. Results retain the selected mapping, units, epoch duration, filtering, reducer parameters, and source column or processing engine.
+        <Card title="Available activity measures">
+          <Table headers={["Option", "Units", "When it is useful"]} rows={ACTIVITY_MAPPING_OPTIONS.map((option) => [option.label, option.units || "Source-dependent", option.description])} />
+        </Card>
+        <Card title="Why the choice matters">
+          All selected rest-activity metrics use the chosen epoch-level activity series. Counts, mg, mg·s/epoch, and crossings/epoch are different scales, so thresholds must be chosen for the selected measure. The resolved measure, units, epoch duration, and settings are included with the results.
         </Card>
       </div>
     ),
     cleaning: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Start/stop intervals">
-          Start/stop intervals define the effective recording period for each file. They can be uploaded or created with full timestamps and the activity plot. Overnight intervals are valid when the stop timestamp is on the following calendar date.
+        <Card title="Recording start and stop">
+          Use start/stop intervals to define the period that should be analysed for each file. You can upload intervals or select them from the activity plot. Full timestamps are supported, including intervals that cross midnight.
         </Card>
         <Card title="Masks and non-wear">
-          Masks exclude invalid or non-wear intervals. Uploaded and manually selected intervals retain a file ID, so one file’s exclusions are not applied to another recording. Missing, masked, and non-wear epochs remain unavailable; they are not converted to zero activity.
+          Masks remove invalid periods from analysis. Uploaded and manually selected intervals remain linked to the correct file, so an exclusion for one recording is not applied to another. Missing, masked, and non-wear epochs remain unavailable rather than becoming zero activity.
+        </Card>
+        <Card title="What to review before continuing">
+          Check that each interval is assigned to the intended file, start times occur before stop times, and overnight intervals use the correct next-day date. Review the updated plot whenever manual intervals are added.
         </Card>
       </div>
     ),
     sleep: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Sleep windows">
-          Upload diary windows or create per-file bedtime/wake-time windows using timestamp fields and the activity plot. When no diary window is available, Crespo_AoT or Roenneberg_AoT may estimate a main rest window. The application does not insert a lowest-activity fallback window when the selected method returns no usable onset/offset pair.
+          Upload a sleep diary or create file-specific bedtime and wake-time windows. When no diary is available, Crespo_AoT or Roenneberg_AoT can estimate a main rest window. The application does not create a lowest-activity fallback window when the selected method finds no usable onset and offset.
         </Card>
         <Card title="Classification algorithms">
-          <Table headers={["Algorithm", "Context", "Purpose", "Caution"]} rows={algorithmRows} />
+          <Table headers={["Algorithm", "Context", "Purpose", "Important note"]} rows={algorithmRows} />
         </Card>
-        <Card title="Coverage and unavailable sleep metrics">
-          Each candidate sleep window is checked against the preprocessing coverage threshold. A missing window, an algorithm failure, or insufficient scorable coverage produces an unavailable/skipped result with diagnostics rather than an invented sleep estimate.
+        <Card title="When a sleep result is unavailable">
+          A sleep metric may be unavailable because no window was supplied or detected, the selected algorithm could not score the data, or the window did not meet the configured coverage threshold. Review the sleep-window QC message before changing settings.
         </Card>
       </div>
     ),
     sensors: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Light data">
-          The Other Sensors page can inspect embedded light in supported actigraphy files or use a separately uploaded light file. It provides light channel discovery, activity-aligned preview, RGB/multichannel preview when available, and configuration for selected light metrics. Light metrics run with the main analysis when Generate Results is selected.
+          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped.
+        </Card>
+        <Card title="RGB and multichannel light">
+          When red, green, blue, white, or lux channels are available, the preview identifies them separately. Confirm the units and channel used by each selected light metric, especially when choosing thresholds.
         </Card>
         <Card title="Temperature and additional sensors">
-          Temperature or other sensor files can be attached on the Other Sensors page for future workflow development. Their filenames and basic file metadata are retained in the analysis configuration/export, but the current version does not calculate temperature or generic sensor metrics and labels these attachments as future analysis so they are not mistaken for completed processing.
+          Temperature and other sensor files may be attached for record-keeping, but the current version does not calculate temperature or generic sensor metrics. These files are clearly labelled as not yet analysed.
         </Card>
       </div>
     ),
     metrics: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Analysis families">
-          <Table headers={["Family", "Metrics", "Purpose"]} rows={familyRows} />
+          <Table headers={["Family", "Included outputs", "Purpose"]} rows={familyRows} />
         </Card>
         <Card title="Available metrics">
-          <Table headers={["Code", "Metric", "Category", "Summary"]} rows={metricRows} />
+          <Table headers={["Code", "Metric", "Category", "What it describes"]} rows={metricRows} />
         </Card>
-        <Card title="Analysis Set-up page">
-          Page 8 is for selecting families or individual metrics and configuring shared or metric-specific parameters. It does not run the analysis. Continue to page 9 to choose files, generate results, and review outputs.
+        <Card title="Choosing Standard or Custom mode">
+          Use Standard mode for common analysis groups with their recommended starting parameters. Use Custom mode when you need individual metrics or protocol-specific settings. Step 8 configures the analysis; Step 9 runs it.
         </Card>
       </div>
     ),
     results: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Generate and view results">
-          Page 9 contains the only Generate Results action. It runs each selected actigraphy file, selected light metrics where supported, data-quality checks, sleep-window checks, metric calculation, plots, QC summaries, and structured diagnostics. Results remain on page 9 for review; successful completion unlocks page 10.
+        <Card title="Generate and review results">
+          Step 9 runs the selected files and analyses. Review the file-level status, summary values, plots, daily recording quality, valid-window counts, sleep-window coverage, warnings, selected activity measure, and light results where available.
+        </Card>
+        <Card title="Understanding warnings">
+          A warning means processing continued but something needs review, such as an excluded low-coverage day, an unavailable metric, or missing light data. A failed status means that the affected stage could not produce a usable result. Other successful outputs may still be valid.
         </Card>
         <Card title="Export outputs">
-          Page 10 downloads selected tables and report-ready outputs, including result summaries, CSV-compatible tables, JSON configuration/diagnostics, QC warnings, and other export registry items. Exported values preserve file identifiers and the resolved analysis configuration.
+          Step 10 downloads the selected tables and supporting information, including result summaries, CSV-ready tables, analysis settings, quality-control information, and diagnostics. Keep the exported configuration with the result tables so the analysis can be reproduced later.
         </Card>
       </div>
     ),
-    diagnostics: (
+    troubleshooting: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Diagnostic status meanings">
-          <Table headers={["Status", "Meaning"]} rows={[
-            ["Passed", "The stage completed without a captured problem."],
-            ["Warning", "Processing continued, but a recoverable issue or unavailable value was recorded."],
-            ["Failed", "The stage raised an exception or returned an unusable result."],
-            ["Skipped", "A prerequisite was unavailable or the metric was unsupported for the selected signal."],
+        <Card title="Status meanings">
+          <Table headers={["Status", "Meaning", "What to do"]} rows={[
+            ["Passed", "The stage completed normally.", "No action is required."],
+            ["Warning", "Processing continued, but a value or quality issue needs review.", "Read the message and confirm whether the result is suitable for your analysis."],
+            ["Failed", "The stage could not produce a usable result.", "Review the error, file format, selected settings, and affected file."],
+            ["Skipped", "A required signal, window, or supported method was unavailable.", "Confirm that the necessary data and settings were supplied."],
           ]} />
         </Card>
-        <Card title="Common transport errors">
-          <ul style={{ margin: 0, paddingLeft: 22 }}>
-            <li><strong>413:</strong> proxy/ingress upload limit rejected the file before analysis.</li>
-            <li><strong>500:</strong> inspect structured diagnostics and backend/container logs.</li>
-            <li><strong>503/504:</strong> upstream disconnect, platform timeout, or missing background-job deployment.</li>
-            <li><strong>Background job not found:</strong> upload and polling may have reached different replicas without shared job storage.</li>
-            <li><strong>No light data:</strong> activity remains usable and light outputs are skipped.</li>
-          </ul>
+        <Card title="Common problems">
+          <Table headers={["Message", "Likely meaning", "Recommended action"]} rows={[
+            ["413 / file too large", "The upload was rejected before processing began.", "Try a smaller file or contact the service team with the file size and format."],
+            ["500, 503, or 504", "The service encountered an error, timeout, or temporary interruption.", "Retry once, preferably with one file. If it repeats, submit feedback with the request ID and visible error."],
+            ["Background job not found", "The saved processing job is no longer available.", "Start the preview or analysis again. Avoid refreshing or closing the page during the run."],
+            ["No light data", "No usable light channel was found.", "Continue with activity analysis or upload a separate light file."],
+            ["Metric unavailable or null", "The metric lacked enough valid data, required windows, or a supported signal.", "Review daily QC, consecutive valid windows, sleep-window coverage, and metric requirements."],
+            ["No Crespo/Roenneberg window", "The selected method did not find a usable main rest interval.", "Review gaps, wear time, activity measure, and recording duration; add a diary window when available."],
+          ]} />
         </Card>
-        <Card title="Quality tables">
-          Recording Quality by 24-hour Window separates expected time, gaps, detected/mapped non-wear, manual masks, and analyzable time. It reports the selected calendar-day or recording-aligned basis, total valid windows, longest consecutive valid-window run, and resolved recommended/customized thresholds. Sleep-window QC reports expected, available, and coverage proportions for each candidate window.
+        <Card title="Before submitting feedback">
+          Note the affected filename, file format, selected activity measure, workflow step, request ID, and exact message. Do not include participant identifiers or raw measurements in the feedback text. A contact email is required so the team can follow up.
         </Card>
       </div>
     ),
-    provenance: (
+    methods: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="pyActigraphy foundation">
-          Native readers, non-parametric activity metrics, Crespo_AoT/Roenneberg_AoT procedures, and Cosinor modelling use pyActigraphy. The web backend prepares the selected scalar activity series, applies file-specific preprocessing, and then calls the corresponding pyActigraphy methods. See <a href="https://ghammad.github.io/pyActigraphy/" target="_blank" rel="noreferrer">pyActigraphy documentation</a>, <a href="https://github.com/ghammad/pyActigraphy" target="_blank" rel="noreferrer">source code</a>, and the <a href="https://doi.org/10.1371/journal.pcbi.1009514" target="_blank" rel="noreferrer">package paper</a>.
+          Native file readers, non-parametric activity metrics, Crespo_AoT and Roenneberg_AoT procedures, and Cosinor modelling use pyActigraphy. The application prepares the selected scalar activity series, applies the chosen preprocessing, and then calls the corresponding methods. See the <a href="https://ghammad.github.io/pyActigraphy/" target="_blank" rel="noreferrer">pyActigraphy documentation</a>, <a href="https://github.com/ghammad/pyActigraphy" target="_blank" rel="noreferrer">source code</a>, and <a href="https://doi.org/10.1371/journal.pcbi.1009514" target="_blank" rel="noreferrer">package paper</a>.
         </Card>
-        <Card title="Recorded preprocessing">
-          Results retain reader/file format, requested and resolved activity mapping, source column or raw-processing engine, units, sample rate, epoch duration, calibration/filter details, start/stop limits, non-wear and masks, valid-day decisions, sleep-window coverage, algorithm parameters, application version, Git commit, and diagnostic stages. Missing and excluded epochs remain unavailable rather than becoming zero activity.
+        <Card title="What is recorded with the analysis">
+          Results retain the source file and reader, resolved activity measure and units, epoch duration, selected preprocessing thresholds, start/stop intervals, masks, valid-window decisions, sleep-window coverage, algorithms, metric parameters, application version, and quality-control messages. Missing and excluded epochs remain unavailable rather than being treated as zero activity.
         </Card>
-        <Card title="Feedback location">
-          Feedback is appended to <Code>{"${APP_DATA_DIR}/feedback.jsonl"}</Code>. A contact email is required, and each submission plus its attached technical context is retained for 30 days before automatic deletion. Configure persistent storage and <Code>FEEDBACK_ADMIN_TOKEN</Code>, then open <Code>/?feedback-admin=1</Code> in the frontend to search, inspect, and export current reports. The protected <Code>GET /api/admin/feedback</Code> and <Code>GET /api/admin/feedback/export</Code> endpoints remain available for direct access. Reports include selected settings, filenames, progress, request ID, and visible errors, but not raw files.
+        <Card title="Data handling and feedback">
+          Uploaded recording and support files are used temporarily to complete the requested operation and are deleted after processing. Feedback requires a contact email and may include non-raw technical context such as filenames, selected settings, request IDs, and visible errors. Feedback and its attached context are retained for 30 days, then automatically deleted. Do not include participant identifiers in filenames or feedback.
         </Card>
       </div>
     ),
     terms: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Hosting and funding">
+        <Card title="Hosting and support">
           This web tool is hosted by the Ontario Brain Institute (OBI), with development supported through the Centre for Analytics.
         </Card>
         <TermsOfUseContent compact />
-      </div>
-    ),
-    developers: (
-      <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Application architecture">
-          The frontend is React/Vite and the backend is FastAPI/Uvicorn. Native readers and raw accelerometer adapters produce a timestamped scalar activity series for analysis. Registry JSON files define metrics, algorithms, families, workflow labels, and export options.
-        </Card>
-        <Card title="Important endpoints">
-          <Table headers={["Endpoint", "Purpose"]} rows={[
-            ["GET /api/version", "Deployment version and enabled feature flags."],
-            ["GET /api/progress/{request_id}", "Live analysis progress."],
-            ["GET /api/jobs/{job_id}", "Poll background status and retrieve a completed result."],
-            ["POST /api/jobs/qc/initial", "Start initial per-window data-coverage QC for Step 2."],
-            ["POST /api/jobs/preview/basic", "Start activity preview."],
-            ["POST /api/jobs/light/preview", "Start embedded/separate light preview."],
-            ["POST /api/jobs/light/analyze", "Run selected light metrics."],
-            ["POST /api/jobs/analyze/basic", "Run preprocessing, sleep, metrics, QC, and diagnostics."],
-            ["POST /api/feedback", "Store user feedback in APP_DATA_DIR."],
-            ["GET /api/admin/feedback", "Token-protected feedback list, filters, counts, and storage details."],
-            ["GET /api/admin/feedback/export", "Token-protected CSV or JSONL feedback export."],
-          ]} />
-        </Card>
-        <Card title="Documentation and search maintenance">
-          The in-app search indexes section labels plus full narrative content, workflow descriptions, file-format text, activity options, algorithm registry content, metric registry content, and analysis-family content. When behaviour changes, update this component and the matching repository Markdown, then record the user-visible change in <Code>docs/CHANGELOG.md</Code>.
-        </Card>
       </div>
     ),
   };
@@ -375,11 +357,11 @@ export default function DocumentationPanel({ onClose }) {
           <div style={{ width: "100%" }}>
             <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>Help & methods</div>
             <h2 style={{ margin: "6px 0 6px", fontSize: 26, color: "#0f172a" }}>Documentation</h2>
-            <div style={{ color: "#475569", lineHeight: 1.5 }}>Searchable user guidance, methods, file support, diagnostics, preprocessing provenance, and developer notes.</div>
+            <div style={{ color: "#475569", lineHeight: 1.5 }}>Searchable guidance for completing the workflow, choosing settings, understanding results, and resolving common problems.</div>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", width: "100%" }}>
             <a href={githubDocsUrl} target="_blank" rel="noreferrer" style={{ padding: "9px 13px", borderRadius: 10, border: "1px solid #cbd5e1", color: "#0f172a", textDecoration: "none", fontWeight: 700, fontSize: 13 }}>
-              Open GitHub docs
+              Open full user guide
             </a>
             <button type="button" onClick={onClose} style={{ padding: "9px 13px", borderRadius: 10, border: "none", background: "#0f172a", color: "white", fontWeight: 700, cursor: "pointer" }}>
               Return to workflow
@@ -393,12 +375,12 @@ export default function DocumentationPanel({ onClose }) {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search all documentation"
+            placeholder="Search the user guide"
             aria-label="Search all documentation content"
             style={{ width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 9, border: "1px solid #cbd5e1", marginBottom: 7 }}
           />
           <div style={{ color: "#64748b", fontSize: 12, lineHeight: 1.4, marginBottom: 10 }}>
-            Searches headings, explanations, workflow text, metrics, algorithms, formats, errors, and developer content.
+            Searches workflow steps, settings, file formats, metrics, results, and troubleshooting guidance.
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             {visibleSections.map((section) => (
@@ -411,7 +393,7 @@ export default function DocumentationPanel({ onClose }) {
                 {section.label}
               </button>
             ))}
-            {visibleSections.length === 0 && <div style={{ color: "#64748b", fontSize: 13, padding: 8 }}>No documentation content matched this search.</div>}
+            {visibleSections.length === 0 && <div style={{ color: "#64748b", fontSize: 13, padding: 8 }}>No guide content matched this search.</div>}
           </div>
         </aside>
 

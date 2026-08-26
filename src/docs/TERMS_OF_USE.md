@@ -14,13 +14,13 @@ Upload only data that you are authorized to process. Remove direct identifiers f
 
 ## Temporary processing
 
-Uploaded recording and support files are used temporarily to complete the requested preview or analysis and are deleted after processing. Processing status and result data are also temporary. Download any outputs that need to be retained.
+Uploaded recording files, support files, job data, and temporary processing data are retained only as needed to operate the service and are automatically deleted **no later than 30 days after upload**. Some temporary files may be deleted sooner after processing or when a job completes. Download any outputs that need to be retained.
 
 ## Technical context and feedback
 
 Feedback may include non-raw technical information such as filenames, file sizes, selected settings, processing stages, errors, request IDs, and summary results. A contact email address is required so the Centre for Analytics team can follow up.
 
-Feedback, the contact email address, and attached technical context are retained for **30 days from submission** and then automatically deleted. Do not include participant identifiers, raw measurements, or other sensitive information in filenames or feedback text.
+Feedback, the contact email address, and attached technical context are retained for a **maximum of 30 days from submission** and then automatically deleted. A minimal notification email may be sent to the designated project contact containing the submitter email, filename, workflow step, category, and feedback ID. The feedback message and detailed diagnostic context are not included in that notification. Do not include participant identifiers, raw measurements, or other sensitive information in filenames or feedback text.
 
 ## Recommended settings and scientific responsibility
 

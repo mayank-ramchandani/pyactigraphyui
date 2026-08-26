@@ -1,177 +1,55 @@
-# Change log
+# What’s new
+
+This page summarizes changes that affect users of the application. Internal deployment and implementation details are documented separately from the public user guide.
+
+## 2026-08-05 — User-focused documentation
+
+- Reorganized the in-app guide around user tasks and decisions.
+- Removed deployment, API, storage-path, admin-token, and maintainer instructions from public documentation.
+- Added a clearer “Start here” section, recommended first-run approach, and final review checklist.
+- Rewrote troubleshooting guidance as practical user actions.
+- Simplified file-format, preprocessing, activity-measure, metric, reproducibility, and data-handling explanations.
+- Moved internal architecture, deployment, maintenance, and implementation notes outside the public `docs` directory.
 
 ## 2026-07-30 — Feedback contact and retention
 
-- Made the feedback contact email mandatory in both the frontend form and backend API validation so the Centre for Analytics team can follow up.
-- Added clear feedback-form and Terms of Use wording that feedback, the email address, and attached technical context are retained for 30 days.
-- Added application-level feedback expiry at startup, every 24 hours, and before submit/list/export operations; expired JSONL records are removed atomically.
-- Replaced CFA wording with Centre for Analytics in the Terms of Use and related documentation.
+- Made a contact email required in the feedback form so the team can follow up.
+- Added a 30-day retention period for feedback, contact email, and attached technical context.
+- Updated the Terms of Use to explain the retention period and de-identification expectations.
 
-## 2026-07-27 — Initial QC, flexible quality windows, dynamic file search, and terms
+## 2026-07-27 — Data-quality windows and preview improvements
 
-- Added Step 2 initial per-file coverage QC before final preprocessing decisions.
-- Kept calendar-day QC as the recommended default and added recording-aligned 24-hour windows as an explicit sensitivity option.
-- Reframed numeric thresholds and related guidance as recommended, configurable settings across the preprocessing UI, results, and documentation.
-- Replaced Step 4 filename selects with dynamic search result lists that distinguish duplicate filenames using stable upload identity and metadata.
-- Removed the heterogeneous Context column from algorithm selection and moved context into the Context / details dialog.
-- Changed advisory processing/QC warning styling to yellow while retaining red for true failures and invalid quality windows.
-- Added in-app and repository Terms of Use covering OBI hosting, Centre for Analytics support, transient raw inputs, diagnostic/feedback metadata, de-identification, acceptable use, and scientific responsibility.
+- Added initial per-file coverage information on the Pre-processing page.
+- Added a choice between calendar-day and recording-aligned 24-hour quality windows.
+- Improved file search and duplicate-filename identification in Activity Preview.
+- Changed recoverable warning styling to yellow while retaining red for true failures and invalid quality windows.
 
-## 2026-07-24 — PIM/ZCM, Cosinor family, feedback access, and preprocessing provenance
+## 2026-07-24 — Additional activity measures and analysis families
 
-- Added PIM and ZCM to the activity-mapping UI, normalization, raw GENEActiv/GT3X streaming reducers, preprocessed time-series column detection, generic mapped tables, and native ATR reader modes.
-- Restored the family-level/metric-level selector in Standard and Custom modes and enabled the pyActigraphy Cosinor family.
-- Expanded feedback submissions with selected files, analysis configuration, progress, request ID, client URL, and recent errors.
-- Added token-protected feedback list and CSV/JSONL export endpoints plus a local export command.
-- Replaced the former document with preprocessing, pyActigraphy foundation, provenance, missingness, and reproducible configuration guidance.
+- Added PIM and ZCM activity measures.
+- Restored family-level and metric-level analysis selection.
+- Added the pyActigraphy Cosinor family.
+- Improved localized Actiware/RPX CSV support and manual CSV mapping.
+- Added preparation guidance for NHANES PAXHR_H files.
 
-## 2026-07-24 — Centred interface and resilient CSV/RPX loading
+## 2026-07-23 — Ten-step workflow
 
-- Updated the persistent documentation link to `https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs`.
-- Centre-aligned workflow pages, documentation pages, cards, tables, inputs, and navigation/action buttons, with responsive single-column layouts on smaller screens.
-- Added encoding detection for UTF-8, UTF-8 BOM, Windows-1252, UTF-16, and Latin-1-compatible CSV/text files.
-- Added a multilingual Philips Actiware/RPX epoch-table parser for English, French, and German exports, bypassing the pyActigraphy `data_offset` failure for localized CSVs.
-- Preserved white/RGB light channels and supported valid no-light RPX files without blocking activity analysis.
-- Enabled automatic and manual generic CSV mapping in preview, analysis, and light workflows, and added the missing `/api/tabular/columns` inspection route.
-- Added NHANES `PAXHR_H` detection with participant/timestamp preparation guidance instead of a generic unsupported-file message.
-- Added five localized/generic tabular regression tests and updated the in-app and GitHub documentation.
+- Reorganized the application into ten workflow pages from upload through export.
+- Made Steps 2–9 directly accessible after file upload.
+- Separated preprocessing, activity selection, preview, cleaning, sleep, sensors, metric setup, results, and export.
+- Added configurable valid-window, consecutive-window, and sleep-window coverage criteria.
+- Added content-aware light handling so recordings without light remain usable for activity analysis.
 
-## 2026-07-23 — Ten-page workflow and full-content documentation
+## 2026-07-22 — Missingness and quality control
 
-- Reorganized the interface into the requested ten-page process from actigraphy import through export.
-- Made sidebar pages 2–9 directly clickable after file import; Export unlocks only after successful result generation.
-- Moved valid-day, consecutive-day, sleep-window coverage, and non-wear choices to the Pre-processing page.
-- At that release, limited the activity-estimation page to four options; the 2026-07-24 update later expanded it to include PIM and ZCM.
-- Separated cleaning/masking, sleep-wake classification, other sensors, metric setup, result generation, and export into dedicated pages.
-- Added an information explanation for minimum sleep-window coverage.
-- Expanded in-app search to index complete narrative, workflow, format, metric, algorithm, family, diagnostic, provenance, and developer content.
-- Made the GitHub documentation link persistently visible with an exact `VITE_GITHUB_DOCS_URL` override and repository fallback.
-- Updated the in-app guide, GitHub Markdown documentation, environment example, and preprocessing guidance.
+- Preserved missing and excluded epochs as unavailable rather than zero activity.
+- Added daily quality information for recorded time, gaps, non-wear, masks, and analyzable time.
+- Added sleep-window coverage checks and valid 24-hour pairs for SRI.
+- Improved background processing and preview reliability for large recordings.
 
-## 2026-07-23 — Optional preprocessing validity thresholds
+## 2026-07-16 — Documentation and processing transparency
 
-- Kept the project standards active by default: 16 analyzable hours per valid day, two consecutive valid days for multi-day rhythm/SRI metrics, and 80% sleep-window coverage.
-- Added an explicit preprocessing opt-in before custom thresholds are applied.
-- Changed rhythm/SRI eligibility from total valid-day count to the longest consecutive valid-day run.
-- Added the consecutive-day run to results, diagnostics, documentation, and regression tests.
-
-## 2026-07-23 — Content-aware GT3X light processing
-
-- Replaced extension-based GT3X light rejection with complete `log.bin`
-  inspection for official type-`0x05` lux records.
-- Added bounded-memory lux aggregation with checksum, timestamp, and payload
-  validation; real gaps remain missing.
-- Exposed GT3X light as `LIGHT` (`log10(lux + 1)`) and `LIGHT_LUX` (lux).
-- Added explicit successful no-light responses so activity continues while
-  light preview and metrics are skipped.
-- Added one background batch job for all selected light metrics, avoiding one
-  upload and file scan per metric.
-- Made lux thresholds follow the selected channel's raw-lux or log scale.
-- Updated the UI, API feature flags, deployment guidance, in-app documentation,
-  and regression suite.
-- Added five focused tests; the complete 26-test backend suite passes.
-
-## 2026-07-23 — Safe large-file light previews
-
-- Stopped `.gt3x` activity files from being used as implicit light sources.
-- Added a clear GT3X-light capability message while preserving GT3X activity
-  preview and analysis.
-- Rejected direct GT3X light requests before temporary-file copying or decoding.
-- Added background jobs for standard light preview, multichannel/RGB preview,
-  and light-channel discovery.
-- Returned standard preview, channels, and the initial multichannel sample from
-  one raw-file decode to avoid redundant GENEActiv processing.
-- Added frontend affinity-aware polling for background light jobs.
-- Added four regression tests for early GT3X rejection, supported light-job
-  lifecycle, and single-decode preview composition; the complete 21-test
-  backend suite passes.
-
-## 2026-07-22 — Missing days, non-wear, and valid-day QC
-
-- Added one format-independent missingness/non-wear stage for GT3X, direct BIN,
-  converted BIN/CWA, Oxford time-series, and native pyActigraphy files.
-- Kept absent and excluded epochs as missing rather than zero activity.
-- Connected **Respect detected non-wear** to backend reader/mapped masks.
-- Added configurable defaults of 16 valid hours/day, two consecutive valid
-  days for rhythm/SRI eligibility, and 80% sleep-window coverage.
-- Added daily QC with recorded, gap, detected-non-wear, manual-mask, and
-  analyzable hours.
-- Made SRI use valid 24-hour pairs and prevented direct-BIN transitions across
-  missing gaps.
-- Excluded low-coverage sleep windows and used observed/scored minutes as the
-  sleep-efficiency denominator.
-- Added ten focused data-quality tests; the complete 17-test suite passes.
-
-## 2026-07-22 — Resilient background-job polling
-
-- Retried transient missing-job responses instead of failing on the first 404.
-- Included credentials on cross-origin job requests for Azure session affinity.
-- Added replica/revision and job-store-scope diagnostics to job responses.
-- Added a targeted error for replica-local or lost background-job state.
-
-## 2026-07-22 — Strict JSON for recording previews
-
-- Converted missing and non-finite preview points to JSON `null` after
-  resampling recordings that contain gaps.
-- Routed activity previews through the same JSON-safety boundary as analyses.
-- Enforced strict JSON when persisting background-job results so `NaN` and
-  infinite numeric values cannot reappear during polling.
-- Added regression coverage for gapped previews and background results.
-
-## 2026-07-21 — Background jobs for the 240-second ingress limit
-
-- Added HTTP 202 background-job submission and result polling for activity
-  preview and main analysis.
-- Kept GT3X decoding and selected metrics outside the original upload request.
-- Added a one-worker default to protect 2 GiB deployments from concurrent
-  large-recording memory multiplication.
-- Persisted job status/results under `APP_DATA_DIR` and removed job input files
-  after completion.
-- Added frontend recovery when ingress closes exactly as a known job ID is
-  accepted.
-
-## 2026-07-21 — Bounded-memory GT3X loading
-
-- Replaced whole-file `pygt3x.FileReader.to_pandas()` decoding with low-level
-  streamed `log.bin` event processing.
-- Reduced calibrated X/Y/Z directly into epoch-level processed `acc`, MAD,
-  custom ENMO, or supported 30 Hz ActiGraph-style counts.
-- Preserved device-local timestamps and real recording gaps.
-- Added checksum, impossible-timestamp, duplicate-event, calibration, buffer,
-  and GT3X progress diagnostics.
-- Moved CPU-heavy preview/conversion routes into FastAPI's thread pool and
-  guaranteed temporary-upload cleanup.
-- Added synthetic gap/timezone/MAD regression tests and a full 289 MB GT3X
-  benchmark.
-
-## 2026-07-16 — Documentation centre
-
-- Added a searchable in-app Documentation page.
-- Added GitHub-ready user, methods, file-format, diagnostics, preprocessing/provenance, architecture, deployment, and maintenance documentation.
-- Added optional `VITE_GITHUB_REPOSITORY_URL` support.
-- Added the `documentation_center` backend feature flag.
-
-## 2026-07-16 — Processed activity basis
-
-- Restored file-aware recommended activity behaviour.
-- Count-based files use source/device activity.
-- Raw `.bin`, `.cwa`, and `.gt3x` files use processed epoch-level `acc` where supported.
-- Kept MAD and ENMO as optional mappings; PIM and ZCM were added in the 2026-07-24 release.
-- Decoupled preview mapping from analysis mapping.
-- Added mapping engine, units, filter, and epoch metadata to diagnostics.
-
-## 2026-07-16 — RA, sleep windows, and live progress
-
-- Corrected direct GENEActiv RA to use the cyclic average daily profile.
-- Added M10/L5 component diagnostics and RA boundary warnings.
-- Added Raw-like interfaces needed by pyActigraphy Crespo and Roenneberg methods.
-- Kept the no-fallback-window requirement.
-- Added live upload, stage, byte, page, and sample progress.
-
-## 2026-07-16 — Structured diagnostics and response safety
-
-- Added per-file, per-stage timing and memory diagnostics.
-- Captured previously suppressed metric exceptions.
-- Made QC non-fatal.
-- Added JSON-safe conversion for NumPy/Pandas/vector metric outputs.
-- Added structured unhandled-error responses and downloadable diagnostic reports.
+- Added the searchable in-app Documentation page.
+- Added file-aware recommended activity processing.
+- Corrected relative-amplitude calculation for direct GENEActiv processing.
+- Added per-file status, warnings, and downloadable diagnostic information.

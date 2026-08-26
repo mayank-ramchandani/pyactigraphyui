@@ -44,7 +44,7 @@
     },
     "documentationCenter": {
       "enabled": true,
-      "description": "In-app user, methods, diagnostics, limitations, and developer documentation with full-content search."
+      "description": "In-app user guidance, methods, file support, troubleshooting, and limitations with full-content search."
     },
     "termsOfUse": {
       "enabled": true,

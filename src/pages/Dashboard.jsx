@@ -170,6 +170,7 @@ export default function Dashboard() {
   const initialQcRequestedRef = useRef(new Set());
 
   const [analysisMode, setAnalysisMode] = useState("standard");
+  const [participantFileMode, setParticipantFileMode] = useState("separate");
   const [analysisScope, setAnalysisScope] = useState("metric");
   const [selectedFamilies, setSelectedFamilies] = useState(() =>
     (analysisFamilyRegistry.families || []).filter((family) => !family.planned).map((family) => family.id)
@@ -1040,12 +1041,21 @@ export default function Dashboard() {
   };
 
   const handleGenerateResults = async () => {
-    const filesToAnalyze = selectedAnalysisFiles;
-    if (!filesToAnalyze.length) {
+    const selectedFilesForRun = selectedAnalysisFiles;
+    if (!selectedFilesForRun.length) {
       setAnalysisError("Select at least one file to analyze.");
       return;
     }
 
+    const joinParticipantFiles = participantFileMode === "join" && selectedFilesForRun.length > 1;
+    if (joinParticipantFiles && selectedLightMetrics.length > 0) {
+      setAnalysisError("Joined participant analysis currently combines the actigraphy activity/sleep timeline only. Deselect light metrics, or analyze the files separately for light outputs.");
+      return;
+    }
+    const filesToAnalyze = joinParticipantFiles ? [selectedFilesForRun[0]] : selectedFilesForRun;
+    const joinedFileLabel = joinParticipantFiles
+      ? `Joined participant (${selectedFilesForRun.length} files)`
+      : null;
     const lightMetricCount = selectedLightMetrics.length;
     const totalSteps = Math.max(1, filesToAnalyze.length * (1 + lightMetricCount));
     let completedSteps = 0;
@@ -1058,18 +1068,21 @@ export default function Dashboard() {
       setLightResults({});
       setResultsGenerated(false);
       setMultiFileResults([]);
-      setProgressStage(`Preparing ${filesToAnalyze.length} file(s) for analysis`, 0, totalSteps);
+      setProgressStage(joinParticipantFiles ? `Preparing ${selectedFilesForRun.length} files as one participant timeline` : `Preparing ${filesToAnalyze.length} file(s) for analysis`, 0, totalSteps);
 
       for (let fileIndex = 0; fileIndex < filesToAnalyze.length; fileIndex += 1) {
         const sourceFile = filesToAnalyze[fileIndex];
-        const fileLabel = `${sourceFile.name} (${fileIndex + 1}/${filesToAnalyze.length})`;
+        const fileLabel = joinedFileLabel || `${sourceFile.name} (${fileIndex + 1}/${filesToAnalyze.length})`;
 
         try {
           setProgressStage(`Uploading and analyzing ${fileLabel}`, completedSteps, totalSteps);
 
           const formData = new FormData();
           formData.append("file", sourceFile);
-          formData.append("sourceFileName", sourceFile.name);
+          if (joinParticipantFiles) {
+            selectedFilesForRun.slice(1).forEach((file) => formData.append("additionalFiles", file));
+          }
+          formData.append("sourceFileName", joinParticipantFiles ? joinedFileLabel : sourceFile.name);
           formData.append("activityChannel", activityChannel);
           formData.append("activityMapping", activityMapping);
           formData.append("activityTransform", activityTransform);
@@ -1189,8 +1202,8 @@ export default function Dashboard() {
             : activityStatus;
 
           const row = {
-            fileName: sourceFile.name,
-            fileSizeMb: Number((sourceFile.size / (1024 * 1024)).toFixed(3)),
+            fileName: joinParticipantFiles ? joinedFileLabel : sourceFile.name,
+            fileSizeMb: Number(((joinParticipantFiles ? selectedFilesForRun.reduce((sum, file) => sum + file.size, 0) : sourceFile.size) / (1024 * 1024)).toFixed(3)),
             status: combinedStatus,
             results,
             qcWarnings: data.qcWarnings || [],
@@ -1199,6 +1212,7 @@ export default function Dashboard() {
             detectedInputType: data.detected_input_type || null,
             activityMapping: data.activity_mapping || { requested: activityMapping, resolved: activityMapping },
             diagnostics: data.diagnostics || null,
+            participantJoin: data.participant_join || null,
             lightResults: generatedLightResults,
             lightDiagnostics: generatedLightDiagnostics,
           };
@@ -1218,8 +1232,8 @@ export default function Dashboard() {
           completedSteps += 1 + lightMetricCount;
           const message = err.message || "Failed to generate results.";
           const row = {
-            fileName: sourceFile.name,
-            fileSizeMb: Number((sourceFile.size / (1024 * 1024)).toFixed(3)),
+            fileName: joinParticipantFiles ? joinedFileLabel : sourceFile.name,
+            fileSizeMb: Number(((joinParticipantFiles ? selectedFilesForRun.reduce((sum, file) => sum + file.size, 0) : sourceFile.size) / (1024 * 1024)).toFixed(3)),
             status: "failed",
             error: message,
             results: {},
@@ -1667,6 +1681,8 @@ export default function Dashboard() {
         actigraphyFiles={actigraphyFiles}
         selectedAnalysisFileNames={selectedAnalysisFileNames}
         setSelectedAnalysisFileNames={setSelectedAnalysisFileNames}
+        participantFileMode={participantFileMode}
+        setParticipantFileMode={setParticipantFileMode}
         multiFileResults={multiFileResults}
         resultsGenerated={resultsGenerated}
         onGenerate={handleGenerateResults}
@@ -1923,6 +1939,7 @@ export default function Dashboard() {
             activityMapping,
             analysisMode,
             analysisScope,
+            participantFileMode,
             selectedFamilies,
             selectedMetrics: resolvedSelectedMetrics,
             selectedAlgorithm,

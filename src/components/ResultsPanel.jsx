@@ -359,6 +359,8 @@ export default function ResultsPanel({
   actigraphyFiles = [],
   selectedAnalysisFileNames = [],
   setSelectedAnalysisFileNames = () => {},
+  participantFileMode = "separate",
+  setParticipantFileMode = () => {},
   multiFileResults = [],
   resultsGenerated,
   onGenerate,
@@ -457,7 +459,7 @@ export default function ResultsPanel({
             <div>
               <div style={{ fontWeight: 800 }}>Files selected for analysis</div>
               <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
-                Preview is optional. The analysis will run for the checked files below and report any file-level errors separately.
+                Preview is optional. Choose the files below, then either analyze them separately or explicitly join them as one participant timeline when they belong to the same participant.
               </div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -469,6 +471,27 @@ export default function ResultsPanel({
               </button>
             </div>
           </div>
+          {selectedFileCount > 1 && (
+            <div style={{ marginBottom: 14, border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 14, padding: 12 }}>
+              <div style={{ fontWeight: 800, marginBottom: 8 }}>How should multiple selected files be analyzed?</div>
+              <div style={{ display: "grid", gap: 8 }}>
+                <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer" }}>
+                  <input type="radio" name="participant-file-mode" value="separate" checked={participantFileMode === "separate"} onChange={() => setParticipantFileMode("separate")} style={{ marginTop: 3 }} />
+                  <span>
+                    <strong>Analyze each file separately</strong>
+                    <span style={{ display: "block", color: "#475569", fontSize: 13, marginTop: 3, lineHeight: 1.5 }}>Produces one set of metrics per file. This remains the default.</span>
+                  </span>
+                </label>
+                <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer" }}>
+                  <input type="radio" name="participant-file-mode" value="join" checked={participantFileMode === "join"} onChange={() => setParticipantFileMode("join")} style={{ marginTop: 3 }} />
+                  <span>
+                    <strong>Join as one participant timeline</strong>
+                    <span style={{ display: "block", color: "#475569", fontSize: 13, marginTop: 3, lineHeight: 1.5 }}>Use only when all selected files are from the same participant and represent portions of the same longitudinal recording. Real timestamps and recording gaps are preserved; compatible sampling intervals are required. Activity/sleep metrics are calculated once across the joined series.</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
           <div style={{ display: "grid", gap: 8 }}>
             {actigraphyFiles.map((file, idx) => {
               const checked = selectedAnalysisNameSet.has(file.name);

@@ -249,7 +249,7 @@ export default function DocumentationPanel({ onClose }) {
     sensors: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Light data">
-          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped.
+          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. On the Results page, multiple selected actigraphy files can be analyzed separately or explicitly joined into one timestamp-preserving participant timeline when they all belong to the same participant. Joined mode requires compatible sampling intervals and is intended for activity/sleep metrics; light outputs remain file-level.
         </Card>
         <Card title="RGB and multichannel light">
           When red, green, blue, white, or lux channels are available, the preview identifies them separately. Confirm the units and channel used by each selected light metric, especially when choosing thresholds.
@@ -319,7 +319,7 @@ export default function DocumentationPanel({ onClose }) {
           Results retain the source file and reader, resolved activity measure and units, epoch duration, selected preprocessing thresholds, start/stop intervals, masks, valid-window decisions, sleep-window coverage, algorithms, metric parameters, application version, and quality-control messages. Missing and excluded epochs remain unavailable rather than being treated as zero activity.
         </Card>
         <Card title="Data handling and feedback">
-          Uploaded recording and support files are used temporarily to complete the requested operation and are deleted after processing. Feedback requires a contact email and may include non-raw technical context such as filenames, selected settings, request IDs, and visible errors. Feedback and its attached context are retained for 30 days, then automatically deleted. Do not include participant identifiers in filenames or feedback.
+          Uploaded recording files, support files, job data, and temporary processing data are automatically deleted no later than 30 days after upload; temporary files may be deleted sooner after processing. Feedback requires a contact email and may include non-raw technical context such as filenames, selected settings, request IDs, and visible errors. Feedback and its attached context are retained for a maximum of 30 days, then automatically deleted. A minimal notification email may include the submitter email, filename, workflow step, category, and feedback ID, but not the feedback message or detailed diagnostic context. Do not include participant identifiers in filenames or feedback.
         </Card>
       </div>
     ),

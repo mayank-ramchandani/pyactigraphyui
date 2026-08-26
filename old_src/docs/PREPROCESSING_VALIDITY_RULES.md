@@ -1,105 +1,84 @@
-# Preprocessing validity rules
+# Preprocessing and data-quality settings
 
-## Where these settings are configured
+These settings are configured on **Step 2: Pre-processing**. Start/stop limits and masks are configured later on **Step 5: Cleaning and Masking**.
 
-Data-quality settings are configured on **page 2: Pre-processing**. The page first runs an initial per-file coverage inspection, then lets the analyst select the quality-window basis and either retain or customize the recommended thresholds. Mask files and custom exclusion intervals are configured separately on **page 5: Cleaning and Masking**.
+## Recommended starting settings
 
-## Initial data-coverage QC
-
-After a recording is loaded, the application reports for each candidate 24-hour quality window:
-
-- recorded hours;
-- recording-gap hours;
-- detected or mapped non-wear hours, when available;
-- effective hours used for the current validity decision; and
-- whether the window reaches the selected minimum-hours threshold.
-
-This initial table is descriptive and occurs before uploaded/manual masks and start/stop limits. Final QC is recalculated during analysis after all preprocessing choices have been applied.
-
-## Recommended settings
-
-Unless the analyst explicitly enables **Customize the recommended data-quality thresholds**, the application uses:
+Unless customization is enabled, the application uses:
 
 - at least **16 analyzable hours** for a quality window to be valid;
-- a run of at least **2 consecutive valid quality windows** for multi-window rhythm metrics and SRI eligibility; and
-- at least **80% recorded and scorable coverage** for each sleep window used by TST, WASO, sleep efficiency, and other window-dependent summaries.
+- at least **2 consecutive valid quality windows** for multi-day rhythm metrics and SRI eligibility;
+- at least **80% available and scorable coverage** for a sleep window to be included in sleep summaries;
+- detected or mapped non-wear when it is available from the file or selected mapping.
 
-These values are configurable starting points rather than mandatory criteria for every protocol. Missing timestamps, non-finite activity, start/stop truncation, respected detected non-wear, and manual masks remain missing. They are not converted to zero activity.
+These values are starting points. A study protocol may require different criteria.
 
-## Quality-window basis
+## Initial and final quality checks
+
+The initial table on Step 2 summarizes each candidate quality window before manual start/stop limits and masks are applied. It shows recorded time, gaps, detected or mapped non-wear, effective analyzable time, and whether the minimum-hours threshold is met.
+
+Final quality is recalculated during analysis after all selected preprocessing choices have been applied.
+
+## Calendar day or recording-aligned 24-hour window
 
 ### Calendar day — recommended default
 
-A calendar day is defined from midnight to midnight. This basis preserves clock-day interpretation for daily summaries and circadian timing outputs.
+A calendar day runs from midnight to midnight. This keeps daily summaries and circadian timing aligned with clock dates.
 
-For a complete recording from 4 PM on day 1 to 4 PM on day 2, calendar-day QC produces:
+For a recording from 4 PM on Day 1 to 4 PM on Day 2, calendar-day quality control reports 8 hours on the first date and 16 hours on the second date. At a 16-hour threshold, the second date is valid; both dates are not automatically lost.
 
-- 8 recorded hours on the first date; and
-- 16 recorded hours on the second date.
+### Recording-aligned 24-hour windows
 
-At a 16-hour threshold, the second date is valid; both dates are not automatically lost.
+These windows begin at the first retained timestamp and continue in 24-hour blocks. The same 4 PM-to-4 PM recording produces one complete 24-hour window.
 
-### Recording-aligned 24-hour windows — sensitivity option
+This option can be useful for short recordings or deployment-anchored protocols. Interpret and report the outputs as recording-aligned windows rather than calendar days.
 
-Recording-aligned windows begin at the first retained timestamp and continue in consecutive 24-hour blocks. The same 4 PM-to-4 PM example produces one complete 24-hour quality window. This option can be useful for short recordings or protocols intentionally anchored to deployment time, but outputs should be interpreted as recording-aligned quality windows rather than clock-calendar days.
+## Consecutive valid windows
 
-The selected basis is retained in result payloads, diagnostics, and exports.
+The application reports both:
 
-## Customized settings
-
-When customization is enabled, the analyst may change:
-
-- recommended minimum valid hours per quality window: 1–24 hours;
-- recommended minimum consecutive valid windows for rhythm/SRI: 1–365 windows; and
-- recommended minimum sleep-window coverage: 0–1.
-
-The backend validates and resolves these values, then stores them in results, data-quality payloads, diagnostics, and exports. Turning customization off restores the recommended numeric values even when custom values remain visible in frontend state.
-
-## Consecutive-window rule
-
-The application reports:
-
-- total valid quality windows; and
+- the total number of valid quality windows; and
 - the longest uninterrupted run of valid quality windows.
 
-IS, IV, ISm, IVm, ISp, IVp, RAp, and SRI are gated by the longest consecutive run, not merely the total valid-window count. Valid windows separated by an invalid or missing window do not satisfy a two-consecutive-window requirement.
+Multi-day rhythm metrics and SRI eligibility use the longest consecutive run. Two valid windows separated by an invalid or missing window do not satisfy a two-consecutive-window requirement.
 
-SRI additionally uses only valid scored epoch pairs exactly 24 hours apart. Two consecutive valid windows are therefore necessary under the recommended rule but may still produce no SRI when no usable 24-hour pairs remain.
+SRI also requires valid scored epoch pairs exactly 24 hours apart. Meeting the consecutive-window rule does not guarantee that an SRI value can be calculated.
 
-## Recommended minimum sleep-window coverage
+## Sleep-window coverage
 
-For every diary-defined or automatically estimated sleep window:
+For each diary-defined or automatically estimated sleep window, the application:
 
-1. determine the expected number of epochs from the window duration and epoch frequency;
-2. identify epochs still recorded and scorable after gaps, start/stop truncation, non-wear, and manual masks;
-3. calculate `available_scored_epochs / expected_epochs`; and
-4. compare the result with the configured coverage threshold.
+1. calculates the expected number of epochs from the window duration;
+2. identifies epochs still available after gaps, start/stop limits, non-wear, and masks;
+3. divides available scorable epochs by expected epochs; and
+4. compares the result with the selected threshold.
 
-At the recommended threshold of `0.80`, at least 80% of expected epochs must remain. A window below the configured threshold is excluded rather than imputed or treated as complete.
+At the recommended threshold of `0.80`, at least 80% of the expected epochs must remain. A lower-coverage window is excluded from TST, WASO, sleep efficiency, and other window-dependent summaries rather than filled or treated as complete.
 
-## Other preprocessing choices that affect results
+## Other choices that affect validity and results
 
-The three threshold fields are not the only preprocessing decisions:
+- **Respect detected non-wear:** applies an available wear/non-wear indicator.
+- **Start/stop intervals:** define the effective recording period.
+- **Masks:** exclude known invalid intervals.
+- **Sleep windows:** define the intervals used for sleep summaries.
+- **Activity measure:** determines the signal used by the metrics.
+- **Binarization and thresholds:** can change results and must match the selected signal units.
+- **Metric-specific parameters:** may change eligibility or output interpretation.
 
-- **Respect detected non-wear** applies a source/native/mapped wear mask when available.
-- **Start/stop intervals** define the effective recording period.
-- **Uploaded and manual masks** exclude known invalid periods.
-- **Sleep diary/custom windows** determine candidate sleep intervals.
-- **Crespo_AoT/Roenneberg_AoT** may estimate a sleep/rest window when no diary is available.
-- **Activity mapping** determines the scalar activity series used by metrics.
-- Metric binarization, thresholds, resampling, and per-metric parameters may change final values.
+## What to report
 
-## Outputs and reporting
+Retain and report:
 
-Quality output includes the selected window basis, window start/stop, expected, recorded, gap, non-wear, manual-mask, and analyzable durations; validity status; total valid windows; longest consecutive run; and resolved recommended/customized thresholds. Sleep-window QC includes expected epochs, available/scored epochs, coverage proportion, configured threshold, and inclusion/exclusion reason.
+- the selected quality-window basis;
+- the minimum analyzable-hours threshold;
+- the minimum consecutive valid-window requirement;
+- the sleep-window coverage threshold;
+- whether detected non-wear was respected;
+- start/stop and mask rules;
+- total valid windows and longest consecutive run;
+- excluded sleep windows and reasons.
 
-## Method rationale and related software
-
-The recommended calendar-day basis follows a common actigraphy convention rather than implying that every study must use the same border. GGIR defines `includedaycrit` as the minimum valid hours in a **calendar day** and uses 16 hours by default; its standard full-day segment `qwindow = c(0, 24)` runs from midnight to the following midnight. GGIR also exposes other protocol/window strategies, which supports treating recording-aligned processing as an explicit alternative rather than silently redefining a calendar day.
-
-pyActigraphy provides the common timestamped data/mask interface used by this application. Its documentation emphasizes that masks alter downstream rest–activity metrics and should be reviewed carefully. The UI therefore reports gaps, non-wear, masks, the selected window basis, and resolved thresholds instead of converting missing or excluded epochs to zero.
-
-Official references:
+## Related documentation
 
 - [GGIR configuration parameters](https://wadpac.github.io/GGIR/articles/GGIRParameters.html)
 - [GGIR day-segment analyses](https://wadpac.github.io/GGIR/articles/TutorialDaySegmentAnalyses.html)
