@@ -52,7 +52,7 @@ const channelColors = {
   "UVB LIGHT": "#eab308",
 };
 
-export default function LightRGBPanel({ lightFile, initialPayload = null }) {
+export default function LightRGBPanel({ lightFile, additionalFiles = [], initialPayload = null, csvMapping = {}, csvSeparator = "," }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [payload, setPayload] = useState(null);
@@ -88,7 +88,8 @@ export default function LightRGBPanel({ lightFile, initialPayload = null }) {
               startUrl: buildApiUrl("api/jobs/light/rgb-preview"),
               statusBaseUrl: buildApiUrl("api/jobs"),
               file: lightFile,
-              fields: { resampleFreq },
+              additionalFiles,
+              fields: { resampleFreq, csvMapping: JSON.stringify(csvMapping || {}), csvSeparator },
               jobPrefix: "light-rgb",
             });
 
@@ -125,7 +126,7 @@ export default function LightRGBPanel({ lightFile, initialPayload = null }) {
     return () => {
       cancelled = true;
     };
-  }, [lightFile, resampleFreq, initialPayload]);
+  }, [lightFile, resampleFreq, initialPayload, additionalFiles, csvMapping, csvSeparator]);
 
   const chartData = payload?.rgb_preview || [];
 

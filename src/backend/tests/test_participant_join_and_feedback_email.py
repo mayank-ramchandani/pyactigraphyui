@@ -21,13 +21,15 @@ except Exception:
     sys.modules["pyActigraphy.io"] = pyactigraphy_io_module
 
 from backend import app as app_module
+from backend.geneactiv_bin import SimpleLightRecording
 
 
 class DummyRaw:
-    def __init__(self, series):
+    def __init__(self, series, light_channels=None):
         self.data = series
         self.metadata = {}
         self.name = "dummy"
+        self.light = SimpleLightRecording(light_channels or {}) if light_channels else None
 
     @property
     def raw_data(self):
@@ -50,6 +52,63 @@ class ParticipantJoinTests(unittest.TestCase):
         self.assertEqual(metadata["duplicate_timestamps_removed"], 1)
         self.assertEqual(len(joined.data), 7)
         self.assertEqual(joined.data.loc[pd.Timestamp("2026-01-01 00:03")], 4)
+
+    def test_join_concatenates_light_channels_by_timestamp_and_preserves_gap(self):
+        first_index = pd.date_range("2026-01-01 00:00", periods=4, freq="1min")
+        second_index = pd.date_range("2026-01-01 00:10", periods=4, freq="1min")
+        first = DummyRaw(
+            pd.Series([1, 2, 3, 4], index=first_index),
+            {"LIGHT": pd.Series([10, 20, 30, 40], index=first_index)},
+        )
+        second = DummyRaw(
+            pd.Series([5, 6, 7, 8], index=second_index),
+            {"LIGHT": pd.Series([50, 60, 70, 80], index=second_index)},
+        )
+
+        joined, metadata = app_module._concatenate_raw_recordings(
+            [first, second], ["part1.csv", "part2.csv"]
+        )
+
+        joined_light = joined.light.get_channel("LIGHT")
+        self.assertEqual(len(joined_light), 8)
+        self.assertEqual(joined_light.loc[pd.Timestamp("2026-01-01 00:10")], 50)
+        self.assertNotIn(pd.Timestamp("2026-01-01 00:05"), joined_light.index)
+        self.assertTrue(metadata["light"]["available"])
+        self.assertEqual(metadata["light"]["source_file_count_with_light"], 2)
+
+    def test_join_light_uses_first_value_at_duplicate_boundary(self):
+        first_index = pd.date_range("2026-01-01 00:00", periods=4, freq="1min")
+        second_index = pd.date_range("2026-01-01 00:03", periods=4, freq="1min")
+        first = DummyRaw(
+            pd.Series([1, 2, 3, 4], index=first_index),
+            {"LIGHT": pd.Series([10, 20, 30, 40], index=first_index)},
+        )
+        second = DummyRaw(
+            pd.Series([5, 6, 7, 8], index=second_index),
+            {"LIGHT": pd.Series([400, 50, 60, 70], index=second_index)},
+        )
+
+        joined, metadata = app_module._concatenate_raw_recordings(
+            [first, second], ["part1.csv", "part2.csv"]
+        )
+        joined_light = joined.light.get_channel("LIGHT")
+        self.assertEqual(joined_light.loc[pd.Timestamp("2026-01-01 00:03")], 40)
+        self.assertEqual(metadata["light"]["duplicate_timestamps_removed"]["LIGHT"], 1)
+
+    def test_join_rejects_incompatible_light_sampling_intervals(self):
+        activity_index_a = pd.date_range("2026-01-01", periods=4, freq="1min")
+        activity_index_b = pd.date_range("2026-01-02", periods=4, freq="1min")
+        first = DummyRaw(
+            pd.Series([1, 2, 3, 4], index=activity_index_a),
+            {"LIGHT": pd.Series([10, 20, 30, 40], index=activity_index_a)},
+        )
+        second_light_index = pd.date_range("2026-01-02", periods=4, freq="5min")
+        second = DummyRaw(
+            pd.Series([5, 6, 7, 8], index=activity_index_b),
+            {"LIGHT": pd.Series([50, 60, 70, 80], index=second_light_index)},
+        )
+        with self.assertRaisesRegex(ValueError, "light channel LIGHT requires compatible sampling intervals"):
+            app_module._concatenate_raw_recordings([first, second], ["a.csv", "b.csv"])
 
     def test_join_rejects_incompatible_sampling_intervals(self):
         first = DummyRaw(pd.Series([1, 2, 3], index=pd.date_range("2026-01-01", periods=3, freq="1min")))

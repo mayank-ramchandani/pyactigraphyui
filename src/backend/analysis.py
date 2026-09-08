@@ -1711,13 +1711,23 @@ def _normalize_file_id(value):
     text = str(value).strip().lower()
     if not text:
         return ""
+    import re as _re
+    candidates = {text}
+    simplified = _re.sub(r"^joined\s+participant\s*[:(]?\s*", "", text).rstrip(")").strip()
+    if simplified:
+        candidates.add(simplified)
+    for token in _re.split(r"\s*(?:\+|\||;|,)\s*", simplified or text):
+        token = token.strip(" ()[]{}\t\r\n")
+        if token:
+            candidates.add(token)
+    keys = set()
     try:
         from pathlib import Path as _Path
-        stem = _Path(text).stem
-        name = _Path(text).name
-        return "|".join(sorted({text, name, stem}))
+        for candidate in candidates:
+            keys.update({candidate, _Path(candidate).name, _Path(candidate).stem})
     except Exception:
-        return text
+        keys.update(candidates)
+    return "|".join(sorted(item for item in keys if item))
 
 
 def _identifier_matches_file(identifier, source_filename):

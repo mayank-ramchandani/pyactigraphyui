@@ -6,6 +6,7 @@ import algorithmRegistry from "../config/algorithmRegistry.json";
 import analysisFamilyRegistry from "../config/analysisFamilyRegistry.json";
 import { ACTIVITY_MAPPING_OPTIONS } from "./ActivityMappingPanel";
 import TermsOfUseContent from "./TermsOfUseContent";
+import BrandLogo from "./BrandLogo";
 
 const DEFAULT_REPOSITORY_URL = "https://github.com/mayank-ramchandani/pyactigraphyui";
 const DEFAULT_DOCS_URL = "https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs";
@@ -354,9 +355,10 @@ export default function DocumentationPanel({ onClose }) {
     <div className="documentation-centered" style={{ display: "grid", gap: 16, textAlign: "center" }}>
       <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 18, padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "center", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ width: "100%" }}>
-            <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>Help & methods</div>
-            <h2 style={{ margin: "6px 0 6px", fontSize: 26, color: "#0f172a" }}>Documentation</h2>
+          <div style={{ width: "100%", display: "grid", justifyItems: "center", gap: 5 }}>
+            <BrandLogo width={175} />
+            <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>{appConfig.appName} · Help & methods</div>
+            <h2 style={{ margin: "3px 0 6px", fontSize: 26, color: "#0f172a" }}>Documentation</h2>
             <div style={{ color: "#475569", lineHeight: 1.5 }}>Searchable guidance for completing the workflow, choosing settings, understanding results, and resolving common problems.</div>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", width: "100%" }}>

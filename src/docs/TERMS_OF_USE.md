@@ -2,11 +2,11 @@
 
 ## Hosting and support
 
-This web tool is hosted by the **Ontario Brain Institute (OBI)**, with development supported through the **Centre for Analytics**. Use of the service is subject to applicable institutional, research-ethics, privacy, data-governance, and legal requirements.
+ActiLab is hosted by the **Ontario Brain Institute (OBI)**, with development supported through the **Centre for Analytics**. Use of the service is subject to applicable institutional, research-ethics, privacy, data-governance, and legal requirements.
 
 ## Research and educational purpose
 
-The application supports actigraphy preprocessing, quality control, analysis, visualization, and export. It is not a medical device, does not provide a diagnosis or treatment recommendation, and is not a substitute for clinical judgment. Users are responsible for choosing methods and interpreting outputs appropriately for their protocol and population.
+ActiLab supports actigraphy preprocessing, quality control, analysis, visualization, and export. It is not a medical device, does not provide a diagnosis or treatment recommendation, and is not a substitute for clinical judgment. Users are responsible for choosing methods and interpreting outputs appropriately for their protocol and population.
 
 ## Authority to upload and de-identification
 
@@ -32,8 +32,8 @@ The service is provided on an as-available basis. Processing may be interrupted 
 
 ## Third-party software
 
-The application uses open-source packages, including pyActigraphy and format-specific readers, under their respective licences and citation requirements.
+ActiLab uses open-source packages, including pyActigraphy and format-specific readers, under their respective licences and citation requirements.
 
 ## Acceptable use
 
-Do not upload unlawful content, attempt unauthorized access, interfere with service operation, evade platform limits, or use the application in a way that compromises other users, OBI infrastructure, or research data. Access may be limited or removed when needed to protect the service or comply with legal and institutional obligations.
+Do not upload unlawful content, attempt unauthorized access, interfere with service operation, evade platform limits, or use ActiLab in a way that compromises other users, OBI infrastructure, or research data. Access may be limited or removed when needed to protect the service or comply with legal and institutional obligations.

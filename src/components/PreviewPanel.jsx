@@ -166,6 +166,8 @@ export default function PreviewPanel({
   actigraphyFiles = [],
   selectedPreviewFile,
   setSelectedPreviewFile,
+  participantFileMode = "separate",
+  joinedParticipantLabel = "Joined participant",
   lightFiles = [],
   selectedLightPreviewFile = "",
   setSelectedLightPreviewFile = () => {},
@@ -177,8 +179,7 @@ export default function PreviewPanel({
 }) {
   const [search, setSearch] = useState("");
   const [previewZoomKey, setPreviewZoomKey] = useState(0);
-
-
+  const joinedParticipantMode = participantFileMode === "join" && actigraphyFiles.length > 1;
 
   const activityPoints = previewData?.full_recording_preview || [];
   const lightPoints = previewData?.light_preview || [];
@@ -215,9 +216,9 @@ export default function PreviewPanel({
 
   const canLoad =
     mode === "activity"
-      ? Boolean(selectedPreviewFile)
+      ? Boolean(joinedParticipantMode ? actigraphyFiles.length : selectedPreviewFile)
       : lightSourceAvailable == null
-        ? Boolean(selectedLightPreviewFile || selectedPreviewFile)
+        ? Boolean(joinedParticipantMode ? actigraphyFiles.length : (selectedLightPreviewFile || selectedPreviewFile))
         : Boolean(lightSourceAvailable);
 
   return (
@@ -231,9 +232,13 @@ export default function PreviewPanel({
     >
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
-        {mode === "light"
-          ? "Load light preview from a separate light file, or use the selected actigraphy file when that reader exposes an embedded light channel."
-          : "Load a full-recording activity preview from the selected actigraphy file."}
+        {joinedParticipantMode
+          ? mode === "light"
+            ? "Load one longitudinal light preview for the joined participant timeline. All uploaded light files are joined when present; otherwise embedded light from all actigraphy files is used."
+            : "Load one full longitudinal activity preview across all files in the joined participant timeline."
+          : mode === "light"
+            ? "Load light preview from a separate light file, or use the selected actigraphy file when that reader exposes an embedded light channel."
+            : "Load a full-recording activity preview from the selected actigraphy file."}
       </p>
 
       {mode === "light" && lightSourceMessage && (
@@ -254,43 +259,58 @@ export default function PreviewPanel({
       )}
 
       <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontWeight: 700 }}>Search uploaded files</span>
-          <input
-            type="search"
-            placeholder="Search filename, extension, size, or duplicate number"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 10,
-              border: "1px solid #cbd5e1",
-            }}
-          />
-        </label>
+        {joinedParticipantMode ? (
+          <div style={{ border: "1px solid #bfdbfe", borderRadius: 14, padding: 14, background: "#eff6ff" }}>
+            <div style={{ fontWeight: 800, color: "#1e3a8a" }}>{joinedParticipantLabel || `Joined participant (${actigraphyFiles.length} files)`}</div>
+            <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5, marginTop: 5 }}>
+              {mode === "light"
+                ? (lightFiles.length > 0
+                  ? `Using all ${lightFiles.length} uploaded light file(s) as one timestamp-preserving light timeline.`
+                  : `Using embedded light, when available, across all ${actigraphyFiles.length} actigraphy file(s).`)
+                : `Using all ${actigraphyFiles.length} actigraphy file(s). Real gaps remain visible as missing time and are not filled or compressed.`}
+            </div>
+          </div>
+        ) : (
+          <>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 700 }}>Search uploaded files</span>
+              <input
+                type="search"
+                placeholder="Search filename, extension, size, or duplicate number"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #cbd5e1",
+                }}
+              />
+            </label>
 
-        <div style={{ display: "grid", gridTemplateColumns: mode === "light" ? "repeat(2, minmax(0, 1fr))" : "1fr", gap: 12 }}>
-          <SearchableFilePicker
-            label={mode === "light" ? "Reference actigraphy file" : "Actigraphy file"}
-            files={actigraphyFiles}
-            selection={selectedPreviewFile}
-            onSelectionChange={setSelectedPreviewFile}
-            search={search}
-            emptyLabel="Select an actigraphy file"
-          />
+            <div style={{ display: "grid", gridTemplateColumns: mode === "light" ? "repeat(2, minmax(0, 1fr))" : "1fr", gap: 12 }}>
+              <SearchableFilePicker
+                label={mode === "light" ? "Reference actigraphy file" : "Actigraphy file"}
+                files={actigraphyFiles}
+                selection={selectedPreviewFile}
+                onSelectionChange={setSelectedPreviewFile}
+                search={search}
+                emptyLabel="Select an actigraphy file"
+              />
 
-          {mode === "light" && (
-            <SearchableFilePicker
-              label="Optional separate light file"
-              files={lightFiles}
-              selection={selectedLightPreviewFile}
-              onSelectionChange={setSelectedLightPreviewFile}
-              search={search}
-              allowEmpty
-              emptyLabel={lightSourceMessage ? "Select a supported separate light file" : "Use selected actigraphy file"}
-            />
-          )}
-        </div>
+              {mode === "light" && (
+                <SearchableFilePicker
+                  label="Optional separate light file"
+                  files={lightFiles}
+                  selection={selectedLightPreviewFile}
+                  onSelectionChange={setSelectedLightPreviewFile}
+                  search={search}
+                  allowEmpty
+                  emptyLabel={lightSourceMessage ? "Select a supported separate light file" : "Use selected actigraphy file"}
+                />
+              )}
+            </div>
+          </>
+        )}
 
         {mode === "activity" && (
           <ActivityMappingPanel

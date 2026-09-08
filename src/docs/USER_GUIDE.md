@@ -8,7 +8,7 @@ This guide follows the ten pages in the application. For a standard first analys
 - Remove names, health-card numbers, dates of birth, and other direct identifiers from filenames and support files.
 - Prepare one or more actigraphy recordings in a supported format.
 - Use the same file extension when uploading multiple files together.
-- On the Results page, multiple selected files can be analyzed separately (default) or explicitly joined as one participant timeline when they all belong to the same participant. Joined analysis preserves original timestamps and gaps, removes duplicate boundary timestamps, and requires compatible sampling intervals. Light metrics remain file-level and should be run separately.
+- When multiple files are uploaded, choose in Step 1 whether they should be analyzed separately (default) or joined as one participant timeline. Use joined mode only when every file belongs to the same participant. The choice applies end-to-end: initial QC, activity preview, cleaning/masking, sleep-wake processing, embedded or separate light preview, light metrics, and final activity/sleep metrics. Original timestamps and gaps are preserved, duplicate boundary timestamps are removed, and compatible sampling intervals are required.
 - Keep sleep diaries, start/stop files, masks, and separate sensor files ready if they are part of the study protocol.
 
 ## 1. Importing Actigraphy Files
@@ -53,7 +53,7 @@ The selected measure becomes the activity basis for the chosen rest-activity met
 
 ## 4. Activity Preview
 
-Preview each recording before analysis. Check:
+Preview each recording before analysis. In joined participant mode, the preview instead shows the complete timestamp-preserving participant timeline across all uploaded files. Check:
 
 - recording start and stop dates;
 - expected recording duration;
@@ -69,7 +69,7 @@ The preview is also needed for plot-based interval selection in later steps.
 
 ### Recording start and stop
 
-Use start/stop intervals to define the effective recording period for each file. Intervals can be uploaded or selected from the activity plot. Full timestamps are supported, including intervals that cross midnight.
+Use start/stop intervals to define the effective recording period. In separate mode, intervals can be file-specific. In joined participant mode, the interactive plot represents the complete participant timeline and manual intervals apply to that joined timeline. Uploaded support files can still use constituent filenames where applicable. Full timestamps are supported, including intervals that cross midnight.
 
 ### Masks and non-wear
 
@@ -93,7 +93,7 @@ A sleep result may be unavailable when:
 
 ### Light
 
-Use light embedded in a supported actigraphy file or upload a separate light file. Review the available channels and preview the signal before selecting light metrics.
+Use light embedded in a supported actigraphy file or upload separate light files. In joined participant mode, all separate light files are joined by their real timestamps; when no separate light files are supplied, embedded light is collected across the joined actigraphy files. Files or periods without light remain missing rather than being interpreted as zero lux. Review the joined channels and preview before selecting light metrics.
 
 A file with no usable light still proceeds through activity analysis. Only the light outputs are skipped.
 
@@ -117,7 +117,7 @@ Step 8 configures the analysis. It does not run it.
 
 ## 9. Generate Results
 
-Select the files to analyse and choose **Generate Results**.
+In separate mode, select the files to analyse. In joined participant mode, all uploaded actigraphy files are included as one participant timeline. Then choose **Generate Results**.
 
 Review:
 

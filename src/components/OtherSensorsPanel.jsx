@@ -44,12 +44,17 @@ function UploadCard({ title, description, files = [], onFilesChange, buttonLabel
 
 export default function OtherSensorsPanel({
   title,
+  participantFileMode = "separate",
+  joinedParticipantLabel = "Joined participant",
   lightFiles = [],
   onLightFilesChange = () => {},
   temperatureFiles = [],
   onTemperatureFilesChange = () => {},
   previewProps = {},
   lightFile = null,
+  lightAdditionalFiles = [],
+  csvMapping = {},
+  csvSeparator = ",",
   lightPreviewLoaded = false,
   lightPreviewData = null,
   selectedLightMetrics = [],
@@ -69,7 +74,7 @@ export default function OtherSensorsPanel({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
           <UploadCard
             title="Separate light data"
-            description="Optional. Leave this empty to inspect light embedded in the selected actigraphy file."
+            description={participantFileMode === "join" ? "Optional. If supplied, all uploaded light files are joined by timestamp as the participant light timeline. Leave empty to use embedded light from the joined actigraphy files." : "Optional. Leave this empty to inspect light embedded in the selected actigraphy file."}
             files={lightFiles}
             onFilesChange={onLightFilesChange}
             buttonLabel="Choose light files"
@@ -88,11 +93,16 @@ export default function OtherSensorsPanel({
       <PreviewPanel {...previewProps} />
 
       {lightFile && lightPreviewLoaded && lightPreviewData?.light_preview_available && (
-        <LightRGBPanel lightFile={lightFile} initialPayload={lightPreviewData} />
+        <LightRGBPanel lightFile={lightFile} additionalFiles={lightAdditionalFiles} initialPayload={lightPreviewData} csvMapping={csvMapping} csvSeparator={csvSeparator} />
       )}
 
       <LightMetricsPanel
         lightFile={lightFile}
+        additionalFiles={lightAdditionalFiles}
+        csvMapping={csvMapping}
+        csvSeparator={csvSeparator}
+        participantFileMode={participantFileMode}
+        joinedParticipantLabel={joinedParticipantLabel}
         selectedLightMetrics={selectedLightMetrics}
         setSelectedLightMetrics={setSelectedLightMetrics}
         lightMetricSettings={lightMetricSettings}

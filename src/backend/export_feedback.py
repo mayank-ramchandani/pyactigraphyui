@@ -30,7 +30,7 @@ def _read_records(path: Path) -> list[dict[str, Any]]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Export PyActigraphy UI feedback.")
+    parser = argparse.ArgumentParser(description="Export ActiLab feedback.")
     parser.add_argument("--input", default=str(Path(os.getenv("APP_DATA_DIR", "/tmp/actigraphy-ui-data")) / "feedback.jsonl"))
     parser.add_argument("--format", choices=["csv", "jsonl"], default="csv")
     parser.add_argument("--output", required=True)

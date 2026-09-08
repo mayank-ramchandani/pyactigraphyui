@@ -90,6 +90,8 @@ export default function FileSelectionPanel({
   setCurrentStep = () => {},
   analysisMode,
   setAnalysisMode,
+  participantFileMode = "separate",
+  setParticipantFileMode = () => {},
   setPreviewLoaded,
   setPreviewData,
   setPreviewError,
@@ -159,7 +161,7 @@ export default function FileSelectionPanel({
         <div style={{ fontWeight: 700 }}>
           <BubbleInfo
             label="Multiple-file analysis"
-            content="Multiple actigraphy files can be uploaded together when they use the same extension. In Results, they can either be analyzed separately or explicitly joined into one timestamp-preserving timeline when all selected files belong to the same participant. Joined analysis requires compatible sampling intervals and preserves recording gaps."
+            content="Multiple actigraphy files can be uploaded together when they use the same extension. Choose below whether they are separate recordings or files from one participant that should be joined by their real timestamps. Joined mode applies throughout the workflow: initial QC, activity and light previews, support intervals, preprocessing, sleep-wake processing, and final metrics. Recording gaps are preserved."
           />
         </div>
       </div>
@@ -191,6 +193,27 @@ export default function FileSelectionPanel({
           Choose actigraphy files
         </div>
       </label>
+
+      {actigraphyFiles.length > 1 && (
+        <div style={{ marginTop: 20, border: "1px solid #bfdbfe", borderRadius: 16, padding: 16, background: "#eff6ff" }}>
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>How should these files be treated?</div>
+          <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
+            Choose this before continuing because it controls the entire workflow, not only the final Results page. Changing the mode later resets loaded previews and manually drawn intervals so file-scoped selections are not accidentally reused with a different timeline.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
+            <label style={{ display: "block", border: participantFileMode === "separate" ? "2px solid #2563eb" : "1px solid #cbd5e1", borderRadius: 14, padding: 13, cursor: "pointer", background: participantFileMode === "separate" ? "white" : "#f8fafc" }}>
+              <input type="radio" name="participantFileModeImport" checked={participantFileMode === "separate"} onChange={() => setParticipantFileMode("separate")} />
+              <span style={{ marginLeft: 8, fontWeight: 800 }}>Analyze files separately</span>
+              <span style={{ display: "block", color: "#475569", fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>Use this when files are different participants or should produce independent previews, QC, and metric results.</span>
+            </label>
+            <label style={{ display: "block", border: participantFileMode === "join" ? "2px solid #2563eb" : "1px solid #cbd5e1", borderRadius: 14, padding: 13, cursor: "pointer", background: participantFileMode === "join" ? "white" : "#f8fafc" }}>
+              <input type="radio" name="participantFileModeImport" checked={participantFileMode === "join"} onChange={() => setParticipantFileMode("join")} />
+              <span style={{ marginLeft: 8, fontWeight: 800 }}>Join as one participant timeline</span>
+              <span style={{ display: "block", color: "#475569", fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>Use only when every uploaded file belongs to the same participant. Activity and light are joined by real timestamps; gaps remain missing and overlapping duplicate boundary timestamps are de-duplicated.</span>
+            </label>
+          </div>
+        </div>
+      )}
 
       {hasCsvActigraphy && (
         <div style={{ marginTop: 20, border: "1px solid #dbeafe", borderRadius: 16, padding: 16, background: "#eff6ff" }}>

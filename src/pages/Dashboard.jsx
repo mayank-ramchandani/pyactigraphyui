@@ -24,6 +24,7 @@ import RunHistoryPanel from "../components/RunHistoryPanel";
 import FeedbackButton from "../components/FeedbackButton";
 import DocumentationPanel from "../components/DocumentationPanel";
 import TermsOfUseContent from "../components/TermsOfUseContent";
+import BrandLogo from "../components/BrandLogo";
 
 import {
   getDefaultAlgorithm,
@@ -36,6 +37,7 @@ import { buildFileEntries, fileSelectionKey, resolveFileSelection } from "../ser
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
 const ENABLE_AUTH_RUNS = import.meta.env.VITE_ENABLE_AUTH_RUNS === "true";
+const JOINED_PARTICIPANT_KEY = "__joined_participant__";
 
 function buildApiUrl(path) {
   const base = API_BASE_URL.endsWith("/") ? API_BASE_URL : `${API_BASE_URL}/`;
@@ -307,24 +309,37 @@ export default function Dashboard() {
 
   const actigraphyFiles = uploadedFiles.actigraphy || [];
   const lightFiles = uploadedFiles.light || [];
+  const joinedParticipantMode = participantFileMode === "join" && actigraphyFiles.length > 1;
+  const joinedParticipantLabel = joinedParticipantMode
+    ? `Joined participant (${actigraphyFiles.length} files)`
+    : "";
 
   const actigraphySelection = resolveFileSelection(actigraphyFiles, selectedPreviewFile);
-  const actigraphyFile = actigraphySelection?.file || null;
+  const actigraphyFile = joinedParticipantMode ? actigraphyFiles[0] || null : actigraphySelection?.file || null;
 
   const requestedLightSelection = selectedLightPreviewFile
     ? resolveFileSelection(lightFiles, selectedLightPreviewFile)
     : null;
-  const requestedLightFile = requestedLightSelection?.file || actigraphyFile || lightFiles[0] || null;
+  const participantLightFiles = joinedParticipantMode
+    ? (lightFiles.length > 0 ? lightFiles : actigraphyFiles)
+    : [];
+  const requestedLightFile = joinedParticipantMode
+    ? participantLightFiles[0] || null
+    : requestedLightSelection?.file || actigraphyFile || lightFiles[0] || null;
   const lightFile = requestedLightFile;
-  const lightFileKey =
-    requestedLightSelection?.key ||
-    actigraphySelection?.key ||
-    (lightFiles[0] ? fileSelectionKey(lightFiles[0], 0) : "");
+  const lightAdditionalFiles = joinedParticipantMode ? participantLightFiles.slice(1) : [];
+  const lightFileKey = joinedParticipantMode
+    ? JOINED_PARTICIPANT_KEY
+    : requestedLightSelection?.key ||
+      actigraphySelection?.key ||
+      (lightFiles[0] ? fileSelectionKey(lightFiles[0], 0) : "");
   const lightInspectionMatchesSelection =
     Boolean(lightFile) &&
-    (lightPreviewData?.light_preview_file_key
-      ? lightPreviewData.light_preview_file_key === lightFileKey
-      : lightPreviewData?.light_preview_file_name === lightFile.name) &&
+    (joinedParticipantMode
+      ? lightPreviewData?.light_preview_file_key === JOINED_PARTICIPANT_KEY || Boolean(lightPreviewData?.participant_join?.joined)
+      : lightPreviewData?.light_preview_file_key
+        ? lightPreviewData.light_preview_file_key === lightFileKey
+        : lightPreviewData?.light_preview_file_name === lightFile.name) &&
     Boolean(lightPreviewData?.light_detection?.inspected);
   const selectedFileHasNoLight =
     lightInspectionMatchesSelection &&
@@ -337,9 +352,10 @@ export default function Dashboard() {
 
   const selectedAnalysisFiles = useMemo(() => {
     if (!actigraphyFiles.length) return [];
+    if (participantFileMode === "join" && actigraphyFiles.length > 1) return actigraphyFiles;
     const selectedNames = new Set(selectedAnalysisFileNames || []);
     return actigraphyFiles.filter((file) => selectedNames.has(file.name));
-  }, [actigraphyFiles, selectedAnalysisFileNames]);
+  }, [actigraphyFiles, participantFileMode, selectedAnalysisFileNames]);
 
   useEffect(() => {
     if (!actigraphyFiles.length) {
@@ -630,12 +646,16 @@ export default function Dashboard() {
     if (currentStep !== "2" || !actigraphyFiles.length) return undefined;
 
     let cancelled = false;
-    const entries = buildFileEntries(actigraphyFiles);
+    const entries = joinedParticipantMode
+      ? [{ key: JOINED_PARTICIPANT_KEY, file: actigraphyFiles[0], joinedFiles: actigraphyFiles }]
+      : buildFileEntries(actigraphyFiles);
 
     const inspectFilesSequentially = async () => {
       for (const entry of entries) {
         if (cancelled) return;
-        const requestToken = `${entry.key}:${activityMapping}:${showManualMapping ? JSON.stringify(csvMapping) : "native"}:${csvSeparator}`;
+        const filesForEntry = entry.joinedFiles || [entry.file];
+        const fileSignature = filesForEntry.map((file) => `${file.name}:${file.size}:${file.lastModified || 0}`).join("|");
+        const requestToken = `${entry.key}:${fileSignature}:${activityMapping}:${showManualMapping ? JSON.stringify(csvMapping) : "native"}:${csvSeparator}`;
         if (initialQcRequestedRef.current.has(requestToken)) continue;
         initialQcRequestedRef.current.add(requestToken);
         setInitialQcLoadingByFile((previous) => ({ ...previous, [entry.key]: true }));
@@ -643,7 +663,8 @@ export default function Dashboard() {
 
         try {
           const formData = new FormData();
-          formData.append("file", entry.file);
+          formData.append("file", filesForEntry[0]);
+          filesForEntry.slice(1).forEach((file) => formData.append("additionalFiles", file));
           formData.append("activityMapping", activityMapping);
           formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
           formData.append("csvSeparator", csvSeparator);
@@ -655,7 +676,10 @@ export default function Dashboard() {
           if (!cancelled) {
             setInitialQcByFile((previous) => ({
               ...previous,
-              [entry.key]: { ...data, source_file_name: entry.file.name },
+              [entry.key]: {
+                ...data,
+                source_file_name: joinedParticipantMode ? joinedParticipantLabel : entry.file.name,
+              },
             }));
           }
         } catch (error) {
@@ -679,7 +703,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [currentStep, actigraphyFiles, activityMapping, showManualMapping, csvMapping, csvSeparator]);
+  }, [currentStep, actigraphyFiles, joinedParticipantMode, joinedParticipantLabel, activityMapping, showManualMapping, csvMapping, csvSeparator]);
 
   const goToStep = (stepId) => {
     if (Number(stepId) <= Number(maxUnlockedStep)) {
@@ -780,9 +804,34 @@ export default function Dashboard() {
     initialQcRequestedRef.current = new Set();
   };
 
+  const handleParticipantFileModeChange = (nextMode) => {
+    const resolvedMode = nextMode === "join" ? "join" : "separate";
+    setParticipantFileMode(resolvedMode);
+    if (resolvedMode === "join") {
+      setSelectedAnalysisFileNames(actigraphyFiles.map((file) => file.name));
+      setSelectedPreviewFile(actigraphyFiles.length > 1 ? JOINED_PARTICIPANT_KEY : (actigraphyFiles[0] ? fileSelectionKey(actigraphyFiles[0], 0) : ""));
+      setSelectedLightPreviewFile("");
+    } else {
+      setSelectedPreviewFile(actigraphyFiles[0] ? fileSelectionKey(actigraphyFiles[0], 0) : "");
+      setSelectedLightPreviewFile(lightFiles[0] ? fileSelectionKey(lightFiles[0], 0) : "");
+    }
+    setInitialQcByFile({});
+    setInitialQcLoadingByFile({});
+    setInitialQcErrorByFile({});
+    initialQcRequestedRef.current = new Set();
+    setSupportFileSettings((previous) => ({
+      ...previous,
+      startStop: { ...(previous.startStop || {}), manualIntervals: [] },
+      masking: { ...(previous.masking || {}), manualIntervals: [] },
+      sleepDiary: { ...(previous.sleepDiary || {}), manualIntervals: [] },
+    }));
+    setAnalysisWindowSettings((previous) => ({ ...previous, manualIntervals: [] }));
+    resetPreviewAndResults();
+  };
+
   const handleActigraphyFilesChange = (files) => {
     setUploadedFiles((prev) => ({ ...prev, actigraphy: files }));
-    setSelectedPreviewFile(files?.[0] ? fileSelectionKey(files[0], 0) : "");
+    setSelectedPreviewFile(participantFileMode === "join" && (files?.length || 0) > 1 ? JOINED_PARTICIPANT_KEY : (files?.[0] ? fileSelectionKey(files[0], 0) : ""));
     setSelectedLightPreviewFile("");
     setSelectedAnalysisFileNames((files || []).map((file) => file.name));
     setInitialQcByFile({});
@@ -810,9 +859,11 @@ export default function Dashboard() {
   };
 
   const loadActivityPreviewForFile = async (selection = selectedPreviewFile) => {
-    const targetEntry = resolveFileSelection(actigraphyFiles, selection) || actigraphySelection;
-    const targetFile = targetEntry?.file || null;
-    if (!targetFile || !targetEntry) return null;
+    const joining = participantFileMode === "join" && actigraphyFiles.length > 1;
+    const targetEntry = joining ? null : (resolveFileSelection(actigraphyFiles, selection) || actigraphySelection);
+    const filesForPreview = joining ? actigraphyFiles : (targetEntry?.file ? [targetEntry.file] : []);
+    const targetFile = filesForPreview[0] || null;
+    if (!targetFile) return null;
 
     try {
       setPreviewLoading(true);
@@ -820,6 +871,7 @@ export default function Dashboard() {
 
       const formData = new FormData();
       formData.append("file", targetFile);
+      filesForPreview.slice(1).forEach((file) => formData.append("additionalFiles", file));
       formData.append("activityChannel", activityChannel);
       formData.append("activityMapping", previewActivityMapping);
       formData.append("resampleFreq", "1min");
@@ -835,17 +887,21 @@ export default function Dashboard() {
         jobId: previewJobId,
       });
 
+      const previewKey = joining ? JOINED_PARTICIPANT_KEY : targetEntry.key;
+      const previewName = joining ? joinedParticipantLabel : targetFile.name;
       const labeledData = {
         ...data,
-        preview_file_name: targetFile.name,
-        preview_file_key: targetEntry.key,
+        preview_file_name: previewName,
+        preview_file_key: previewKey,
+        joined_source_files: joining ? filesForPreview.map((file) => file.name) : undefined,
       };
-      setSelectedPreviewFile(targetEntry.key);
+      setSelectedPreviewFile(previewKey);
       setPreviewData(labeledData);
       setActivityPreviewByFile((prev) => ({
         ...prev,
-        [targetEntry.key]: labeledData,
-        [targetFile.name]: labeledData,
+        [previewKey]: labeledData,
+        [previewName]: labeledData,
+        ...(joining ? {} : { [targetFile.name]: labeledData }),
       }));
       setPreviewLoaded(true);
       unlockStep("4");
@@ -883,6 +939,7 @@ export default function Dashboard() {
 
       const formData = new FormData();
       formData.append("file", lightFile);
+      lightAdditionalFiles.forEach((file) => formData.append("additionalFiles", file));
       formData.append("resampleFreq", "1min");
       formData.append("rgbResampleFreq", "5min");
       formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
@@ -896,8 +953,9 @@ export default function Dashboard() {
 
       const labeledData = {
         ...data,
-        light_preview_file_name: lightFile.name,
+        light_preview_file_name: joinedParticipantMode ? joinedParticipantLabel : lightFile.name,
         light_preview_file_key: lightFileKey,
+        joined_source_files: joinedParticipantMode ? participantLightFiles.map((file) => file.name) : undefined,
       };
       setLightPreviewData(labeledData);
       setLightPreviewLoaded(true);
@@ -910,13 +968,15 @@ export default function Dashboard() {
     }
   };
 
-  const runSelectedLightMetrics = async (targetFile = lightFile, startingStep = 1, totalSteps = 1, fileLabel = "") => {
+  const runSelectedLightMetrics = async (targetFile = lightFile, additionalFiles = lightAdditionalFiles, startingStep = 1, totalSteps = 1, fileLabel = "") => {
     if (selectedLightMetrics.length === 0) {
       return { results: {}, diagnostics: {} };
     }
     const targetAlreadyInspectedWithoutLight =
       Boolean(targetFile) &&
-      lightPreviewData?.light_preview_file_name === targetFile.name &&
+      (joinedParticipantMode
+        ? lightPreviewData?.light_preview_file_key === JOINED_PARTICIPANT_KEY || Boolean(lightPreviewData?.participant_join?.joined)
+        : lightPreviewData?.light_preview_file_name === targetFile.name) &&
       lightPreviewData?.light_detection?.inspected === true &&
       lightPreviewData?.light_detection?.available === false;
     if (targetAlreadyInspectedWithoutLight) {
@@ -968,6 +1028,7 @@ export default function Dashboard() {
     try {
       const formData = new FormData();
       formData.append("file", targetFile);
+      (additionalFiles || []).forEach((file) => formData.append("additionalFiles", file));
       formData.append("metricIds", JSON.stringify(selectedLightMetrics));
       formData.append("channel", lightMetricSettings.channel || "");
       formData.append("thresholdLux", lightMetricSettings.thresholdLux || "");
@@ -1048,10 +1109,6 @@ export default function Dashboard() {
     }
 
     const joinParticipantFiles = participantFileMode === "join" && selectedFilesForRun.length > 1;
-    if (joinParticipantFiles && selectedLightMetrics.length > 0) {
-      setAnalysisError("Joined participant analysis currently combines the actigraphy activity/sleep timeline only. Deselect light metrics, or analyze the files separately for light outputs.");
-      return;
-    }
     const filesToAnalyze = joinParticipantFiles ? [selectedFilesForRun[0]] : selectedFilesForRun;
     const joinedFileLabel = joinParticipantFiles
       ? `Joined participant (${selectedFilesForRun.length} files)`
@@ -1178,15 +1235,16 @@ export default function Dashboard() {
           setProgressStage(`Activity/sleep metrics complete for ${fileLabel}`, completedSteps, totalSteps);
 
           const results = data.results || {};
-          const lightTargetFile =
-            lightFiles.length > 0
-              ? lightFile
-              : sourceFile;
+          const lightFilesForRun = joinParticipantFiles
+            ? (lightFiles.length > 0 ? lightFiles : selectedFilesForRun)
+            : [lightFiles.length > 0 ? lightFile : sourceFile].filter(Boolean);
+          const lightTargetFile = lightFilesForRun[0] || null;
           const generatedLightRun = await runSelectedLightMetrics(
             lightTargetFile,
+            lightFilesForRun.slice(1),
             completedSteps,
             totalSteps,
-            sourceFile.name
+            fileLabel
           );
           const generatedLightResults = generatedLightRun.results;
           const generatedLightDiagnostics = generatedLightRun.diagnostics;
@@ -1221,6 +1279,9 @@ export default function Dashboard() {
 
           void saveRunRecord({
             sourceFile,
+            sourceFileName: joinParticipantFiles ? joinedFileLabel : null,
+            sourceFileSize: joinParticipantFiles ? selectedFilesForRun.reduce((sum, file) => sum + file.size, 0) : null,
+            sourceFileType: joinParticipantFiles ? "joined_participant" : null,
             status: combinedStatus,
             results,
             qcWarnings: data.qcWarnings || [],
@@ -1249,7 +1310,14 @@ export default function Dashboard() {
           batchResults.push(row);
           setMultiFileResults([...batchResults]);
           setProgressStage(`Failed ${fileLabel}: ${message}`, completedSteps, totalSteps);
-          void saveRunRecord({ sourceFile, status: "failed", errorMessage: message });
+          void saveRunRecord({
+            sourceFile,
+            sourceFileName: joinParticipantFiles ? joinedFileLabel : null,
+            sourceFileSize: joinParticipantFiles ? selectedFilesForRun.reduce((sum, file) => sum + file.size, 0) : null,
+            sourceFileType: joinParticipantFiles ? "joined_participant" : null,
+            status: "failed",
+            errorMessage: message,
+          });
         }
       }
 
@@ -1290,6 +1358,9 @@ export default function Dashboard() {
 
   const saveRunRecord = async ({
     sourceFile = actigraphyFile,
+    sourceFileName = null,
+    sourceFileSize = null,
+    sourceFileType = null,
     status = "completed",
     results = {},
     qcWarnings: savedWarnings = [],
@@ -1304,9 +1375,9 @@ export default function Dashboard() {
       const row = {
         user_id: currentUser.id,
         user_email: currentUser.email || null,
-        original_filename: sourceFile.name,
-        file_type: getExtension(sourceFile.name),
-        file_size_mb: Number((sourceFile.size / (1024 * 1024)).toFixed(3)),
+        original_filename: sourceFileName || sourceFile.name,
+        file_type: sourceFileType || getExtension(sourceFile.name),
+        file_size_mb: Number(((sourceFileSize ?? sourceFile.size) / (1024 * 1024)).toFixed(3)),
         status,
         analysis_mode: analysisMode,
         selected_algorithm: selectedAlgorithm,
@@ -1482,6 +1553,8 @@ export default function Dashboard() {
           setCurrentStep={setCurrentStep}
           analysisMode={analysisMode}
           setAnalysisMode={setAnalysisMode}
+          participantFileMode={participantFileMode}
+          setParticipantFileMode={handleParticipantFileModeChange}
           setPreviewLoaded={setPreviewLoaded}
           setPreviewData={setPreviewData}
           setPreviewError={setPreviewError}
@@ -1519,6 +1592,9 @@ export default function Dashboard() {
         initialQcByFile={initialQcByFile}
         initialQcLoadingByFile={initialQcLoadingByFile}
         initialQcErrorByFile={initialQcErrorByFile}
+        participantFileMode={participantFileMode}
+        joinedParticipantKey={JOINED_PARTICIPANT_KEY}
+        joinedParticipantLabel={joinedParticipantLabel}
       />
     );
   } else if (currentStep === "3") {
@@ -1541,6 +1617,8 @@ export default function Dashboard() {
         actigraphyFiles={actigraphyFiles}
         selectedPreviewFile={selectedPreviewFile}
         setSelectedPreviewFile={handlePreviewFileSelectionChange}
+        participantFileMode={participantFileMode}
+        joinedParticipantLabel={joinedParticipantLabel}
         lightFiles={lightFiles}
         selectedLightPreviewFile={selectedLightPreviewFile}
         setSelectedLightPreviewFile={handleLightPreviewFileSelectionChange}
@@ -1568,6 +1646,9 @@ export default function Dashboard() {
           previewData={previewData}
           previewDataByFile={activityPreviewByFile}
           actigraphyFiles={actigraphyFiles}
+          participantFileMode={participantFileMode}
+          joinedParticipantKey={JOINED_PARTICIPANT_KEY}
+          joinedParticipantLabel={joinedParticipantLabel}
           onLoadPreviewForFile={loadActivityPreviewForFile}
         />
         <SupportFilesStep
@@ -1587,6 +1668,9 @@ export default function Dashboard() {
           previewData={previewData}
           previewDataByFile={activityPreviewByFile}
           actigraphyFiles={actigraphyFiles}
+          participantFileMode={participantFileMode}
+          joinedParticipantKey={JOINED_PARTICIPANT_KEY}
+          joinedParticipantLabel={joinedParticipantLabel}
           onLoadPreviewForFile={loadActivityPreviewForFile}
         />
       </div>
@@ -1610,6 +1694,9 @@ export default function Dashboard() {
           previewData={previewData}
           previewDataByFile={activityPreviewByFile}
           actigraphyFiles={actigraphyFiles}
+          participantFileMode={participantFileMode}
+          joinedParticipantKey={JOINED_PARTICIPANT_KEY}
+          joinedParticipantLabel={joinedParticipantLabel}
           onLoadPreviewForFile={loadActivityPreviewForFile}
         />
         <MetricsPanel
@@ -1623,6 +1710,8 @@ export default function Dashboard() {
     content = (
       <OtherSensorsPanel
         title={appConfig.panels.otherSensors.title}
+        participantFileMode={participantFileMode}
+        joinedParticipantLabel={joinedParticipantLabel}
         lightFiles={lightFiles}
         onLightFilesChange={(files) => {
           setUploadedFiles((previous) => ({ ...previous, light: files }));
@@ -1644,6 +1733,8 @@ export default function Dashboard() {
           actigraphyFiles,
           selectedPreviewFile,
           setSelectedPreviewFile: handlePreviewFileSelectionChange,
+          participantFileMode,
+          joinedParticipantLabel,
           lightFiles,
           selectedLightPreviewFile,
           setSelectedLightPreviewFile: handleLightPreviewFileSelectionChange,
@@ -1652,6 +1743,9 @@ export default function Dashboard() {
           onPreview: onLightPreview,
         }}
         lightFile={lightMetricFile}
+        lightAdditionalFiles={lightAdditionalFiles}
+        csvMapping={showManualMapping ? csvMapping : {}}
+        csvSeparator={csvSeparator}
         lightPreviewLoaded={lightPreviewLoaded}
         lightPreviewData={lightPreviewData}
         selectedLightMetrics={selectedLightMetrics}
@@ -1661,7 +1755,7 @@ export default function Dashboard() {
         lightSourceMessage={lightSourceMessage}
         onLightInspection={(data) => {
           if (!lightFile || data?.light_detection?.available !== false) return;
-          setLightPreviewData({ ...data, light_preview_file_name: lightFile.name, light_preview_file_key: lightFileKey });
+          setLightPreviewData({ ...data, light_preview_file_name: joinedParticipantMode ? joinedParticipantLabel : lightFile.name, light_preview_file_key: lightFileKey });
           setLightPreviewLoaded(true);
         }}
       />
@@ -1682,7 +1776,7 @@ export default function Dashboard() {
         selectedAnalysisFileNames={selectedAnalysisFileNames}
         setSelectedAnalysisFileNames={setSelectedAnalysisFileNames}
         participantFileMode={participantFileMode}
-        setParticipantFileMode={setParticipantFileMode}
+        setParticipantFileMode={handleParticipantFileModeChange}
         multiFileResults={multiFileResults}
         resultsGenerated={resultsGenerated}
         onGenerate={handleGenerateResults}
@@ -1743,9 +1837,10 @@ export default function Dashboard() {
     >
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <div className="app-header-centered" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
-          <div style={{ width: "100%" }}>
-            <h1 style={{ fontSize: 32, margin: "0 0 8px" }}>{appConfig.appName}</h1>
-            <p style={{ color: "#475569", margin: 0, lineHeight: 1.5 }}>
+          <div style={{ width: "100%", display: "grid", justifyItems: "center", gap: 8 }}>
+            <BrandLogo width={250} />
+            <h1 style={{ fontSize: 30, margin: 0 }}>{appConfig.appName}</h1>
+            <p style={{ color: "#475569", margin: 0, lineHeight: 1.5, maxWidth: 900 }}>
               Guided 10-step actigraphy workflow covering preprocessing, activity estimation, cleaning, sleep-wake classification, other sensors, analysis, results, and export.
             </p>
           </div>
@@ -1897,9 +1992,12 @@ export default function Dashboard() {
             style={{ width: "min(920px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "#f8fafc", borderRadius: 20, padding: 20, boxShadow: "0 28px 80px rgba(15,23,42,0.35)" }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 14 }}>
-              <div>
-                <div style={{ color: "#64748b", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>OBI-hosted web application</div>
-                <h2 id="terms-of-use-title" style={{ margin: "5px 0 0" }}>Terms of Use</h2>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <BrandLogo width={105} compact />
+                <div>
+                  <div style={{ color: "#64748b", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>{appConfig.appName} · OBI-hosted web application</div>
+                  <h2 id="terms-of-use-title" style={{ margin: "5px 0 0" }}>Terms of Use</h2>
+                </div>
               </div>
               <button type="button" onClick={() => setTermsOpen(false)} aria-label="Close terms of use" style={{ width: 36, height: 36, borderRadius: 999, border: "none", background: "#e2e8f0", cursor: "pointer", fontSize: 22 }}>×</button>
             </div>

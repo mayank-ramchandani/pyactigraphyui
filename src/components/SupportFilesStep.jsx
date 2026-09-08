@@ -124,12 +124,18 @@ export default function SupportFilesStep({
   previewData = null,
   previewDataByFile = {},
   actigraphyFiles = [],
+  participantFileMode = "separate",
+  joinedParticipantKey = "__joined_participant__",
+  joinedParticipantLabel = "Joined participant",
   onLoadPreviewForFile = null,
 }) {
   const help = SUPPORT_HELP[type] || SUPPORT_HELP.masking;
+  const joinedParticipantMode = participantFileMode === "join" && actigraphyFiles.length > 1;
+  const joinedTimelineDisplayLabel = joinedParticipantLabel || `Joined participant (${actigraphyFiles.length} files)`;
+  const joinedIntervalFileId = ALL_FILES_ID;
   const optionDefaults = useMemo(() => defaultSettings(options), [options]);
   const mergedSettings = { ...optionDefaults, manualIntervals: [], ...settings };
-  const firstFileName = actigraphyFiles?.[0]?.name || previewData?.preview_file_name || "";
+  const firstFileName = joinedParticipantMode ? joinedIntervalFileId : (actigraphyFiles?.[0]?.name || previewData?.preview_file_name || "");
   const [selectedFileId, setSelectedFileId] = useState(firstFileName || ALL_FILES_ID);
   const [draft, setDraft] = useState({
     state: type === "sleepDiary" ? "NIGHT" : type === "masking" ? "NOWEAR" : "",
@@ -147,18 +153,25 @@ export default function SupportFilesStep({
       setSelectedFileId(ALL_FILES_ID);
       return;
     }
+    if (joinedParticipantMode) {
+      setSelectedFileId(joinedIntervalFileId);
+      return;
+    }
     setSelectedFileId((prev) => {
       if (prev && actigraphyFiles.some((file) => file.name === prev)) return prev;
       return actigraphyFiles[0].name;
     });
-  }, [actigraphyFiles]);
+  }, [actigraphyFiles, joinedParticipantMode, joinedIntervalFileId]);
 
   const selectedPreviewData = useMemo(() => {
+    if (joinedParticipantMode) {
+      return previewDataByFile?.[joinedParticipantKey] || previewData || null;
+    }
     if (selectedFileId && previewDataByFile?.[selectedFileId]) return previewDataByFile[selectedFileId];
     if (previewData?.preview_file_name === selectedFileId) return previewData;
     if (actigraphyFiles.length <= 1) return previewData;
     return null;
-  }, [actigraphyFiles.length, previewData, previewDataByFile, selectedFileId]);
+  }, [actigraphyFiles.length, joinedParticipantMode, joinedParticipantKey, previewData, previewDataByFile, selectedFileId]);
 
   const plotPoints = selectedPreviewData?.full_recording_preview || [];
   const bounds = useMemo(() => getPreviewBounds(selectedPreviewData), [selectedPreviewData]);
@@ -174,11 +187,11 @@ export default function SupportFilesStep({
   };
 
   const loadSelectedPlot = async () => {
-    if (!onLoadPreviewForFile || !selectedFileId || selectedFileId === ALL_FILES_ID) return;
+    if (!onLoadPreviewForFile || !selectedFileId || (selectedFileId === ALL_FILES_ID && !joinedParticipantMode)) return;
     setPlotError("");
     setPlotLoading(true);
     try {
-      await onLoadPreviewForFile(selectedFileId);
+      await onLoadPreviewForFile(joinedParticipantMode ? joinedParticipantKey : selectedFileId);
     } catch (err) {
       setPlotError(err.message || "Could not load this file preview.");
     } finally {
@@ -188,7 +201,7 @@ export default function SupportFilesStep({
 
   const addManualInterval = () => {
     setDraftError("");
-    if (!selectedFileId || selectedFileId === ALL_FILES_ID) {
+    if (!selectedFileId || (selectedFileId === ALL_FILES_ID && !joinedParticipantMode)) {
       setDraftError("Choose the file this interval belongs to, or use uploaded support files for global intervals.");
       return;
     }
@@ -252,7 +265,7 @@ export default function SupportFilesStep({
       <p style={{ color: "#64748b", lineHeight: 1.6 }}>{description}</p>
 
       <div style={{ border: "1px solid #dbeafe", background: "#eff6ff", borderRadius: 14, padding: 14, color: "#1e3a8a", lineHeight: 1.55, fontSize: 14, marginBottom: 14 }}>
-        <strong>pyActigraphy-style support file workflow:</strong> upload a file with intervals, manually add intervals with the calendar fields, or click points on the selected file's activity plot. {help.fileHint} Uploaded files are parsed on the backend; manual intervals are sent with a file ID so each interval only applies to the matching file.
+        <strong>pyActigraphy-style support file workflow:</strong> upload a file with intervals, manually add intervals with the calendar fields, or click points on the activity plot. {help.fileHint} {joinedParticipantMode ? "Joined mode uses one longitudinal participant plot; manual intervals are attached to that joined timeline and therefore can span any constituent recording while preserving gaps." : "Uploaded files are parsed on the backend; manual intervals are sent with a file ID so each interval only applies to the matching file."}
       </div>
 
       <label style={{ display: "block", border: "2px dashed #cbd5e1", borderRadius: 16, padding: 20, background: "#f8fafc", cursor: "pointer", marginTop: 12 }}>
@@ -289,12 +302,19 @@ export default function SupportFilesStep({
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <label style={{ minWidth: 240 }}>
-              <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>Plot / interval file</div>
-              <select value={selectedFileId} onChange={(e) => setSelectedFileId(e.target.value)} style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
-                {(actigraphyFiles || []).map((file) => <option key={file.name} value={file.name}>{file.name}</option>)}
-              </select>
-            </label>
+            {joinedParticipantMode ? (
+              <div style={{ minWidth: 240, padding: "9px 10px", borderRadius: 10, border: "1px solid #bfdbfe", background: "#eff6ff" }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Plot / interval timeline</div>
+                <div style={{ fontWeight: 800, marginTop: 3 }}>{joinedTimelineDisplayLabel}</div>
+              </div>
+            ) : (
+              <label style={{ minWidth: 240 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>Plot / interval file</div>
+                <select value={selectedFileId} onChange={(e) => setSelectedFileId(e.target.value)} style={{ width: "100%", padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+                  {(actigraphyFiles || []).map((file) => <option key={file.name} value={file.name}>{file.name}</option>)}
+                </select>
+              </label>
+            )}
             {onLoadPreviewForFile && selectedFileId && (
               <button type="button" onClick={loadSelectedPlot} disabled={plotLoading} style={{ padding: "9px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", color: "#0f172a", cursor: plotLoading ? "wait" : "pointer", fontWeight: 700 }}>
                 {plotLoading ? "Loading plot..." : hasPlot ? "Refresh plot" : "Load plot"}
@@ -322,7 +342,7 @@ export default function SupportFilesStep({
         {hasPlot ? (
           <>
             <div style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5, marginBottom: 8 }}>
-              Drag the small range selector under the plot to zoom into a fine-grained time window. Click the zoomed line to set start/stop points for <strong>{selectedFileId}</strong>.
+              Drag the small range selector under the plot to zoom into a fine-grained time window. Click the zoomed line to set start/stop points for <strong>{joinedParticipantMode ? joinedTimelineDisplayLabel : selectedFileId}</strong>.
             </div>
             <div style={{ height: 330, border: "1px solid #e2e8f0", borderRadius: 14, padding: 12, background: "#f8fafc", marginBottom: 16 }}>
               <ResponsiveContainer key={plotZoomKey} width="100%" height="100%">
@@ -353,9 +373,13 @@ export default function SupportFilesStep({
         <div style={{ display: "grid", gridTemplateColumns: type === "sleepDiary" || type === "masking" ? "1fr 1fr 1fr 1fr auto" : "1fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
           <label>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>File ID</div>
-            <select value={selectedFileId} onChange={(e) => setSelectedFileId(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
-              {(actigraphyFiles || []).map((file) => <option key={file.name} value={file.name}>{file.name}</option>)}
-            </select>
+            {joinedParticipantMode ? (
+              <div style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #bfdbfe", background: "#eff6ff", fontWeight: 700 }}>{joinedTimelineDisplayLabel}</div>
+            ) : (
+              <select value={selectedFileId} onChange={(e) => setSelectedFileId(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white" }}>
+                {(actigraphyFiles || []).map((file) => <option key={file.name} value={file.name}>{file.name}</option>)}
+              </select>
+            )}
           </label>
           {type === "sleepDiary" && (
             <label>

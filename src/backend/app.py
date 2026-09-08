@@ -56,6 +56,7 @@ from .accelerometer_loader import (
     DEFAULT_JAVA_HEAP_MB,
 )
 from .gt3x_loader import summarize_gt3x_file, DEFAULT_GT3X_ACTIVITY_MODE
+from .geneactiv_bin import SimpleLightRecording
 
 from .progress import get_progress
 from .job_manager import (
@@ -241,11 +242,11 @@ def _send_feedback_notification(record: dict) -> Dict[str, Any]:
     use_tls = os.getenv("SMTP_USE_TLS", "true").strip().lower() not in {"0", "false", "no"}
 
     message = EmailMessage()
-    message["Subject"] = f"PyActigraphy UI feedback submitted — {record.get('current_step') or 'step unknown'}"
+    message["Subject"] = f"ActiLab feedback submitted — {record.get('current_step') or 'step unknown'}"
     message["From"] = sender
     message["To"] = recipient
     message.set_content(
-        "A new PyActigraphy UI feedback submission was received.\n\n"
+        "A new ActiLab feedback submission was received.\n\n"
         f"Feedback ID: {record.get('id') or 'Not available'}\n"
         f"User email: {record.get('email') or 'Not available'}\n"
         f"File: {record.get('file_name') or 'Not available'}\n"
@@ -679,6 +680,15 @@ NO_LIGHT_MEASUREMENTS_DETAIL = (
 )
 
 
+def _upload_file_list(value):
+    """Normalize optional FastAPI multi-upload params for HTTP and direct test calls."""
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    if isinstance(value, UploadFile):
+        return [value]
+    return []
+
+
 def _validate_light_upload_format(upload: UploadFile) -> None:
     """Retained for compatibility; light capability is determined from content."""
     if upload is None:
@@ -907,6 +917,7 @@ def inspect_tabular_columns(
 @app.post("/api/preview/basic")
 def preview_basic(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
     resampleFreq: str = Form("1min"),
@@ -916,20 +927,42 @@ def preview_basic(
     sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
     startStopFiles: Optional[List[UploadFile]] = File(None),
 ):
-    tmp_path = None
+    temp_paths: List[str] = []
     try:
         parsed_csv_mapping = _clean_csv_mapping(csvMapping)
+        requested_mapping = normalize_activity_mapping(activityMapping)
 
         tmp_path = _write_upload_to_temp(file)
-        requested_mapping = normalize_activity_mapping(activityMapping)
+        temp_paths.append(tmp_path)
         raw, reader_type = _load_native_supported_file(
             tmp_path,
             activity_mapping=requested_mapping,
             csv_mapping=parsed_csv_mapping,
             csv_separator=csvSeparator,
         )
-        mapping_details = raw_mapping_metadata(raw)
+        raw_items = [raw]
+        source_names = [file.filename or Path(tmp_path).name]
+        additional_reader_types = []
+        for upload in _upload_file_list(additionalFiles):
+            path = _write_upload_to_temp(upload)
+            temp_paths.append(path)
+            additional_raw, additional_reader = _load_native_supported_file(
+                path,
+                activity_mapping=requested_mapping,
+                csv_mapping=parsed_csv_mapping,
+                csv_separator=csvSeparator,
+            )
+            raw_items.append(additional_raw)
+            source_names.append(upload.filename or Path(path).name)
+            additional_reader_types.append(additional_reader)
 
+        participant_join = {"joined": False, "source_files": source_names}
+        if len(raw_items) > 1:
+            if any(item != reader_type for item in additional_reader_types):
+                raise ValueError("Joined participant preview requires all selected files to use the same detected input type.")
+            raw, participant_join = _concatenate_raw_recordings(raw_items, source_names)
+
+        mapping_details = raw_mapping_metadata(raw)
         preview = build_native_preview(
             raw=raw,
             activity_channel=activityChannel,
@@ -943,6 +976,7 @@ def preview_basic(
                 "detected_input_type": reader_type,
                 "native_reader_used": reader_type != "tabular_mapped",
                 "activity_mapping": mapping_details,
+                "participant_join": participant_join,
             }
         )
 
@@ -954,33 +988,59 @@ def preview_basic(
             content={"detail": "Server error: {}".format(str(e))}
         )
     finally:
-        _cleanup_temp_paths([tmp_path])
+        _cleanup_temp_paths(temp_paths)
 
 
 @app.post("/api/qc/initial")
 def initial_data_qc(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     activityMapping: str = Form("auto"),
     csvMapping: str = Form("{}"),
     csvSeparator: str = Form(","),
 ):
     """Inspect per-day coverage immediately after loading a recording.
 
-    This endpoint intentionally runs before uploaded/manual masking and final
-    preprocessing so Step 2 can show the user what was actually recorded.
+    In joined-participant mode the selected files are timestamp-concatenated
+    first, so Step 2 reports the same participant-level timeline that later
+    preprocessing and analysis will use.
     """
 
-    tmp_path = None
+    temp_paths: List[str] = []
     try:
         parsed_csv_mapping = _clean_csv_mapping(csvMapping)
-        tmp_path = _write_upload_to_temp(file)
         requested_mapping = normalize_activity_mapping(activityMapping)
+
+        tmp_path = _write_upload_to_temp(file)
+        temp_paths.append(tmp_path)
         raw, reader_type = _load_native_supported_file(
             tmp_path,
             activity_mapping=requested_mapping,
             csv_mapping=parsed_csv_mapping,
             csv_separator=csvSeparator,
         )
+        raw_items = [raw]
+        source_names = [file.filename or Path(tmp_path).name]
+        additional_reader_types = []
+        for upload in _upload_file_list(additionalFiles):
+            path = _write_upload_to_temp(upload)
+            temp_paths.append(path)
+            additional_raw, additional_reader = _load_native_supported_file(
+                path,
+                activity_mapping=requested_mapping,
+                csv_mapping=parsed_csv_mapping,
+                csv_separator=csvSeparator,
+            )
+            raw_items.append(additional_raw)
+            source_names.append(upload.filename or Path(path).name)
+            additional_reader_types.append(additional_reader)
+
+        participant_join = {"joined": False, "source_files": source_names}
+        if len(raw_items) > 1:
+            if any(item != reader_type for item in additional_reader_types):
+                raise ValueError("Joined participant QC requires all selected files to use the same detected input type.")
+            raw, participant_join = _concatenate_raw_recordings(raw_items, source_names)
+
         payload = inspect_initial_data_coverage(raw)
         return _safe_json_response(
             status_code=200,
@@ -989,6 +1049,7 @@ def initial_data_qc(
                 "detected_input_type": reader_type,
                 "native_reader_used": reader_type != "tabular_mapped",
                 "activity_mapping": raw_mapping_metadata(raw),
+                "participant_join": participant_join,
             },
         )
     except ValueError as exc:
@@ -996,12 +1057,57 @@ def initial_data_qc(
     except Exception as exc:
         return JSONResponse(status_code=500, content={"detail": f"Server error: {exc}"})
     finally:
-        _cleanup_temp_paths([tmp_path])
+        _cleanup_temp_paths(temp_paths)
+
+
+def _load_joined_light_uploads(
+    file: UploadFile,
+    additional_files: Optional[List[UploadFile]] = None,
+    *,
+    csv_mapping: Optional[Dict[str, Any]] = None,
+    csv_separator: str = ",",
+):
+    """Load one or more light-capable files and join them by timestamp."""
+    temp_paths: List[str] = []
+    try:
+        uploads = [file, *(_upload_file_list(additional_files))]
+        for upload in uploads:
+            _validate_light_upload_format(upload)
+
+        raw_items = []
+        source_names = []
+        reader_types = []
+        for upload in uploads:
+            path = _write_upload_to_temp(upload)
+            temp_paths.append(path)
+            raw, reader_type = _load_native_supported_file(
+                path,
+                purpose="light",
+                csv_mapping=csv_mapping or {},
+                csv_separator=csv_separator,
+            )
+            raw_items.append(raw)
+            source_names.append(upload.filename or Path(path).name)
+            reader_types.append(reader_type)
+
+        reader_type = reader_types[0]
+        if any(item != reader_type for item in reader_types[1:]):
+            raise ValueError("Joined participant light processing requires all selected files to use the same detected input type.")
+
+        participant_join = {"joined": False, "source_files": source_names}
+        raw = raw_items[0]
+        if len(raw_items) > 1:
+            raw, participant_join = _concatenate_raw_recordings(raw_items, source_names)
+        return raw, reader_type, participant_join, temp_paths
+    except Exception:
+        _cleanup_temp_paths(temp_paths)
+        raise
 
 
 @app.post("/api/light/preview")
 def preview_light(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     resampleFreq: str = Form("1min"),
     rgbResampleFreq: str = Form("5min"),
     csvMapping: str = Form("{}"),
@@ -1010,18 +1116,42 @@ def preview_light(
     sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
     startStopFiles: Optional[List[UploadFile]] = File(None),
 ):
-    tmp_path = None
+    temp_paths: List[str] = []
     try:
         _validate_light_upload_format(file)
+        for upload in _upload_file_list(additionalFiles):
+            _validate_light_upload_format(upload)
         parsed_csv_mapping = _clean_csv_mapping(csvMapping)
 
         tmp_path = _write_upload_to_temp(file)
+        temp_paths.append(tmp_path)
         raw, reader_type = _load_native_supported_file(
             tmp_path,
             purpose="light",
             csv_mapping=parsed_csv_mapping,
             csv_separator=csvSeparator,
         )
+        raw_items = [raw]
+        source_names = [file.filename or Path(tmp_path).name]
+        additional_reader_types = []
+        for upload in _upload_file_list(additionalFiles):
+            path = _write_upload_to_temp(upload)
+            temp_paths.append(path)
+            additional_raw, additional_reader = _load_native_supported_file(
+                path,
+                purpose="light",
+                csv_mapping=parsed_csv_mapping,
+                csv_separator=csvSeparator,
+            )
+            raw_items.append(additional_raw)
+            source_names.append(upload.filename or Path(path).name)
+            additional_reader_types.append(additional_reader)
+
+        participant_join = {"joined": False, "source_files": source_names}
+        if len(raw_items) > 1:
+            if any(item != reader_type for item in additional_reader_types):
+                raise ValueError("Joined participant light preview requires all selected files to use the same detected input type.")
+            raw, participant_join = _concatenate_raw_recordings(raw_items, source_names)
 
         preview = build_light_preview(raw=raw, resample_freq=resampleFreq)
         detection = _light_detection_payload(raw, reader_type)
@@ -1041,6 +1171,7 @@ def preview_light(
                     "skipped": True,
                     "detected_input_type": reader_type,
                     "native_reader_used": reader_type != "tabular_mapped",
+                    "participant_join": participant_join,
                 },
             )
 
@@ -1059,6 +1190,7 @@ def preview_light(
                 "skipped": False,
                 "detected_input_type": reader_type,
                 "native_reader_used": reader_type != "tabular_mapped",
+                "participant_join": participant_join,
             }
         )
 
@@ -1070,18 +1202,26 @@ def preview_light(
             content={"detail": "Server error: {}".format(str(e))}
         )
     finally:
-        _cleanup_temp_paths([tmp_path])
+        _cleanup_temp_paths(temp_paths)
+
 
 @app.post("/api/light/rgb-preview")
 def preview_light_rgb(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     resampleFreq: str = Form("5min"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
 ):
-    tmp_path = None
+    temp_paths: List[str] = []
     try:
-        _validate_light_upload_format(file)
-        tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path, purpose="light")
+        parsed_csv_mapping = _clean_csv_mapping(csvMapping)
+        raw, reader_type, participant_join, temp_paths = _load_joined_light_uploads(
+            file,
+            additionalFiles,
+            csv_mapping=parsed_csv_mapping,
+            csv_separator=csvSeparator,
+        )
 
         payload = build_light_rgb_preview(raw=raw, resample_freq=resampleFreq)
         detection = _light_detection_payload(raw, reader_type)
@@ -1095,6 +1235,7 @@ def preview_light_rgb(
                 "skipped": not detection["available"],
                 "detected_input_type": reader_type,
                 "native_reader_used": reader_type != "tabular_mapped",
+                "participant_join": participant_join,
             }
         )
 
@@ -1106,17 +1247,25 @@ def preview_light_rgb(
             content={"detail": "Server error: {}".format(str(e))}
         )
     finally:
-        _cleanup_temp_paths([tmp_path])
+        _cleanup_temp_paths(temp_paths)
+
 
 @app.post("/api/light/channels")
 def light_channels(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
 ):
-    tmp_path = None
+    temp_paths: List[str] = []
     try:
-        _validate_light_upload_format(file)
-        tmp_path = _write_upload_to_temp(file)
-        raw, reader_type = _load_native_supported_file(tmp_path, purpose="light")
+        parsed_csv_mapping = _clean_csv_mapping(csvMapping)
+        raw, reader_type, participant_join, temp_paths = _load_joined_light_uploads(
+            file,
+            additionalFiles,
+            csv_mapping=parsed_csv_mapping,
+            csv_separator=csvSeparator,
+        )
 
         payload = get_basic_light_channels(raw)
         detection = _light_detection_payload(raw, reader_type)
@@ -1130,6 +1279,7 @@ def light_channels(
                 "skipped": not detection["available"],
                 "detected_input_type": reader_type,
                 "native_reader_used": reader_type != "tabular_mapped",
+                "participant_join": participant_join,
             }
         )
 
@@ -1141,12 +1291,13 @@ def light_channels(
             content={"detail": "Server error: {}".format(str(e))}
         )
     finally:
-        _cleanup_temp_paths([tmp_path])
+        _cleanup_temp_paths(temp_paths)
 
 
 @app.post("/api/light/analyze")
 def analyze_light(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     metricId: str = Form(...),
     channel: Optional[str] = Form(None),
     thresholdLux: Optional[str] = Form(None),
@@ -1171,6 +1322,8 @@ def analyze_light(
 
     try:
         _validate_light_upload_format(file)
+        for additional_upload in _upload_file_list(additionalFiles):
+            _validate_light_upload_format(additional_upload)
         with session.stage("request.parse_light_metric", category="request"):
             parsed_csv_mapping = _clean_csv_mapping(csvMapping)
             agg_funcs = [x.strip() for x in aggFuncs.split(",") if x.strip()] if aggFuncs else None
@@ -1190,23 +1343,27 @@ def analyze_light(
             )
 
         with session.stage("upload.primary_file", category="upload"):
-            tmp_path = _write_upload_to_temp(file)
-            temp_paths.append(tmp_path)
-            session.input_file = uploaded_file_summary(tmp_path, file.filename, file.content_type)
-            update_current_stage(**session.input_file)
-
-        with session.stage("input.detect_reader", category="reader"):
-            reader_type = infer_reader_type(tmp_path)
-            update_current_stage(detected_input_type=reader_type)
-
-        with session.stage("input.load_recording", category="reader", details={"detected_input_type": reader_type}):
-            raw, reader_type = _load_native_supported_file(
-                tmp_path,
-                purpose="light",
+            raw, reader_type, participant_join, joined_temp_paths = _load_joined_light_uploads(
+                file,
+                additionalFiles,
                 csv_mapping=parsed_csv_mapping,
                 csv_separator=csvSeparator,
             )
-            update_current_stage(raw_class=type(raw).__name__, raw_module=type(raw).__module__)
+            temp_paths.extend(joined_temp_paths)
+            primary_path = joined_temp_paths[0] if joined_temp_paths else None
+            if primary_path:
+                session.input_file = uploaded_file_summary(primary_path, file.filename, file.content_type)
+            update_current_stage(
+                **(session.input_file or {}),
+                participant_file_count=1 + len(_upload_file_list(additionalFiles)),
+                participant_join=participant_join,
+            )
+
+        with session.stage("input.detect_reader", category="reader"):
+            update_current_stage(detected_input_type=reader_type)
+
+        with session.stage("input.load_recording", category="reader", details={"detected_input_type": reader_type}):
+            update_current_stage(raw_class=type(raw).__name__, raw_module=type(raw).__module__, participant_join=participant_join)
 
         with session.stage("input.inspect_recording", category="data_validation"):
             session.recording = raw_recording_summary(raw)
@@ -1222,6 +1379,7 @@ def analyze_light(
                     "message": detection["message"],
                     "detected_input_type": reader_type,
                     "native_reader_used": reader_type != "tabular_mapped",
+                    "participant_join": participant_join,
                 }
                 final_status = "completed_with_warnings"
                 mark_current_stage("warning")
@@ -1256,6 +1414,7 @@ def analyze_light(
                 "light_detection": _light_detection_payload(raw, reader_type),
                 "detected_input_type": reader_type,
                 "native_reader_used": reader_type != "tabular_mapped",
+                "participant_join": participant_join,
             }
 
     except ValueError as exc:
@@ -1289,6 +1448,7 @@ def analyze_light(
 @app.post("/api/light/analyze-batch")
 def analyze_light_batch(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     metricIds: str = Form("[]"),
     channel: Optional[str] = Form(None),
     thresholdLux: Optional[str] = Form(None),
@@ -1335,14 +1495,26 @@ def analyze_light_batch(
             session.set_expected_stage_total(4 + len(selected_metric_ids))
             update_current_stage(metric_ids=selected_metric_ids)
 
+        additional_paths = []
         with session.stage("upload.primary_file", category="upload"):
             tmp_path = _write_upload_to_temp(file)
             temp_paths.append(tmp_path)
             session.input_file = uploaded_file_summary(tmp_path, file.filename, file.content_type)
-            update_current_stage(**session.input_file)
+            for upload in _upload_file_list(additionalFiles):
+                path = _write_upload_to_temp(upload)
+                temp_paths.append(path)
+                additional_paths.append((path, upload))
+            update_current_stage(
+                **session.input_file,
+                participant_file_count=1 + len(additional_paths),
+                participant_files=[file.filename, *[upload.filename for _, upload in additional_paths]],
+            )
 
         with session.stage("input.detect_reader", category="reader"):
             reader_type = infer_reader_type(tmp_path)
+            additional_reader_types = [infer_reader_type(path) for path, _ in additional_paths]
+            if any(item != reader_type for item in additional_reader_types):
+                raise ValueError("Joined participant light analysis requires all selected files to use the same detected input type.")
             update_current_stage(detected_input_type=reader_type)
 
         with session.stage(
@@ -1356,12 +1528,28 @@ def analyze_light_batch(
                 csv_mapping=parsed_csv_mapping,
                 csv_separator=csvSeparator,
             )
+            raw_items = [raw]
+            source_names = [file.filename or Path(tmp_path).name]
+            for path, upload in additional_paths:
+                additional_raw, _ = _load_native_supported_file(
+                    path,
+                    purpose="light",
+                    csv_mapping=parsed_csv_mapping,
+                    csv_separator=csvSeparator,
+                )
+                raw_items.append(additional_raw)
+                source_names.append(upload.filename or Path(path).name)
+            participant_join = {"joined": False, "source_files": source_names}
+            if len(raw_items) > 1:
+                raw, participant_join = _concatenate_raw_recordings(raw_items, source_names)
+
             session.recording = raw_recording_summary(raw)
             detection = _light_detection_payload(raw, reader_type)
             update_current_stage(
                 raw_class=type(raw).__name__,
                 light_available=detection["available"],
                 light_channels=detection["channels"],
+                participant_join=participant_join,
             )
             if not detection["available"]:
                 mark_current_stage("warning")
@@ -1440,6 +1628,7 @@ def analyze_light_batch(
             ),
             "detected_input_type": reader_type,
             "native_reader_used": reader_type != "tabular_mapped",
+            "participant_join": participant_join,
         }
 
     except ValueError as exc:
@@ -1563,13 +1752,25 @@ def _file_key_parts(value):
     text = str(value).strip().lower()
     if not text:
         return set()
-    parts = {text}
-    try:
-        path = Path(text)
-        parts.add(path.name)
-        parts.add(path.stem)
-    except Exception:
-        pass
+
+    candidates = {text}
+    simplified = re.sub(r"^joined\s+participant\s*[:(]?\s*", "", text).rstrip(")").strip()
+    if simplified:
+        candidates.add(simplified)
+    for token in re.split(r"\s*(?:\+|\||;|,)\s*", simplified or text):
+        token = token.strip(" ()[]{}\t\r\n")
+        if token:
+            candidates.add(token)
+
+    parts = set()
+    for candidate in candidates:
+        parts.add(candidate)
+        try:
+            path = Path(candidate)
+            parts.add(path.name)
+            parts.add(path.stem)
+        except Exception:
+            pass
     return {part for part in parts if part}
 
 
@@ -1742,9 +1943,15 @@ def _apply_support_file_logic(raw, masking_paths=None, diary_paths=None, start_s
             if start is None or stop is None or stop <= start:
                 summary["notes"].append(f"{source}: skipped invalid start/stop interval.")
                 return
-            raw._ui_analysis_start = start.isoformat()
-            raw._ui_analysis_stop = stop.isoformat()
+            intervals = list(getattr(raw, "_ui_start_stop_intervals", None) or [])
+            intervals.append({"start": start.isoformat(), "stop": stop.isoformat(), "source": source})
+            raw._ui_start_stop_intervals = intervals
+            starts = [pd.to_datetime(item["start"]) for item in intervals]
+            stops = [pd.to_datetime(item["stop"]) for item in intervals]
+            raw._ui_analysis_start = min(starts).isoformat()
+            raw._ui_analysis_stop = max(stops).isoformat()
             summary["start_stop_applied"] = True
+            summary["start_stop_intervals_applied"] = len(intervals)
             summary["notes"].append(f"{source}: applied recording interval before masking and sleep scoring.")
         except Exception as exc:
             summary["notes"].append(f"{source}: data truncation failed ({exc}).")
@@ -1913,9 +2120,160 @@ def _median_epoch(series: pd.Series) -> pd.Timedelta:
     return pd.Timedelta(diffs.median())
 
 
+def _light_channels_for_concatenation(raw: Any) -> Dict[str, pd.Series]:
+    """Return timestamped light channels exposed by a loaded recording.
+
+    The join path deliberately uses the public LightRecording-like API already
+    consumed by the light analysis code. This keeps native pyActigraphy readers,
+    mapped tables, streamed GT3X light, and GENEActiv-compatible objects on the
+    same path without assuming a specific concrete light class.
+    """
+    payload = get_basic_light_channels(raw)
+    channels = payload.get("channels") or []
+    light_obj = getattr(raw, "light", None)
+    if light_obj is None or not hasattr(light_obj, "get_channel"):
+        return {}
+
+    result: Dict[str, pd.Series] = {}
+    for channel in channels:
+        try:
+            series = light_obj.get_channel(channel)
+        except Exception:
+            continue
+        if isinstance(series, pd.DataFrame):
+            if series.shape[1] == 0:
+                continue
+            series = series.iloc[:, 0]
+        if not isinstance(series, pd.Series):
+            continue
+        values = pd.to_numeric(series, errors="coerce").copy()
+        if not isinstance(values.index, pd.DatetimeIndex):
+            values.index = pd.to_datetime(values.index, errors="coerce")
+        values = values.loc[~pd.isna(values.index)].sort_index().dropna()
+        if len(values):
+            result[str(channel)] = values.rename(str(channel))
+    return result
+
+
+def _attach_joined_light(first: Any, raw_items: List[Any], source_names: List[str]) -> Dict[str, Any]:
+    """Concatenate all available light channels by real timestamp.
+
+    Files that contain no light simply contribute a gap. Shared boundary
+    timestamps are de-duplicated with the earliest selected file taking
+    precedence, mirroring the activity-series join.
+    """
+    per_file_channels = [_light_channels_for_concatenation(raw) for raw in raw_items]
+    all_channels = sorted({channel for item in per_file_channels for channel in item})
+    if not all_channels:
+        return {
+            "available": False,
+            "channels": [],
+            "source_files_with_light": [],
+            "source_file_count_with_light": 0,
+            "duplicate_timestamps_removed": {},
+        }
+
+    joined_channels: Dict[str, pd.Series] = {}
+    duplicates_by_channel: Dict[str, int] = {}
+    starts: List[pd.Timestamp] = []
+    stops: List[pd.Timestamp] = []
+    source_files_with_light = [
+        source_names[index]
+        for index, channels in enumerate(per_file_channels)
+        if channels
+    ]
+
+    for channel in all_channels:
+        pieces_with_sources = [
+            (source_names[index], channels[channel])
+            for index, channels in enumerate(per_file_channels)
+            if channel in channels
+        ]
+        pieces = [series for _, series in pieces_with_sources]
+        if not pieces:
+            continue
+        light_epochs = [
+            (source_name, _median_epoch(series))
+            for source_name, series in pieces_with_sources
+            if len(series) >= 2
+        ]
+        if len(light_epochs) > 1:
+            reference_light_epoch = light_epochs[0][1]
+            incompatible_light = [
+                source_name
+                for source_name, epoch in light_epochs
+                if abs(epoch - reference_light_epoch) > max(pd.Timedelta(milliseconds=1), reference_light_epoch * 0.01)
+            ]
+            if incompatible_light:
+                raise ValueError(
+                    f"Joined participant light channel {channel} requires compatible sampling intervals across files. "
+                    f"Files with a different interval: {', '.join(incompatible_light)}."
+                )
+        combined = pd.concat(pieces).sort_index()
+        duplicate_count = int(combined.index.duplicated(keep="first").sum())
+        combined = combined.loc[~combined.index.duplicated(keep="first")].dropna()
+        if not len(combined):
+            continue
+        joined_channels[channel] = combined.rename(channel)
+        duplicates_by_channel[channel] = duplicate_count
+        starts.append(combined.index.min())
+        stops.append(combined.index.max())
+
+    if not joined_channels:
+        return {
+            "available": False,
+            "channels": [],
+            "source_files_with_light": source_files_with_light,
+            "source_file_count_with_light": len(source_files_with_light),
+            "duplicate_timestamps_removed": duplicates_by_channel,
+        }
+
+    light_recording = SimpleLightRecording(joined_channels)
+    assigned = False
+    for attribute in ("light", "_light"):
+        try:
+            setattr(first, attribute, light_recording)
+            assigned = getattr(first, "light", None) is not None
+            if assigned:
+                break
+        except Exception:
+            continue
+    if not assigned:
+        raise ValueError(
+            "This file type exposes light data but does not allow the joined light timeline to be attached."
+        )
+
+    # Some readers expose convenience properties through raw_light rather than
+    # light. Keep a joined copy there when it is a writable attribute.
+    with contextlib.suppress(Exception):
+        if hasattr(first, "raw_light") and not isinstance(getattr(type(first), "raw_light", None), property):
+            first.raw_light = light_recording
+
+    return {
+        "available": True,
+        "channels": list(joined_channels.keys()),
+        "source_files_with_light": source_files_with_light,
+        "source_file_count_with_light": len(source_files_with_light),
+        "duplicate_timestamps_removed": duplicates_by_channel,
+        "start": min(starts).isoformat() if starts else None,
+        "stop": max(stops).isoformat() if stops else None,
+    }
+
+
 def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -> tuple[Any, Dict[str, Any]]:
     if len(raw_items) < 2:
-        return raw_items[0], {"joined": False, "source_files": source_names}
+        light_summary = _light_channels_for_concatenation(raw_items[0]) if raw_items else {}
+        return raw_items[0], {
+            "joined": False,
+            "source_files": source_names,
+            "light": {
+                "available": bool(light_summary),
+                "channels": list(light_summary.keys()),
+                "source_files_with_light": source_names if light_summary else [],
+                "source_file_count_with_light": len(source_names) if light_summary else 0,
+                "duplicate_timestamps_removed": {},
+            },
+        }
 
     series_items = [_activity_series_for_concatenation(raw) for raw in raw_items]
     epochs = [_median_epoch(series) for series in series_items]
@@ -1978,6 +2336,8 @@ def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -
             with contextlib.suppress(Exception):
                 setattr(first, "_mask", combined_mask)
 
+    light_join = _attach_joined_light(first, raw_items, source_names)
+
     metadata = dict(getattr(first, "metadata", None) or {})
     metadata["participant_join"] = {
         "joined": True,
@@ -1987,6 +2347,7 @@ def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -
         "epoch_seconds": float(reference_epoch.total_seconds()),
         "start": combined.index.min().isoformat(),
         "stop": combined.index.max().isoformat(),
+        "light": light_join,
     }
     with contextlib.suppress(Exception):
         first.metadata = metadata
@@ -2049,7 +2410,7 @@ def analyze_basic(
                 algorithm=(algorithm_request or {}).get("id"),
                 analysis_window_mode=analysis_window_settings.get("mode", "full"),
                 activity_mapping_requested=requested_mapping,
-                participant_file_count=1 + len(additionalFiles or []),
+                participant_file_count=1 + len(_upload_file_list(additionalFiles)),
                 support_file_counts={
                     "masking": len(maskingFiles or []),
                     "sleep_diary": len(sleepDiaryFiles or []),
@@ -2083,9 +2444,9 @@ def analyze_basic(
                 csv_separator=csvSeparator,
             )
             raw_items = [raw]
-            joined_source_names = [source_filename]
+            joined_source_names = [file.filename or Path(tmp_path).name]
             additional_reader_types = []
-            for additional_upload in additionalFiles or []:
+            for additional_upload in _upload_file_list(additionalFiles):
                 additional_path = _write_upload_to_temp(additional_upload)
                 temp_paths.append(additional_path)
                 additional_raw, additional_reader = _load_native_supported_file(
@@ -2104,6 +2465,11 @@ def analyze_basic(
                     raise ValueError("Joined participant analysis requires all selected files to use the same detected input type.")
                 raw, participant_join = _concatenate_raw_recordings(raw_items, joined_source_names)
 
+            support_source_filename = (
+                source_filename
+                if len(joined_source_names) <= 1
+                else f"Joined participant ({' + '.join(joined_source_names)})"
+            )
             mapping_details = raw_mapping_metadata(raw)
             update_current_stage(
                 raw_class=type(raw).__name__,
@@ -2153,7 +2519,7 @@ def analyze_basic(
                 diary_paths=diary_paths,
                 start_stop_paths=start_stop_paths,
                 support_settings=analysis_config.get("supportFileSettings", {}),
-                source_filename=source_filename,
+                source_filename=support_source_filename,
             )
             update_current_stage(summary=support_file_summary)
             session.recording["after_support_files"] = raw_recording_summary(raw).get("data", {})
@@ -2267,11 +2633,14 @@ def analyze_basic(
     return _safe_json_response(status_code=status_code, content=response_content)
 
 
-def _background_initial_qc_worker(primary_spec: dict, options: dict) -> dict:
-    uploads, opened = _uploads_from_job_specs([primary_spec])
+def _background_initial_qc_worker(primary_spec: dict, additional_specs: List[dict], options: dict) -> dict:
+    primary_uploads, primary_opened = _uploads_from_job_specs([primary_spec])
+    additional_uploads, additional_opened = _uploads_from_job_specs(additional_specs)
+    opened = primary_opened + additional_opened
     try:
         response = initial_data_qc(
-            file=uploads[0],
+            file=primary_uploads[0],
+            additionalFiles=additional_uploads or None,
             activityMapping=options.get("activityMapping", "auto"),
             csvMapping=options.get("csvMapping", "{}"),
             csvSeparator=options.get("csvSeparator", ","),
@@ -2285,11 +2654,14 @@ def _background_initial_qc_worker(primary_spec: dict, options: dict) -> dict:
                 pass
 
 
-def _background_preview_worker(primary_spec: dict, options: dict) -> dict:
-    uploads, opened = _uploads_from_job_specs([primary_spec])
+def _background_preview_worker(primary_spec: dict, additional_specs: List[dict], options: dict) -> dict:
+    primary_uploads, primary_opened = _uploads_from_job_specs([primary_spec])
+    additional_uploads, additional_opened = _uploads_from_job_specs(additional_specs)
+    opened = primary_opened + additional_opened
     try:
         response = preview_basic(
-            file=uploads[0],
+            file=primary_uploads[0],
+            additionalFiles=additional_uploads or None,
             activityChannel=options.get("activityChannel", "VM"),
             activityMapping=options.get("activityMapping", "auto"),
             resampleFreq=options.get("resampleFreq", "1min"),
@@ -2305,14 +2677,17 @@ def _background_preview_worker(primary_spec: dict, options: dict) -> dict:
                 pass
 
 
-def _background_light_worker(primary_spec: dict, operation: str, options: dict) -> dict:
+def _background_light_worker(primary_spec: dict, additional_specs: List[dict], operation: str, options: dict) -> dict:
     """Run a light read operation after the upload request has returned."""
-    uploads, opened = _uploads_from_job_specs([primary_spec])
+    primary_uploads, primary_opened = _uploads_from_job_specs([primary_spec])
+    additional_uploads, additional_opened = _uploads_from_job_specs(additional_specs)
+    opened = primary_opened + additional_opened
     try:
-        upload = uploads[0]
+        upload = primary_uploads[0]
         if operation == "preview":
             response = preview_light(
                 file=upload,
+                additionalFiles=additional_uploads or None,
                 resampleFreq=options.get("resampleFreq", "1min"),
                 rgbResampleFreq=options.get("rgbResampleFreq", "5min"),
                 csvMapping=options.get("csvMapping", "{}"),
@@ -2324,13 +2699,22 @@ def _background_light_worker(primary_spec: dict, operation: str, options: dict) 
         elif operation == "rgb_preview":
             response = preview_light_rgb(
                 file=upload,
+                additionalFiles=additional_uploads or None,
                 resampleFreq=options.get("resampleFreq", "5min"),
+                csvMapping=options.get("csvMapping", "{}"),
+                csvSeparator=options.get("csvSeparator", ","),
             )
         elif operation == "channels":
-            response = light_channels(file=upload)
+            response = light_channels(
+                file=upload,
+                additionalFiles=additional_uploads or None,
+                csvMapping=options.get("csvMapping", "{}"),
+                csvSeparator=options.get("csvSeparator", ","),
+            )
         elif operation == "analyze":
             response = analyze_light_batch(
                 file=upload,
+                additionalFiles=additional_uploads or None,
                 metricIds=options.get("metricIds", "[]"),
                 channel=options.get("channel") or None,
                 thresholdLux=options.get("thresholdLux") or None,
@@ -2395,6 +2779,7 @@ def _background_analysis_worker(primary_spec: dict, additional_specs: List[dict]
 def _start_background_light_job(
     *,
     file: UploadFile,
+    additional_files: Optional[List[UploadFile]],
     operation: str,
     options: dict,
     requested_job_id: Optional[str],
@@ -2405,6 +2790,8 @@ def _start_background_light_job(
         # light-only streaming reader; files without lux records finish as a
         # successful, explicit skip rather than a crash or format rejection.
         _validate_light_upload_format(file)
+        for upload in _upload_file_list(additional_files):
+            _validate_light_upload_format(upload)
         created_job_id, directory = create_job_record(
             f"light_{operation}",
             requested_job_id=requested_job_id,
@@ -2412,9 +2799,13 @@ def _start_background_light_job(
             source_file_name=file.filename,
         )
         primary_spec = _write_upload_to_job(file, directory, "light")
+        additional_specs = [
+            _write_upload_to_job(upload, directory, f"participant-light-{index}")
+            for index, upload in enumerate(_upload_file_list(additional_files))
+        ]
         submit_job(
             created_job_id,
-            lambda: _background_light_worker(primary_spec, operation, options),
+            lambda: _background_light_worker(primary_spec, additional_specs, operation, options),
         )
         return JSONResponse(
             status_code=202,
@@ -2489,6 +2880,7 @@ def background_job_status(job_id: str):
 @app.post("/api/jobs/qc/initial")
 def start_background_initial_qc(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     activityMapping: str = Form("auto"),
     csvMapping: str = Form("{}"),
     csvSeparator: str = Form(","),
@@ -2503,6 +2895,10 @@ def start_background_initial_qc(
             source_file_name=file.filename,
         )
         primary_spec = _write_upload_to_job(file, directory, "primary")
+        additional_specs = [
+            _write_upload_to_job(upload, directory, f"participant-{index}")
+            for index, upload in enumerate(_upload_file_list(additionalFiles))
+        ]
         options = {
             "activityMapping": activityMapping,
             "csvMapping": csvMapping,
@@ -2510,7 +2906,7 @@ def start_background_initial_qc(
         }
         submit_job(
             created_job_id,
-            lambda: _background_initial_qc_worker(primary_spec, options),
+            lambda: _background_initial_qc_worker(primary_spec, additional_specs, options),
         )
         return JSONResponse(
             status_code=202,
@@ -2540,6 +2936,7 @@ def start_background_initial_qc(
 @app.post("/api/jobs/preview/basic")
 def start_background_preview_basic(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
     resampleFreq: str = Form("1min"),
@@ -2556,6 +2953,10 @@ def start_background_preview_basic(
             source_file_name=file.filename,
         )
         primary_spec = _write_upload_to_job(file, directory, "primary")
+        additional_specs = [
+            _write_upload_to_job(upload, directory, f"participant-{index}")
+            for index, upload in enumerate(_upload_file_list(additionalFiles))
+        ]
         options = {
             "activityChannel": activityChannel,
             "activityMapping": activityMapping,
@@ -2565,7 +2966,7 @@ def start_background_preview_basic(
         }
         submit_job(
             created_job_id,
-            lambda: _background_preview_worker(primary_spec, options),
+            lambda: _background_preview_worker(primary_spec, additional_specs, options),
         )
         return JSONResponse(
             status_code=202,
@@ -2590,6 +2991,7 @@ def start_background_preview_basic(
 @app.post("/api/jobs/light/preview")
 def start_background_light_preview(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     resampleFreq: str = Form("1min"),
     rgbResampleFreq: str = Form("5min"),
     csvMapping: str = Form("{}"),
@@ -2598,6 +3000,7 @@ def start_background_light_preview(
 ):
     return _start_background_light_job(
         file=file,
+        additional_files=additionalFiles,
         operation="preview",
         options={
             "resampleFreq": resampleFreq,
@@ -2612,13 +3015,17 @@ def start_background_light_preview(
 @app.post("/api/jobs/light/rgb-preview")
 def start_background_light_rgb_preview(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     resampleFreq: str = Form("5min"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
     jobId: Optional[str] = Form(None),
 ):
     return _start_background_light_job(
         file=file,
+        additional_files=additionalFiles,
         operation="rgb_preview",
-        options={"resampleFreq": resampleFreq},
+        options={"resampleFreq": resampleFreq, "csvMapping": csvMapping, "csvSeparator": csvSeparator},
         requested_job_id=jobId,
     )
 
@@ -2626,12 +3033,16 @@ def start_background_light_rgb_preview(
 @app.post("/api/jobs/light/channels")
 def start_background_light_channels(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
     jobId: Optional[str] = Form(None),
 ):
     return _start_background_light_job(
         file=file,
+        additional_files=additionalFiles,
         operation="channels",
-        options={},
+        options={"csvMapping": csvMapping, "csvSeparator": csvSeparator},
         requested_job_id=jobId,
     )
 
@@ -2639,6 +3050,7 @@ def start_background_light_channels(
 @app.post("/api/jobs/light/analyze")
 def start_background_light_analysis(
     file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
     metricIds: str = Form("[]"),
     channel: Optional[str] = Form(None),
     thresholdLux: Optional[str] = Form(None),
@@ -2659,6 +3071,7 @@ def start_background_light_analysis(
     resolved_job_id = jobId or requestId
     return _start_background_light_job(
         file=file,
+        additional_files=additionalFiles,
         operation="analyze",
         options={
             "metricIds": metricIds,
@@ -2713,7 +3126,7 @@ def start_background_analyze_basic(
         primary_spec = _write_upload_to_job(file, directory, "primary")
         additional_specs = [
             _write_upload_to_job(upload, directory, f"participant-{index}")
-            for index, upload in enumerate(additionalFiles or [])
+            for index, upload in enumerate(_upload_file_list(additionalFiles))
         ]
         support_specs = {"masking": [], "sleep_diary": [], "start_stop": []}
         for index, upload in enumerate(maskingFiles or []):

@@ -111,6 +111,7 @@ export async function runBackgroundFileJob({
   startUrl,
   statusBaseUrl,
   file,
+  additionalFiles = [],
   fields = {},
   jobPrefix = "light",
   onUpdate = null,
@@ -118,6 +119,7 @@ export async function runBackgroundFileJob({
   const jobId = makeJobId(jobPrefix);
   const formData = new FormData();
   formData.append("file", file);
+  (additionalFiles || []).forEach((additionalFile) => formData.append("additionalFiles", additionalFile));
   formData.append("jobId", jobId);
   Object.entries(fields || {}).forEach(([key, value]) => {
     if (value != null) formData.append(key, String(value));

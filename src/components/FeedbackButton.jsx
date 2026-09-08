@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import BrandLogo from "./BrandLogo";
 
 export default function FeedbackButton({ buildApiUrl, user = null, context = {} }) {
   const [open, setOpen] = useState(false);
@@ -132,7 +133,8 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12 }}>
               <div>
-                <h2 style={{ margin: 0, color: "#0f172a" }}>Send feedback</h2>
+                <BrandLogo width={125} style={{ margin: "0 0 8px 0" }} />
+                <h2 style={{ margin: 0, color: "#0f172a" }}>Send feedback to ActiLab</h2>
                 <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14, lineHeight: 1.5 }}>
                   Report upload, preview, analysis, or deployment issues. Your email address is required so the Centre for Analytics team can contact you about the report. Raw files are not sent; the form includes filenames, selected settings, progress, and current errors to help diagnose the report. Feedback submissions and attached technical context are stored for a maximum of 30 days and then automatically deleted. A minimal notification email (email address, filename, workflow step, category, and feedback ID) may be sent to the project contact; your feedback message is not included in that email.
                 </p>
