@@ -61,6 +61,6 @@ Values labelled recommended are starting points rather than universal standards.
 
 ## Data handling and feedback
 
-Uploaded recording and support files are used temporarily to complete the requested operation and are deleted after processing. Download any result files that need to be retained.
+Uploaded recording files, support files, job data, and temporary processing data are automatically deleted no later than 30 days after upload. Temporary files may be deleted sooner after processing. Download any result files that need to be retained.
 
-Feedback requires a contact email and may include non-raw technical context such as filenames, file sizes, selected settings, processing stages, request IDs, errors, and summary results. Feedback and its attached context are retained for 30 days and then automatically deleted. Do not include participant identifiers or raw measurements in filenames or feedback text.
+Feedback requires a contact email and may include non-raw technical context such as filenames, file sizes, selected settings, processing stages, request IDs, errors, and summary results. Feedback and its attached context are retained for a maximum of 30 days and then automatically deleted. A minimal notification email may contain the submitter email, filename, workflow step, category, and feedback ID, without the feedback message or detailed diagnostic context. Do not include participant identifiers or raw measurements in filenames or feedback text.

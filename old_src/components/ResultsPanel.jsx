@@ -359,6 +359,8 @@ export default function ResultsPanel({
   actigraphyFiles = [],
   selectedAnalysisFileNames = [],
   setSelectedAnalysisFileNames = () => {},
+  participantFileMode = "separate",
+  setParticipantFileMode = () => {},
   multiFileResults = [],
   resultsGenerated,
   onGenerate,
@@ -457,26 +459,49 @@ export default function ResultsPanel({
             <div>
               <div style={{ fontWeight: 800 }}>Files selected for analysis</div>
               <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>
-                Preview is optional. The analysis will run for the checked files below and report any file-level errors separately.
+                {participantFileMode === "join" ? "Joined participant mode is active for the entire workflow. All uploaded actigraphy files below are included in the same timestamp-preserving participant timeline." : "Choose which recordings to analyze independently. You can switch to joined participant mode only when every uploaded file belongs to the same participant."}
               </div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setSelectedAnalysisFileNames(actigraphyFiles.map((file) => file.name))} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", cursor: "pointer", fontWeight: 700 }}>
+              <button type="button" disabled={participantFileMode === "join"} onClick={() => setSelectedAnalysisFileNames(actigraphyFiles.map((file) => file.name))} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", cursor: participantFileMode === "join" ? "not-allowed" : "pointer", opacity: participantFileMode === "join" ? 0.5 : 1, fontWeight: 700 }}>
                 Select all
               </button>
-              <button type="button" onClick={() => setSelectedAnalysisFileNames([])} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", cursor: "pointer", fontWeight: 700 }}>
+              <button type="button" disabled={participantFileMode === "join"} onClick={() => setSelectedAnalysisFileNames([])} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", cursor: participantFileMode === "join" ? "not-allowed" : "pointer", opacity: participantFileMode === "join" ? 0.5 : 1, fontWeight: 700 }}>
                 Clear
               </button>
             </div>
           </div>
+          {selectedFileCount > 1 && (
+            <div style={{ marginBottom: 14, border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 14, padding: 12 }}>
+              <div style={{ fontWeight: 800, marginBottom: 8 }}>How should multiple selected files be analyzed?</div>
+              <div style={{ color: "#475569", fontSize: 13, marginBottom: 8, lineHeight: 1.45 }}>This setting applies to the complete workflow. Changing it here resets previews and manually drawn intervals to avoid mixing file-level selections with a joined timeline.</div>
+              <div style={{ display: "grid", gap: 8 }}>
+                <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer" }}>
+                  <input type="radio" name="participant-file-mode" value="separate" checked={participantFileMode === "separate"} onChange={() => setParticipantFileMode("separate")} style={{ marginTop: 3 }} />
+                  <span>
+                    <strong>Analyze each file separately</strong>
+                    <span style={{ display: "block", color: "#475569", fontSize: 13, marginTop: 3, lineHeight: 1.5 }}>Produces one set of metrics per file. This remains the default.</span>
+                  </span>
+                </label>
+                <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer" }}>
+                  <input type="radio" name="participant-file-mode" value="join" checked={participantFileMode === "join"} onChange={() => setParticipantFileMode("join")} style={{ marginTop: 3 }} />
+                  <span>
+                    <strong>Join as one participant timeline</strong>
+                    <span style={{ display: "block", color: "#475569", fontSize: 13, marginTop: 3, lineHeight: 1.5 }}>Use only when all uploaded files are from the same participant. This is an end-to-end mode: initial QC, activity preview, support intervals, preprocessing, sleep-wake processing, embedded/separate light preview, light metrics, and final activity/sleep metrics use the joined timestamped timeline. Real gaps are preserved and compatible sampling intervals are required.</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
           <div style={{ display: "grid", gap: 8 }}>
             {actigraphyFiles.map((file, idx) => {
-              const checked = selectedAnalysisNameSet.has(file.name);
+              const checked = participantFileMode === "join" || selectedAnalysisNameSet.has(file.name);
               return (
-                <label key={`${file.name}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, border: "1px solid #e2e8f0", background: "white", cursor: "pointer" }}>
+                <label key={`${file.name}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, border: "1px solid #e2e8f0", background: "white", cursor: participantFileMode === "join" ? "default" : "pointer" }}>
                   <input
                     type="checkbox"
                     checked={checked}
+                    disabled={participantFileMode === "join"}
                     onChange={(e) => {
                       if (e.target.checked) {
                         setSelectedAnalysisFileNames(Array.from(new Set([...(selectedAnalysisFileNames || []), file.name])));

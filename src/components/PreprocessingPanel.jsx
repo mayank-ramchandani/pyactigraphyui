@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { buildFileEntries, fileEntryLabel, formatFileSize } from "../services/fileIdentityUtils";
+import SamplingHarmonizationNotice from "./SamplingHarmonizationNotice";
 
 function BubbleInfo({ label, content }) {
   const [open, setOpen] = useState(false);
@@ -132,6 +133,7 @@ function InitialQcCard({ entry, payload, loading, error, settings }) {
         {!error && loading && <div style={{ color: "#475569", fontSize: 13 }}>Loading the file and calculating initial per-day coverage. Large raw recordings may take longer to inspect.</div>}
         {!error && payload && (
           <>
+            <SamplingHarmonizationNotice harmonization={payload?.participant_join?.sampling_harmonization} compact />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
               <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10 }}><strong>Recorded</strong><br />{formatHours(payload.recorded_hours)}</div>
               <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10 }}><strong>Initial gaps</strong><br />{formatHours(payload.recording_gap_hours)}</div>

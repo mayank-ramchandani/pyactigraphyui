@@ -268,6 +268,11 @@ function Section({ title, description, expanded, onToggle, summary, children }) 
 
 export default function LightMetricsPanel({
   lightFile,
+  additionalFiles = [],
+  csvMapping = {},
+  csvSeparator = ",",
+  participantFileMode = "separate",
+  joinedParticipantLabel = "Joined participant",
   selectedLightMetrics = [],
   setSelectedLightMetrics = () => {},
   lightMetricSettings = {},
@@ -334,6 +339,8 @@ export default function LightMetricsPanel({
           startUrl: buildApiUrl("api/jobs/light/channels"),
           statusBaseUrl: buildApiUrl("api/jobs"),
           file: lightFile,
+          additionalFiles,
+          fields: { csvMapping: JSON.stringify(csvMapping || {}), csvSeparator },
           jobPrefix: "light-channels",
         });
         if (cancelled) return;
@@ -365,7 +372,7 @@ export default function LightMetricsPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lightFile, previewData?.channels, previewData?.default_channel]);
+  }, [lightFile, additionalFiles, csvMapping, csvSeparator, previewData?.channels, previewData?.default_channel]);
 
   const updateSetting = (name, value) => {
     setLightMetricSettings((prev) => ({ ...DEFAULT_LIGHT_SETTINGS, ...(prev || {}), [name]: value }));
@@ -395,6 +402,11 @@ export default function LightMetricsPanel({
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
         Select light metrics for the Other Sensors page. Optional settings stay collapsed until the user opens them; selected light metrics run with the main analysis on page 9.
       </p>
+      {participantFileMode === "join" && additionalFiles.length > 0 && (
+        <div style={{ padding: 12, borderRadius: 12, border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1e3a8a", marginBottom: 16, fontSize: 14 }}>
+          Light metrics will use the complete <strong>{joinedParticipantLabel}</strong> light timeline rather than one file at a time.
+        </div>
+      )}
 
       {!lightFile && (
         <div style={{ padding: 14, borderRadius: 14, border: "1px solid #fde68a", background: "#fffbeb", color: "#92400e", marginBottom: 16 }}>

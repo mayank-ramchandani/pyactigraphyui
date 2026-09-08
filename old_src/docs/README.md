@@ -1,6 +1,8 @@
-# Actigraphy Dashboard user documentation
+# ActiLab user documentation
 
-This directory contains the public documentation for researchers and analysts using the Actigraphy Dashboard. It focuses on completing the workflow, choosing appropriate settings, understanding outputs, and resolving common user-level problems.
+![ActiLab logo](../assets/actilab-logo.png)
+
+This directory contains the public documentation for researchers and analysts using ActiLab. It focuses on completing the workflow, choosing appropriate settings, understanding outputs, and resolving common user-level problems.
 
 ## Start here
 

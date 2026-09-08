@@ -186,6 +186,9 @@ export default function PreprocessingPanel({
   initialQcByFile = {},
   initialQcLoadingByFile = {},
   initialQcErrorByFile = {},
+  participantFileMode = "separate",
+  joinedParticipantKey = "__joined_participant__",
+  joinedParticipantLabel = "Joined participant",
 }) {
   const resolved = {
     customizeDataQualityThresholds: false,
@@ -196,7 +199,18 @@ export default function PreprocessingPanel({
     respectNonwear: true,
     ...settings,
   };
-  const entries = useMemo(() => buildFileEntries(actigraphyFiles), [actigraphyFiles]);
+  const entries = useMemo(() => {
+    if (participantFileMode === "join" && actigraphyFiles.length > 1) {
+      const totalSize = actigraphyFiles.reduce((sum, file) => sum + (Number(file?.size) || 0), 0);
+      return [{
+        key: joinedParticipantKey,
+        file: { name: joinedParticipantLabel || `Joined participant (${actigraphyFiles.length} files)`, size: totalSize },
+        duplicateCount: 1,
+        duplicateIndex: 1,
+      }];
+    }
+    return buildFileEntries(actigraphyFiles);
+  }, [actigraphyFiles, participantFileMode, joinedParticipantKey, joinedParticipantLabel]);
   const update = (patch) => onSettingsChange({ ...resolved, ...patch });
   const modeLabel = resolved.validDayWindowMode === "recording_anchored" ? "recording-aligned 24-hour window" : "calendar day";
 
@@ -210,7 +224,9 @@ export default function PreprocessingPanel({
       <div style={{ border: "1px solid #bfdbfe", borderRadius: 16, padding: 16, background: "#eff6ff", marginBottom: 16 }}>
         <div style={{ fontWeight: 800, color: "#1e3a8a", marginBottom: 8 }}>Initial data-coverage QC after file loading</div>
         <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.55, marginBottom: 12 }}>
-          Each uploaded recording is inspected before final preprocessing so you can see how much data is present in each candidate quality window. Expand a file for the full table.
+          {participantFileMode === "join" && actigraphyFiles.length > 1
+            ? "The joined participant timeline is inspected as one longitudinal recording, with real timestamp gaps retained as missing data. Expand it for the full table."
+            : "Each uploaded recording is inspected before final preprocessing so you can see how much data is present in each candidate quality window. Expand a file for the full table."}
         </div>
         <div style={{ display: "grid", gap: 10 }}>
           {entries.map((entry) => (

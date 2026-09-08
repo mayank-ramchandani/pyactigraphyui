@@ -52,3 +52,7 @@ See the [Methods and reproducibility guide](docs/PREPROCESSING_AND_PROVENANCE.md
 ## Contributions and code ownership
 
 ActiLab accepts suggestions and pull requests, but proposed changes do not modify the protected production branch automatically. Repository protection should require maintainer/Code Owner approval before merge. See `CONTRIBUTING.md` and `GITHUB_PROTECTION_SETUP.md` at the repository root.
+
+### Joined participant recordings with different native sampling rates
+
+When files from the same participant were recorded at different native accelerometer sampling rates (for example 30 Hz and 100 Hz), ActiLab does not concatenate the raw samples. Each recording is processed independently at its native rate into the selected activity representation and the same analytical epoch (30 seconds for current raw GT3X/GENEActiv processing), then the epoch-level series are joined by timestamp. The original sampling rates are retained in participant-join provenance. ENMO and processed acceleration are allowed with an informational notice; MAD and PIM are allowed with a warning; ZCM is allowed with a strong warning because zero-crossing counts are sampling-frequency sensitive; source/device activity or ActiGraph counts are blocked across differing native rates unless they have been externally harmonized/validated. Different processed epoch intervals or different resolved activity bases/units remain incompatible.

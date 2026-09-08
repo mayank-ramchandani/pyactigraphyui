@@ -106,3 +106,8 @@ python -m backend.export_feedback \
 ```
 
 Specify `--input /mounted/path/feedback.jsonl` when exporting a copied or mounted feedback file.
+
+
+## Email notification
+
+After feedback is safely stored, the backend can send a minimal notification to `mramchandani@stjoes.ca` (or `FEEDBACK_NOTIFICATION_TO`). Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, and, when required, `SMTP_USERNAME` / `SMTP_PASSWORD` in the Azure Container App environment/secrets. The email contains only the feedback ID, submitter email, filename, workflow step, and category. It intentionally excludes the free-text feedback and detailed diagnostic/configuration context. A mail-delivery failure does not discard the stored feedback submission.

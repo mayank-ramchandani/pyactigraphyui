@@ -219,6 +219,9 @@ export default function DocumentationPanel({ onClose }) {
         <Card title="Why the choice matters">
           All selected rest-activity metrics use the chosen epoch-level activity series. Counts, mg, mg·s/epoch, and crossings/epoch are different scales, so thresholds must be chosen for the selected measure. The resolved measure, units, epoch duration, and settings are included with the results.
         </Card>
+        <Card title="Joining recordings with different native sampling rates">
+          In joined participant mode, ActiLab does not directly concatenate raw 30-Hz, 100-Hz, or other differently sampled streams. Each source is processed independently at its native rate into the selected activity representation and the same analytical epoch, then the epoch-level series are joined by timestamp. Native rates remain visible in QC, previews, results, and provenance. ENMO and processed acceleration are allowed with an informational notice; MAD and PIM are allowed with a warning; ZCM receives a strong warning because it is sampling-frequency sensitive; and source/device activity or ActiGraph counts are blocked across differing native rates unless already externally harmonized/validated. A join is also blocked when processed epoch durations, resolved activity bases, or units differ.
+        </Card>
       </div>
     ),
     cleaning: (
@@ -250,7 +253,7 @@ export default function DocumentationPanel({ onClose }) {
     sensors: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Light data">
-          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. On the Results page, multiple selected actigraphy files can be analyzed separately or explicitly joined into one timestamp-preserving participant timeline when they all belong to the same participant. Joined mode requires compatible sampling intervals and is intended for activity/sleep metrics; light outputs remain file-level.
+          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. In joined participant mode, light data are also joined by their real timestamps across the participant timeline, and periods without light remain missing rather than being treated as zero exposure.
         </Card>
         <Card title="RGB and multichannel light">
           When red, green, blue, white, or lux channels are available, the preview identifies them separately. Confirm the units and channel used by each selected light metric, especially when choosing thresholds.

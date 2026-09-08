@@ -6,6 +6,7 @@ import algorithmRegistry from "../config/algorithmRegistry.json";
 import analysisFamilyRegistry from "../config/analysisFamilyRegistry.json";
 import { ACTIVITY_MAPPING_OPTIONS } from "./ActivityMappingPanel";
 import TermsOfUseContent from "./TermsOfUseContent";
+import BrandLogo from "./BrandLogo";
 
 const DEFAULT_REPOSITORY_URL = "https://github.com/mayank-ramchandani/pyactigraphyui";
 const DEFAULT_DOCS_URL = "https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs";
@@ -249,7 +250,7 @@ export default function DocumentationPanel({ onClose }) {
     sensors: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Light data">
-          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped.
+          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. On the Results page, multiple selected actigraphy files can be analyzed separately or explicitly joined into one timestamp-preserving participant timeline when they all belong to the same participant. Joined mode requires compatible sampling intervals and is intended for activity/sleep metrics; light outputs remain file-level.
         </Card>
         <Card title="RGB and multichannel light">
           When red, green, blue, white, or lux channels are available, the preview identifies them separately. Confirm the units and channel used by each selected light metric, especially when choosing thresholds.
@@ -319,7 +320,7 @@ export default function DocumentationPanel({ onClose }) {
           Results retain the source file and reader, resolved activity measure and units, epoch duration, selected preprocessing thresholds, start/stop intervals, masks, valid-window decisions, sleep-window coverage, algorithms, metric parameters, application version, and quality-control messages. Missing and excluded epochs remain unavailable rather than being treated as zero activity.
         </Card>
         <Card title="Data handling and feedback">
-          Uploaded recording and support files are used temporarily to complete the requested operation and are deleted after processing. Feedback requires a contact email and may include non-raw technical context such as filenames, selected settings, request IDs, and visible errors. Feedback and its attached context are retained for 30 days, then automatically deleted. Do not include participant identifiers in filenames or feedback.
+          Uploaded recording files, support files, job data, and temporary processing data are automatically deleted no later than 30 days after upload; temporary files may be deleted sooner after processing. Feedback requires a contact email and may include non-raw technical context such as filenames, selected settings, request IDs, and visible errors. Feedback and its attached context are retained for a maximum of 30 days, then automatically deleted. A minimal notification email may include the submitter email, filename, workflow step, category, and feedback ID, but not the feedback message or detailed diagnostic context. Do not include participant identifiers in filenames or feedback.
         </Card>
       </div>
     ),
@@ -354,9 +355,10 @@ export default function DocumentationPanel({ onClose }) {
     <div className="documentation-centered" style={{ display: "grid", gap: 16, textAlign: "center" }}>
       <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 18, padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "center", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ width: "100%" }}>
-            <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>Help & methods</div>
-            <h2 style={{ margin: "6px 0 6px", fontSize: 26, color: "#0f172a" }}>Documentation</h2>
+          <div style={{ width: "100%", display: "grid", justifyItems: "center", gap: 5 }}>
+            <BrandLogo width={175} />
+            <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>{appConfig.appName} · Help & methods</div>
+            <h2 style={{ margin: "3px 0 6px", fontSize: 26, color: "#0f172a" }}>Documentation</h2>
             <div style={{ color: "#475569", lineHeight: 1.5 }}>Searchable guidance for completing the workflow, choosing settings, understanding results, and resolving common problems.</div>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", width: "100%" }}>

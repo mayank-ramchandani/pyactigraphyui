@@ -8,7 +8,7 @@ This guide follows the ten pages in the application. For a standard first analys
 - Remove names, health-card numbers, dates of birth, and other direct identifiers from filenames and support files.
 - Prepare one or more actigraphy recordings in a supported format.
 - Use the same file extension when uploading multiple files together.
-- When multiple files are uploaded, choose in Step 1 whether they should be analyzed separately (default) or joined as one participant timeline. Use joined mode only when every file belongs to the same participant. The choice applies end-to-end: initial QC, activity preview, cleaning/masking, sleep-wake processing, embedded or separate light preview, light metrics, and final activity/sleep metrics. Original timestamps and gaps are preserved, duplicate boundary timestamps are removed, and compatible sampling intervals are required.
+- When multiple files are uploaded, choose in Step 1 whether they should be analyzed separately (default) or joined as one participant timeline. Use joined mode only when every file belongs to the same participant. The choice applies end-to-end, including QC, previews, cleaning/masking, sleep-wake processing, light processing, and final metrics. Original timestamps and real gaps are preserved.
 - Keep sleep diaries, start/stop files, masks, and separate sensor files ready if they are part of the study protocol.
 
 ## 1. Importing Actigraphy Files
@@ -50,6 +50,18 @@ Other choices are:
 - **ZCM:** movement-frequency measure based on zero crossings.
 
 The selected measure becomes the activity basis for the chosen rest-activity metrics. Thresholds must match the selected units.
+
+### Different native sampling rates in joined mode
+
+If joined recordings were collected at different native sampling rates (for example, 30 Hz and 100 Hz), ActiLab does not append those raw samples directly. Each file is processed independently at its native rate into the selected activity representation, summarized to the same analytical epoch, and then joined by timestamp. The original native rates remain visible in QC, preview information, results, and provenance.
+
+- **ENMO / processed acceleration:** allowed with an informational notice.
+- **MAD / PIM:** allowed with a warning.
+- **ZCM:** allowed with a strong warning because it is especially sensitive to sampling frequency.
+- **Source/device activity or ActiGraph counts:** blocked across different native rates unless already externally harmonized/validated.
+- **Different processed epoch durations, activity bases, or units:** blocked.
+
+This means a 30-Hz recording and a 100-Hz recording may be combined at a common 30-second analytical epoch when the selected representation is compatible, while still being documented as recordings with different native frequencies.
 
 ## 4. Activity Preview
 

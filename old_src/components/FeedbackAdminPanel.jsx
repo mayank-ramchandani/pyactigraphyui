@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import BrandLogo from "./BrandLogo";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
 
@@ -114,7 +115,8 @@ export default function FeedbackAdminPanel() {
       <div style={{ width: "min(1180px, 100%)", margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 20, flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: ".08em", color: "#475569" }}>PYACTIGRAPHY UI</div>
+            <BrandLogo width={170} style={{ margin: "0 0 8px 0" }} />
+            <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: ".08em", color: "#475569" }}>ACTILAB</div>
             <h1 style={{ margin: "6px 0 8px", fontSize: 34 }}>Feedback review</h1>
             <p style={{ margin: 0, color: "#475569", lineHeight: 1.55, maxWidth: 760 }}>
               Search submitted reports, inspect the complete UI and diagnostic context, and export all feedback as CSV or JSONL. The administrator token is retained only for this browser tab.

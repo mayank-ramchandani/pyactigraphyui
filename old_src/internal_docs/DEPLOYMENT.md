@@ -172,3 +172,8 @@ Expose detailed server errors only during controlled debugging.
 12. Run a large-file activity diagnostic test.
 13. Download and inspect diagnostics.
 14. Update `docs/CHANGELOG.md`.
+
+
+### Feedback notification email
+
+To email a minimal notification when feedback is submitted, configure `FEEDBACK_NOTIFICATION_TO` (defaults to `mramchandani@stjoes.ca`), `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, `SMTP_USE_TLS`, and SMTP credentials where required. Store `SMTP_PASSWORD` as an Azure secret rather than in source control. Notification delivery is best-effort: feedback is persisted even if email delivery fails.

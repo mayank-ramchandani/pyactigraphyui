@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "appName": "Actigraphy Dashboard",
+  "appName": "ActiLab",
   "layout": {
     "sidebarEnabled": true,
     "sidebarPosition": "left",

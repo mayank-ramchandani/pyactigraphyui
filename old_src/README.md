@@ -1,4 +1,6 @@
-# Actigraphy Dashboard
+# ActiLab
+
+![ActiLab logo](assets/actilab-logo.png)
 
 A web application for importing actigraphy recordings, reviewing data quality, selecting transparent preprocessing and activity measures, classifying sleep/wake, calculating activity and light outcomes, and exporting reproducible results.
 
@@ -19,7 +21,7 @@ After an actigraphy file is uploaded, Steps 2–9 can be opened directly from th
 
 ## User documentation
 
-Start with the [Actigraphy Dashboard user documentation](docs/README.md).
+Start with the [ActiLab user documentation](docs/README.md).
 
 - [User guide](docs/USER_GUIDE.md)
 - [Preprocessing and data-quality settings](docs/PREPROCESSING_VALIDITY_RULES.md)
@@ -46,3 +48,7 @@ Start with the [Actigraphy Dashboard user documentation](docs/README.md).
 The application uses pyActigraphy for native readers and downstream actigraphy methods. Raw accelerometer files are first converted to the selected epoch-level activity measure. Missing data, non-wear, and masks remain unavailable rather than being converted to zero activity.
 
 See the [Methods and reproducibility guide](docs/PREPROCESSING_AND_PROVENANCE.md) for details.
+
+## Contributions and code ownership
+
+ActiLab accepts suggestions and pull requests, but proposed changes do not modify the protected production branch automatically. Repository protection should require maintainer/Code Owner approval before merge. See `CONTRIBUTING.md` and `GITHUB_PROTECTION_SETUP.md` at the repository root.

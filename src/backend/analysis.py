@@ -1975,15 +1975,172 @@ def _mean_daily_wave(series, value_key="mean_activity", max_points=1440):
     return [{"time": str(idx), value_key: _safe_float(value)} for idx, value in grouped.items()]
 
 
-def _sample_full_recording(series, max_points=2000, value_key="activity"):
+def _participant_join_metadata(raw):
+    direct = getattr(raw, "_ui_participant_join", None)
+    if isinstance(direct, dict):
+        return direct
+    metadata = getattr(raw, "metadata", None)
+    if isinstance(metadata, dict):
+        payload = metadata.get("participant_join")
+        if isinstance(payload, dict):
+            return payload
+    return {}
+
+
+def _coerce_preview_segments(segments, index):
+    if not segments or not isinstance(index, pd.DatetimeIndex) or len(index) == 0:
+        return []
+    normalized = []
+    index_tz = index.tz
+    for position, item in enumerate(segments):
+        if not isinstance(item, dict):
+            continue
+        start = pd.to_datetime(item.get("start"), errors="coerce")
+        stop = pd.to_datetime(item.get("stop"), errors="coerce")
+        if pd.isna(start) or pd.isna(stop) or stop < start:
+            continue
+        if index_tz is None and getattr(start, "tzinfo", None) is not None:
+            start = start.tz_convert(None)
+            stop = stop.tz_convert(None)
+        elif index_tz is not None and getattr(start, "tzinfo", None) is None:
+            start = start.tz_localize(index_tz)
+            stop = stop.tz_localize(index_tz)
+        elif index_tz is not None and getattr(start, "tzinfo", None) is not None:
+            start = start.tz_convert(index_tz)
+            stop = stop.tz_convert(index_tz)
+        normalized.append({
+            **item,
+            "start_ts": max(start, index.min()),
+            "stop_ts": min(stop, index.max()),
+            "segment_index": position,
+        })
+    normalized = [item for item in normalized if item["stop_ts"] >= item["start_ts"]]
+    normalized.sort(key=lambda item: item["start_ts"])
+    return normalized
+
+
+def _resample_preview_series(series, resample_freq=None, source_segments=None):
+    """Resample preview data without materialising large inter-file gaps.
+
+    ``Series.resample`` over a joined 2017→2019 timeline creates every empty
+    minute between the recordings.  Besides wasting memory, those empty rows
+    can dominate the later 2,000-point preview sampler.  Joined source ranges
+    are therefore resampled independently and concatenated back together.
+    Short missing intervals *inside* each recording are still represented as
+    NaN bins, so the preview retains meaningful local gaps.
+    """
+    if series is None or len(series) == 0 or not resample_freq:
+        return series
+
+    segments = _coerce_preview_segments(source_segments, series.index)
+    if not segments:
+        return series.resample(resample_freq).mean()
+
+    pieces = []
+    for item in segments:
+        piece = series.loc[item["start_ts"]:item["stop_ts"]]
+        if len(piece) == 0:
+            continue
+        pieces.append(piece.resample(resample_freq).mean())
+    if not pieces:
+        return series.resample(resample_freq).mean()
+
+    combined = pd.concat(pieces).sort_index()
+    combined = combined.loc[~combined.index.duplicated(keep="first")]
+    combined.name = series.name
+    return combined
+
+
+def _allocate_preview_budgets(lengths, max_points):
+    if not lengths:
+        return []
+    n = len(lengths)
+    available = max(n, int(max_points) - max(0, n - 1))
+    if sum(lengths) <= available:
+        return list(lengths)
+
+    minimum = min(100, max(2, available // max(1, n * 4)))
+    budgets = [min(length, minimum) for length in lengths]
+    remaining = max(0, available - sum(budgets))
+
+    while remaining > 0:
+        capacities = [max(0, length - budget) for length, budget in zip(lengths, budgets)]
+        total_capacity = sum(capacities)
+        if total_capacity <= 0:
+            break
+        additions = [min(capacity, int(remaining * capacity / total_capacity)) for capacity in capacities]
+        added = sum(additions)
+        if added == 0:
+            for index, capacity in enumerate(capacities):
+                if capacity > 0 and remaining > 0:
+                    budgets[index] += 1
+                    remaining -= 1
+            continue
+        for index, addition in enumerate(additions):
+            budgets[index] += addition
+        remaining -= added
+    return budgets
+
+
+def _sample_piece(piece, budget):
+    if len(piece) <= budget:
+        return piece
+    positions = np.linspace(0, len(piece) - 1, num=max(2, int(budget)), dtype=int)
+    positions = np.unique(positions)
+    return piece.iloc[positions]
+
+
+def _sample_full_recording(series, max_points=2000, value_key="activity", source_segments=None):
     if series is None or len(series) == 0:
         return []
 
-    total = len(series)
-    step = max(1, total // max_points)
-    sampled = series.iloc[::step]
+    segments = _coerce_preview_segments(source_segments, series.index)
+    if not segments:
+        total = len(series)
+        step = max(1, total // max_points)
+        sampled = series.iloc[::step]
+        # Always retain the final observation when downsampling.
+        if len(sampled) and sampled.index[-1] != series.index[-1]:
+            sampled = pd.concat([sampled, series.iloc[[-1]]])
+        return [{"timestamp": str(index), value_key: _safe_float(value)} for index, value in sampled.items()]
 
-    return [{"timestamp": str(index), value_key: _safe_float(value)} for index, value in sampled.items()]
+    pieces = []
+    segment_rows = []
+    for item in segments:
+        piece = series.loc[item["start_ts"]:item["stop_ts"]]
+        if len(piece) == 0:
+            continue
+        pieces.append(piece)
+        segment_rows.append(item)
+    if not pieces:
+        return _sample_full_recording(series, max_points=max_points, value_key=value_key)
+
+    budgets = _allocate_preview_budgets([len(piece) for piece in pieces], max_points)
+    rows = []
+    previous_item = None
+    for piece, item, budget in zip(pieces, segment_rows, budgets):
+        if previous_item is not None and item["start_ts"] > previous_item["stop_ts"]:
+            midpoint = previous_item["stop_ts"] + (item["start_ts"] - previous_item["stop_ts"]) / 2
+            rows.append({
+                "timestamp": str(midpoint),
+                value_key: None,
+                "is_gap": True,
+                "gap_start": str(previous_item["stop_ts"]),
+                "gap_end": str(item["start_ts"]),
+            })
+        sampled = _sample_piece(piece, budget)
+        source_file = item.get("source_file")
+        for index, value in sampled.items():
+            row = {
+                "timestamp": str(index),
+                value_key: _safe_float(value),
+                "segment_index": item.get("segment_index"),
+            }
+            if source_file:
+                row["source_file"] = source_file
+            rows.append(row)
+        previous_item = item
+    return rows
 
 
 def build_native_preview(raw, activity_channel="data", resample_freq=None):
@@ -1991,9 +2148,11 @@ def build_native_preview(raw, activity_channel="data", resample_freq=None):
     if series is None:
         raise ValueError("Unable to read the activity signal for preview.")
 
+    participant_join = _participant_join_metadata(raw)
+    source_segments = participant_join.get("segments") if participant_join.get("joined") else None
     preview_series = series.dropna()
     if resample_freq:
-        preview_series = preview_series.resample(resample_freq).mean()
+        preview_series = _resample_preview_series(preview_series, resample_freq, source_segments=source_segments)
 
     timezone_info = _index_timezone_info(preview_series.index) if len(preview_series) else _index_timezone_info(series.index)
     mean_activity_wave = _mean_daily_wave(preview_series, value_key="mean_activity")
@@ -2014,7 +2173,9 @@ def build_native_preview(raw, activity_channel="data", resample_freq=None):
         "preview_available": True,
         "summary": summary,
         "timezone_info": timezone_info,
-        "full_recording_preview": _sample_full_recording(preview_series, value_key="activity"),
+        "full_recording_preview": _sample_full_recording(
+            preview_series, value_key="activity", source_segments=source_segments
+        ),
         "mean_activity_wave": mean_activity_wave,
     }
 
@@ -2116,8 +2277,11 @@ def build_light_preview(raw, resample_freq=None):
             "light_summary": {},
         }
 
+    participant_join = _participant_join_metadata(raw)
+    light_join = participant_join.get("light") if participant_join.get("joined") else {}
+    source_segments = light_join.get("segments") if isinstance(light_join, dict) else None
     if resample_freq:
-        preview_series = preview_series.resample(resample_freq).mean()
+        preview_series = _resample_preview_series(preview_series, resample_freq, source_segments=source_segments)
 
     timezone_info = _index_timezone_info(preview_series.index)
     scale_info = _describe_light_scale(raw, light_channel_name)
@@ -2138,7 +2302,9 @@ def build_light_preview(raw, resample_freq=None):
         "light_y_axis_label": scale_info.get("y_axis_label"),
         "light_units": scale_info.get("light_units"),
         "light_scale": scale_info.get("light_scale"),
-        "light_preview": _sample_full_recording(preview_series, value_key="light"),
+        "light_preview": _sample_full_recording(
+            preview_series, value_key="light", source_segments=source_segments
+        ),
         "light_summary": summary,
     }
 

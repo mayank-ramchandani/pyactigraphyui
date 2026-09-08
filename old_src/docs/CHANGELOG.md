@@ -1,3 +1,12 @@
+## 2026-08-26 — Participant-level file joining and feedback alerts
+
+- Expanded the opt-in same-participant join into an end-to-end workflow mode selected from Step 1 (and reviewable in Results).
+- Joined mode now applies to initial QC, activity preview, support-interval selection, preprocessing, sleep-wake processing, final activity/sleep metrics, light preview, RGB/multichannel light inspection, and light metrics.
+- Embedded light is joined across actigraphy files; when separate light files are supplied, those files are joined as the participant light timeline. Files without light contribute missing intervals rather than zero exposure.
+- Joined analysis validates compatible sampling intervals, preserves real timestamp gaps, and removes duplicate boundary timestamps before metric calculation.
+- Added optional minimal feedback notification emails to the designated project contact; notifications contain only feedback ID, submitter email, filename, workflow step, and category.
+- Updated privacy wording so uploaded/job data and feedback are described as automatically deleted no later than 30 days, with temporary files potentially deleted sooner.
+
 # What’s new
 
 This page summarizes changes that affect users of the application. Internal deployment and implementation details are documented separately from the public user guide.

@@ -161,7 +161,7 @@ export default function FileSelectionPanel({
         <div style={{ fontWeight: 700 }}>
           <BubbleInfo
             label="Multiple-file analysis"
-            content="Multiple actigraphy files can be uploaded together when they use the same extension. Choose below whether they are separate recordings or files from one participant that should be joined by their real timestamps. Joined mode applies throughout the workflow: initial QC, activity and light previews, support intervals, preprocessing, sleep-wake processing, and final metrics. Recording gaps are preserved."
+            content="Multiple actigraphy files can be uploaded together when they use the same extension. Choose below whether they are separate recordings or files from one participant that should be joined by their real timestamps. Joined mode applies throughout the workflow. Each file is processed independently to a common analytical epoch before joining. Different native accelerometer sampling rates are retained in provenance and trigger metric-specific information or warnings; incompatible source/device activity is rejected."
           />
         </div>
       </div>
@@ -209,7 +209,7 @@ export default function FileSelectionPanel({
             <label style={{ display: "block", border: participantFileMode === "join" ? "2px solid #2563eb" : "1px solid #cbd5e1", borderRadius: 14, padding: 13, cursor: "pointer", background: participantFileMode === "join" ? "white" : "#f8fafc" }}>
               <input type="radio" name="participantFileModeImport" checked={participantFileMode === "join"} onChange={() => setParticipantFileMode("join")} />
               <span style={{ marginLeft: 8, fontWeight: 800 }}>Join as one participant timeline</span>
-              <span style={{ display: "block", color: "#475569", fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>Use only when every uploaded file belongs to the same participant. Activity and light are joined by real timestamps; gaps remain missing and overlapping duplicate boundary timestamps are de-duplicated.</span>
+              <span style={{ display: "block", color: "#475569", fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>Use only when every uploaded file belongs to the same participant. Each recording is processed independently to the common analytical epoch, then activity and light are joined by real timestamps. Gaps remain missing, duplicate boundaries are de-duplicated, and different native accelerometer sampling rates are explicitly assessed before the join.</span>
             </label>
           </div>
         </div>

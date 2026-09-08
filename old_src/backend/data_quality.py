@@ -207,6 +207,26 @@ def _regularize_series(raw: Any, series: pd.Series) -> Tuple[pd.Series, pd.Timed
         raise ValueError("The selected recording start/stop interval contains fewer than two activity epochs.")
     full_index = pd.date_range(start=scoped.index.min(), end=scoped.index.max(), freq=frequency)
     regular = scoped.reindex(full_index)
+
+    # Joined participant timelines may have one start/stop interval per source
+    # recording. Keep the union of those intervals and leave everything between
+    # them missing rather than collapsing the participant timeline to the final
+    # interval or filling gaps with zeros.
+    include_intervals = getattr(raw, "_ui_start_stop_intervals", None) or []
+    if include_intervals:
+        allowed = pd.Series(False, index=regular.index, dtype=bool)
+        for interval in include_intervals:
+            try:
+                interval_start = _timestamp_for_index(interval.get("start"), regular.index)
+                interval_stop = _timestamp_for_index(interval.get("stop"), regular.index)
+                if interval_stop <= interval_start:
+                    continue
+                allowed.loc[(allowed.index >= interval_start) & (allowed.index <= interval_stop)] = True
+            except Exception:
+                continue
+        if allowed.any():
+            regular = regular.where(allowed)
+
     regular.name = series.name or "activity"
     return regular, frequency
 
