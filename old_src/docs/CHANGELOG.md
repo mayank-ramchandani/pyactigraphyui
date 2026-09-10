@@ -9,6 +9,9 @@ This page summarizes changes that affect users of the application. Internal depl
 - Moved accepted-file and multiple-file guidance into a hover tooltip on the actigraphy upload box.
 - Moved validity thresholds, 24-hour period definition, and detected/mapped non-wear handling to **Step 8: Analysis Set-up** under **Analysis settings**.
 - Removed the duplicate detected non-wear toggle from Cleaning and Masking.
+- Removed the logo image's light canvas so the ActiLab mark blends cleanly with its surrounding page background.
+- Standardized paired choices (including Analysis type, participant file handling, valid 24-hour period definition, and Analysis scope) as balanced two-column controls that collapse cleanly on small screens.
+- Reworked the workflow sidebar into a compact sticky navigator with a Step X of 10 indicator, progress bar, active-step highlighting, and automatic active-row visibility. Moving between workflow steps now returns the new step content to its top.
 
 ## 2026-09-08 — Joined participant fixes and sampling-rate harmonization
 

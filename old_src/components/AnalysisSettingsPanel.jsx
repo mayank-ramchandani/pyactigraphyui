@@ -128,7 +128,7 @@ export default function AnalysisSettingsPanel({ settings = {}, onSettingsChange 
 
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontWeight: 800, marginBottom: 8 }}>How should a valid 24-hour period be defined?</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
+        <div className="two-option-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
           <label style={{ display: "block", border: resolved.validDayWindowMode === "calendar_day" ? "2px solid #2563eb" : "1px solid #cbd5e1", borderRadius: 14, padding: 13, cursor: "pointer", background: resolved.validDayWindowMode === "calendar_day" ? "#eff6ff" : "white" }}>
             <input type="radio" name="validDayWindowMode" checked={resolved.validDayWindowMode === "calendar_day"} onChange={() => update({ validDayWindowMode: "calendar_day" })} />
             <span style={{ marginLeft: 8, fontWeight: 800 }}>Calendar day (recommended)</span>

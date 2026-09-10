@@ -12,6 +12,7 @@ export default function BrandLogo({ width = 230, compact = false, style = {}, al
         height: "auto",
         objectFit: "contain",
         display: "block",
+        background: "transparent",
         margin: "0 auto",
         borderRadius: 12,
         ...style,
