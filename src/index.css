@@ -261,3 +261,76 @@ code {
     overflow-y: visible !important;
   }
 }
+
+
+.workflow-sidebar-card {
+  overflow: visible;
+}
+
+.workflow-step-list {
+  overflow: visible;
+}
+
+.workflow-step-button {
+  position: relative;
+  overflow: visible;
+}
+
+.workflow-step-tooltip {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) translateX(8px);
+  width: min(280px, 32vw);
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+  font-size: 12.75px;
+  line-height: 1.55;
+  text-align: left;
+  z-index: 40;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+}
+
+.workflow-step-tooltip::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 8px 8px 8px 0;
+  border-style: solid;
+  border-color: transparent #0f172a transparent transparent;
+}
+
+.workflow-step-tooltip-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.workflow-step-button:hover .workflow-step-tooltip,
+.workflow-step-button:focus-visible .workflow-step-tooltip,
+.workflow-step-button:focus-within .workflow-step-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+
+@media (max-width: 1200px) {
+  .workflow-step-tooltip {
+    width: min(250px, 28vw);
+  }
+}
+
+@media (max-width: 900px) {
+  .workflow-step-tooltip {
+    display: none;
+  }
+}

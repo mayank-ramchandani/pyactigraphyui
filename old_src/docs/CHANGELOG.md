@@ -1,3 +1,10 @@
+## 2026-09-10 — Workflow sidebar readability
+
+- Increased the workflow sidebar width slightly on desktop so long step names and descriptions wrap less aggressively.
+- Increased active-step description font size, contrast, line height, spacing, and active-row padding for easier reading.
+- Increased step-title weight/size and strengthened the active-step background.
+- Added the full step description as a hover tooltip for every workflow step without permanently increasing sidebar height.
+
 # What’s new
 
 This page summarizes changes that affect users of the application. Internal deployment and implementation details are documented separately from the public user guide.

@@ -1849,7 +1849,7 @@ export default function Dashboard() {
           className="workflow-centered"
           style={{
             display: "grid",
-            gridTemplateColumns: appConfig.layout.sidebarEnabled ? "280px minmax(0, 1fr)" : "1fr",
+            gridTemplateColumns: appConfig.layout.sidebarEnabled ? "310px minmax(0, 1fr)" : "1fr",
             gap: 24,
             alignItems: "start",
           }}
