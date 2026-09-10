@@ -318,7 +318,7 @@ export default function MetricsPanel({
         <select
           value={selectValue ?? ""}
           onChange={(e) => onChange(e.target.value)}
-          style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}
+          style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", boxSizing: "border-box" }}
         >
           {(param.options || []).map((option) => {
             const optionValue = typeof option === "string" ? option : option.value;
@@ -335,9 +335,16 @@ export default function MetricsPanel({
 
     if (param.type === "multiselect") {
       const selectedValues = normalizeMultiselectValue(current);
+      const optionList = param.options || [];
+      const isTwoOptionGroup = optionList.length === 2;
       return (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {(param.options || []).map((option) => {
+        <div
+          className={isTwoOptionGroup ? "two-option-grid" : undefined}
+          style={isTwoOptionGroup
+            ? { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, width: "100%" }
+            : { display: "flex", gap: 8, flexWrap: "wrap" }}
+        >
+          {optionList.map((option) => {
             const optionValue = typeof option === "string" ? option : option.value;
             const optionLabel = typeof option === "string" ? option : option.label;
             const isSelected = selectedValues.includes(optionValue);
@@ -359,6 +366,7 @@ export default function MetricsPanel({
                   background: isSelected ? "#0f172a" : "white",
                   color: isSelected ? "white" : "#0f172a",
                   cursor: "pointer",
+                  width: isTwoOptionGroup ? "100%" : undefined,
                 }}
               >
                 {optionLabel}
@@ -876,7 +884,7 @@ export default function MetricsPanel({
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 10 }}>Analysis scope</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div className="two-option-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
             {[
               { id: "family", label: "Family-level analysis" },
               { id: "metric", label: "Metric-level analysis" },
@@ -894,6 +902,8 @@ export default function MetricsPanel({
                     background: selected ? "#0f172a" : "white",
                     color: selected ? "white" : "#0f172a",
                     cursor: "pointer",
+                    width: "100%",
+                    minHeight: 46,
                   }}
                 >
                   {option.label}

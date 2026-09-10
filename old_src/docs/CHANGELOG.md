@@ -1,3 +1,28 @@
+# What’s new
+
+This page summarizes changes that affect users of the application. Internal deployment and implementation details are documented separately from the public user guide.
+
+## 2026-09-10
+
+- Fixed theme inconsistency by making ActiLab use a consistent light colour scheme instead of inheriting the operating system/browser dark-mode preference.
+- Moved the workflow sidebar to the top of the page and centred the ActiLab logo/header within the main workflow content area.
+- Moved accepted-file and multiple-file guidance into a hover tooltip on the actigraphy upload box.
+- Moved validity thresholds, 24-hour period definition, and detected/mapped non-wear handling to **Step 8: Analysis Set-up** under **Analysis settings**.
+- Removed the duplicate detected non-wear toggle from Cleaning and Masking.
+
+## 2026-09-08 — Joined participant fixes and sampling-rate harmonization
+
+- Joined participant mode now distinguishes native/raw accelerometer sampling rate from the common analytical epoch used after processing. Raw 30-Hz and 100-Hz samples are never directly concatenated.
+- Each source recording is processed independently at its native rate into the same epoch-level activity representation before timestamp joining; native rates are retained in provenance and shown in QC/preview/results.
+- ENMO and processed acceleration are allowed across differing native rates with an informational notice. MAD and PIM are allowed with a warning. ZCM is allowed with a strong warning because zero-crossing counts are sampling-frequency sensitive. Source/device activity and ActiGraph counts are blocked across differing native rates unless externally harmonized/validated.
+- Fixed joined pyActigraphy recordings so the combined activity/light timeline is rebuilt as a new `BaseRaw` instead of attempting to write to read-only `data`/`light` properties. This prevents joined workflows from silently continuing to expose only the first source file.
+- Joined preview resampling now processes each source recording separately before combining preview points, avoiding millions of empty resample bins across long calendar gaps.
+- Activity and light previews now preserve a visible gap break and guarantee that each source segment is represented in the sampled plot.
+- Added joined-source coverage tables showing each source file's start/stop range, epoch count, raw sample rate (where available), and resolved activity basis.
+- Added validation that all joined files resolve to the same activity basis/units before they are combined.
+- Updated the user documentation and in-app Documentation panel to explain native sampling rate versus analytical epoch, metric-specific join safeguards, blocking conditions, and provenance for mixed-frequency recordings.
+
+
 ## 2026-08-26 — Participant-level file joining and feedback alerts
 
 - Expanded the opt-in same-participant join into an end-to-end workflow mode selected from Step 1 (and reviewable in Results).
@@ -6,10 +31,6 @@
 - Joined analysis validates compatible sampling intervals, preserves real timestamp gaps, and removes duplicate boundary timestamps before metric calculation.
 - Added optional minimal feedback notification emails to the designated project contact; notifications contain only feedback ID, submitter email, filename, workflow step, and category.
 - Updated privacy wording so uploaded/job data and feedback are described as automatically deleted no later than 30 days, with temporary files potentially deleted sooner.
-
-# What’s new
-
-This page summarizes changes that affect users of the application. Internal deployment and implementation details are documented separately from the public user guide.
 
 ## 2026-08-05 — User-focused documentation
 

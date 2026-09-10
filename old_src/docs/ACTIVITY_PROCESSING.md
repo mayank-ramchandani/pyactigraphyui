@@ -39,6 +39,25 @@ Raw X/Y/Z acceleration must be reduced to one scalar epoch-level series before p
 
 The exact resolved measure, units, epoch duration, and processing details are included with the results.
 
+## Joining recordings with different native sampling rates
+
+When **Join as one participant timeline** is selected, ActiLab distinguishes the device's **native/raw sampling rate** (for example, 30 Hz or 100 Hz) from the **analytical epoch** used for actigraphy analysis (for example, 30-second epochs).
+
+ActiLab does **not** concatenate raw samples recorded at different frequencies. Instead, each source recording is processed independently at its own native sampling rate into the selected activity representation, summarized to the same analytical epoch, and only then joined by timestamp. Original timestamps and true gaps between recordings are preserved. Native sampling rates are retained in QC, preview information, results, and provenance.
+
+For joined files with different native sampling rates:
+
+| Activity representation | Behaviour |
+|---|---|
+| ENMO | Join allowed with an informational notice |
+| Processed acceleration | Join allowed with an informational notice |
+| MAD | Join allowed with a warning |
+| PIM | Join allowed with a warning |
+| ZCM | Join allowed with a strong warning because zero-crossing counts are sampling-frequency sensitive |
+| Source/device activity or ActiGraph counts | Join blocked across differing native sampling rates unless the inputs have already been externally harmonized/validated |
+
+The join is also blocked if the processed epoch durations differ or if the files resolve to different activity measures or units. Matching the analytical epoch does not mean that the original recordings had the same sampling rate; ActiLab records that distinction explicitly.
+
 ## Existing time-series columns
 
 For Oxford time-series and mapped tabular files, an existing acc, ENMO, MAD, PIM, ZCM, or activity column can be used directly. Confirm that the column units and epoch duration are correct before analysis.

@@ -62,7 +62,7 @@
       "id": "2",
       "key": "preprocessing",
       "title": "Pre-processing",
-      "description": "Review initial per-file coverage, choose calendar-day or recording-aligned 24-hour QC windows, and use or customize the recommended validity and non-wear settings."
+      "description": "Review initial per-file data coverage and quality-control information before activity estimation."
     },
     {
       "id": "3",
@@ -80,7 +80,7 @@
       "id": "5",
       "key": "cleaning",
       "title": "Cleaning and Masking",
-      "description": "Apply per-file start/stop limits, uploaded masks, detected non-wear, and custom plot-selected exclusions."
+      "description": "Apply per-file start/stop limits, uploaded masks, and custom plot-selected exclusions."
     },
     {
       "id": "6",
@@ -98,7 +98,7 @@
       "id": "8",
       "key": "metrics",
       "title": "Analysis Set-up",
-      "description": "Choose analysis families or individual metrics and configure their parameters."
+      "description": "Configure analysis settings, including validity thresholds, 24-hour period definition and non-wear handling, then choose analysis families or individual metrics."
     },
     {
       "id": "9",

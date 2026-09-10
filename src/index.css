@@ -210,3 +210,54 @@ code {
     position: static !important;
   }
 }
+
+/* Keep paired choices visually balanced instead of leaving unused space. */
+.two-option-grid {
+  width: 100%;
+}
+
+.two-option-grid > button,
+.two-option-grid > label {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Compact workflow navigation stays available while long analysis pages scroll. */
+.workflow-sidebar-sticky {
+  max-height: calc(100vh - 32px);
+}
+
+.workflow-step-list {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.workflow-step-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.workflow-step-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.workflow-step-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (max-width: 760px) {
+  .two-option-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .workflow-sidebar-sticky,
+  .workflow-sidebar-card {
+    max-height: none !important;
+  }
+
+  .workflow-step-list {
+    overflow-y: visible !important;
+  }
+}

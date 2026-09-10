@@ -476,15 +476,15 @@ export default function ResultsPanel({
             <div style={{ marginBottom: 14, border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 14, padding: 12 }}>
               <div style={{ fontWeight: 800, marginBottom: 8 }}>How should multiple selected files be analyzed?</div>
               <div style={{ color: "#475569", fontSize: 13, marginBottom: 8, lineHeight: 1.45 }}>This setting applies to the complete workflow. Changing it here resets previews and manually drawn intervals to avoid mixing file-level selections with a joined timeline.</div>
-              <div style={{ display: "grid", gap: 8 }}>
-                <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer" }}>
+              <div className="two-option-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer", border: participantFileMode === "separate" ? "2px solid #2563eb" : "1px solid #cbd5e1", borderRadius: 12, padding: 12, background: participantFileMode === "separate" ? "white" : "#f8fafc" }}>
                   <input type="radio" name="participant-file-mode" value="separate" checked={participantFileMode === "separate"} onChange={() => setParticipantFileMode("separate")} style={{ marginTop: 3 }} />
                   <span>
                     <strong>Analyze each file separately</strong>
                     <span style={{ display: "block", color: "#475569", fontSize: 13, marginTop: 3, lineHeight: 1.5 }}>Produces one set of metrics per file. This remains the default.</span>
                   </span>
                 </label>
-                <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer" }}>
+                <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer", border: participantFileMode === "join" ? "2px solid #2563eb" : "1px solid #cbd5e1", borderRadius: 12, padding: 12, background: participantFileMode === "join" ? "white" : "#f8fafc" }}>
                   <input type="radio" name="participant-file-mode" value="join" checked={participantFileMode === "join"} onChange={() => setParticipantFileMode("join")} style={{ marginTop: 3 }} />
                   <span>
                     <strong>Join as one participant timeline</strong>

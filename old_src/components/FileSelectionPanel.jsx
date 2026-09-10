@@ -1,66 +1,5 @@
 import React, { useState } from "react";
 
-function BubbleInfo({ label, content }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <span
-      style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6 }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <span>{label}</span>
-      <button
-        type="button"
-        aria-label={`More information about ${label}`}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setOpen((value) => !value);
-        }}
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 999,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#e2e8f0",
-          color: "#0f172a",
-          fontSize: 12,
-          fontWeight: 700,
-          border: "none",
-          cursor: "pointer",
-          padding: 0,
-        }}
-      >
-        i
-      </button>
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "120%",
-            left: 0,
-            zIndex: 50,
-            width: 360,
-            padding: 12,
-            borderRadius: 12,
-            border: "1px solid #cbd5e1",
-            background: "white",
-            color: "#334155",
-            fontSize: 13,
-            lineHeight: 1.5,
-            boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
-          }}
-        >
-          {content}
-        </div>
-      )}
-    </span>
-  );
-}
-
 const acceptedActigraphyExtensions = [
   ".agd",
   ".atr",
@@ -105,6 +44,7 @@ export default function FileSelectionPanel({
   setShowManualMapping = () => {},
 }) {
   const [uploadError, setUploadError] = useState("");
+  const [uploadHelpOpen, setUploadHelpOpen] = useState(false);
   const actigraphyFiles = uploadedFiles.actigraphy || [];
   const hasCsvActigraphy = actigraphyFiles.length > 0 && actigraphyFiles.every((file) => getExtension(file.name) === ".csv");
 
@@ -151,28 +91,45 @@ export default function FileSelectionPanel({
         Upload actigraphy recordings here. Sleep diaries, masks, start/stop files, light files, and other sensor files are added later in the step where they are used.
       </p>
 
-      <div style={{ border: "1px solid #dbeafe", borderRadius: 16, padding: 16, background: "#eff6ff", marginBottom: 16, display: "grid", gap: 10 }}>
-        <div style={{ fontWeight: 700 }}>
-          <BubbleInfo
-            label="Accepted actigraphy files"
-            content={`Supported actigraphy file types: ${acceptedActigraphyExtensions.join(", ")}. ActiGraph .gt3x and GENEActiv .bin recordings are inspected for embedded light later on the Other Sensors page.`}
-          />
-        </div>
-        <div style={{ fontWeight: 700 }}>
-          <BubbleInfo
-            label="Multiple-file analysis"
-            content="Multiple actigraphy files can be uploaded together when they use the same extension. Choose below whether they are separate recordings or files from one participant that should be joined by their real timestamps. Joined mode applies throughout the workflow: initial QC, activity and light previews, support intervals, preprocessing, sleep-wake processing, and final metrics. Recording gaps are preserved."
-          />
-        </div>
-      </div>
-
       {(uploadError || fileError) && (
         <div style={{ marginBottom: 16, padding: 12, borderRadius: 12, border: "1px solid #fecaca", background: "#fef2f2", color: "#991b1b", fontSize: 14 }}>
           {uploadError || fileError}
         </div>
       )}
 
-      <label style={{ display: "block", border: "2px dashed #cbd5e1", borderRadius: 16, padding: 24, background: "#f8fafc", cursor: "pointer" }}>
+      <label
+        onMouseEnter={() => setUploadHelpOpen(true)}
+        onMouseLeave={() => setUploadHelpOpen(false)}
+        style={{ display: "block", position: "relative", border: "2px dashed #cbd5e1", borderRadius: 16, padding: 24, background: "#f8fafc", cursor: "pointer" }}
+      >
+        {uploadHelpOpen && (
+          <div
+            role="tooltip"
+            style={{
+              position: "absolute",
+              left: "50%",
+              bottom: "calc(100% + 10px)",
+              transform: "translateX(-50%)",
+              zIndex: 100,
+              width: "min(620px, calc(100vw - 64px))",
+              padding: 14,
+              borderRadius: 14,
+              border: "1px solid #bfdbfe",
+              background: "white",
+              color: "#334155",
+              boxShadow: "0 12px 30px rgba(15,23,42,0.16)",
+              fontSize: 13,
+              lineHeight: 1.5,
+              textAlign: "left",
+              pointerEvents: "none",
+            }}
+          >
+            <div style={{ fontWeight: 800, color: "#1e3a8a", marginBottom: 4 }}>Accepted actigraphy files</div>
+            <div>Supported actigraphy file types: {acceptedActigraphyExtensions.join(", ")}. ActiGraph .gt3x and GENEActiv .bin recordings are inspected for embedded light later on the Other Sensors page.</div>
+            <div style={{ fontWeight: 800, color: "#1e3a8a", marginTop: 10, marginBottom: 4 }}>Multiple files allowed</div>
+            <div>Multiple actigraphy files can be uploaded together when they use the same extension. Choose whether they are separate recordings or files from one participant that should be joined by their real timestamps. Joined mode applies throughout the workflow. Each file is processed independently to a common analytical epoch before joining. Different native accelerometer sampling rates are retained in provenance and trigger metric-specific information or warnings; incompatible source/device activity is rejected.</div>
+          </div>
+        )}
         <div style={{ fontWeight: 800, fontSize: 17 }}>Actigraphy files</div>
         <div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
           {actigraphyFiles.length ? `${actigraphyFiles.length} file(s) selected` : "No actigraphy files selected"}
@@ -209,7 +166,7 @@ export default function FileSelectionPanel({
             <label style={{ display: "block", border: participantFileMode === "join" ? "2px solid #2563eb" : "1px solid #cbd5e1", borderRadius: 14, padding: 13, cursor: "pointer", background: participantFileMode === "join" ? "white" : "#f8fafc" }}>
               <input type="radio" name="participantFileModeImport" checked={participantFileMode === "join"} onChange={() => setParticipantFileMode("join")} />
               <span style={{ marginLeft: 8, fontWeight: 800 }}>Join as one participant timeline</span>
-              <span style={{ display: "block", color: "#475569", fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>Use only when every uploaded file belongs to the same participant. Activity and light are joined by real timestamps; gaps remain missing and overlapping duplicate boundary timestamps are de-duplicated.</span>
+              <span style={{ display: "block", color: "#475569", fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>Use only when every uploaded file belongs to the same participant. Each recording is processed independently to the common analytical epoch, then activity and light are joined by real timestamps. Gaps remain missing, duplicate boundaries are de-duplicated, and different native accelerometer sampling rates are explicitly assessed before the join.</span>
             </label>
           </div>
         </div>

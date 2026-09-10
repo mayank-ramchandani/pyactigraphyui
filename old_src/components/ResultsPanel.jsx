@@ -9,6 +9,7 @@ import {
 import { LIGHT_METRIC_DEFINITIONS } from "./LightMetricsPanel";
 import DiagnosticPanel, { downloadDiagnostics } from "./DiagnosticPanel";
 import { activityMappingLabel } from "./ActivityMappingPanel";
+import SamplingHarmonizationNotice from "./SamplingHarmonizationNotice";
 
 
 const RESULT_INFO_OVERRIDES = {
@@ -487,7 +488,7 @@ export default function ResultsPanel({
                   <input type="radio" name="participant-file-mode" value="join" checked={participantFileMode === "join"} onChange={() => setParticipantFileMode("join")} style={{ marginTop: 3 }} />
                   <span>
                     <strong>Join as one participant timeline</strong>
-                    <span style={{ display: "block", color: "#475569", fontSize: 13, marginTop: 3, lineHeight: 1.5 }}>Use only when all uploaded files are from the same participant. This is an end-to-end mode: initial QC, activity preview, support intervals, preprocessing, sleep-wake processing, embedded/separate light preview, light metrics, and final activity/sleep metrics use the joined timestamped timeline. Real gaps are preserved and compatible sampling intervals are required.</span>
+                    <span style={{ display: "block", color: "#475569", fontSize: 13, marginTop: 3, lineHeight: 1.5 }}>Use only when all uploaded files are from the same participant. This is an end-to-end mode. Each file is reduced independently to the same analytical epoch before timestamp joining; real gaps are preserved. Different native accelerometer rates are retained in provenance and assessed according to the selected activity basis.</span>
                   </span>
                 </label>
               </div>
@@ -678,6 +679,7 @@ export default function ResultsPanel({
                         Activity mapping used: <strong>{activityMappingLabel(item.activityMapping?.resolved || item.activityMapping?.requested || activityMapping)}</strong>
                         {item.activityMapping?.source ? ` · Source: ${item.activityMapping.source}` : ""}
                       </div>
+                      <SamplingHarmonizationNotice harmonization={item.participantJoin?.sampling_harmonization} />
                       <div style={{ border: "1px solid #e2e8f0", borderRadius: 14, padding: 12, background: "#f8fafc", marginBottom: 12, maxHeight: 460, overflowY: "auto" }}>
                         <div style={{ fontWeight: 700, marginBottom: 8 }}>Summary Table</div>
                         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>

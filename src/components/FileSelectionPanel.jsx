@@ -157,7 +157,7 @@ export default function FileSelectionPanel({
           <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
             Choose this before continuing because it controls the entire workflow, not only the final Results page. Changing the mode later resets loaded previews and manually drawn intervals so file-scoped selections are not accidentally reused with a different timeline.
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
+          <div className="two-option-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
             <label style={{ display: "block", border: participantFileMode === "separate" ? "2px solid #2563eb" : "1px solid #cbd5e1", borderRadius: 14, padding: 13, cursor: "pointer", background: participantFileMode === "separate" ? "white" : "#f8fafc" }}>
               <input type="radio" name="participantFileModeImport" checked={participantFileMode === "separate"} onChange={() => setParticipantFileMode("separate")} />
               <span style={{ marginLeft: 8, fontWeight: 800 }}>Analyze files separately</span>
@@ -197,7 +197,7 @@ export default function FileSelectionPanel({
 
       <div style={{ marginTop: 20, border: "1px solid #e2e8f0", borderRadius: 16, padding: 16, background: "#f8fafc" }}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Analysis type</div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="two-option-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
           {[
             {
               id: "standard",
@@ -223,8 +223,9 @@ export default function FileSelectionPanel({
                   background: selected ? "#0f172a" : "white",
                   color: selected ? "white" : "#0f172a",
                   cursor: "pointer",
-                  textAlign: "left",
-                  maxWidth: 360,
+                  textAlign: "center",
+                  width: "100%",
+                  minHeight: 104,
                 }}
               >
                 <div style={{ fontWeight: 700 }}>{mode.label}</div>

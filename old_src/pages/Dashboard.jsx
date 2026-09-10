@@ -1449,12 +1449,7 @@ export default function Dashboard() {
         };
       }
       case "2":
-        return {
-          valid: customThresholdsValid,
-          message: customThresholdsValid
-            ? ""
-            : "Use 1–24 valid hours, at least 1 consecutive day, and sleep-window coverage between 0 and 1.",
-        };
+        return { valid: true, message: "" };
       case "3":
         return {
           valid: Boolean(activityMapping),
@@ -1481,8 +1476,10 @@ export default function Dashboard() {
         };
       case "8":
         return {
-          valid: selectedAnalysisFileNames.length > 0 && hasMetrics,
-          message: !selectedAnalysisFileNames.length
+          valid: customThresholdsValid && selectedAnalysisFileNames.length > 0 && hasMetrics,
+          message: !customThresholdsValid
+            ? "Use 1–24 valid hours, at least 1 consecutive valid window, and sleep-window coverage between 0 and 1."
+            : !selectedAnalysisFileNames.length
             ? "Select at least one uploaded file to analyze."
             : !hasMetrics
             ? "Choose at least one analysis family or metric."
@@ -1539,6 +1536,9 @@ export default function Dashboard() {
     previewData,
     analysisWindowSettings,
     setAnalysisWindowSettings,
+    dataQualitySettings: supportFileSettings.masking,
+    setDataQualitySettings: (settings) =>
+      setSupportFileSettings((previous) => ({ ...previous, masking: settings })),
   };
 
   let content = null;
@@ -1585,9 +1585,6 @@ export default function Dashboard() {
       <PreprocessingPanel
         title={appConfig.panels.preprocessing.title}
         settings={supportFileSettings.masking}
-        onSettingsChange={(settings) =>
-          setSupportFileSettings((previous) => ({ ...previous, masking: settings }))
-        }
         actigraphyFiles={actigraphyFiles}
         initialQcByFile={initialQcByFile}
         initialQcLoadingByFile={initialQcLoadingByFile}
@@ -1654,7 +1651,7 @@ export default function Dashboard() {
         <SupportFilesStep
           title={appConfig.panels.masking.title}
           type="masking"
-          description="Upload exclusion intervals, respect detected non-wear, or select per-file masks directly on the activity plot."
+          description="Upload exclusion intervals or select per-file masks directly on the activity plot. Detected or mapped non-wear handling is configured in Analysis Set-up."
           files={uploadedFiles.masking}
           onFilesChange={(files) => setUploadedFiles((previous) => ({ ...previous, masking: files }))}
           settings={supportFileSettings.masking}
@@ -1663,7 +1660,6 @@ export default function Dashboard() {
           }
           options={[
             { id: "apply", label: "Apply uploaded or manually selected masking intervals", defaultValue: true },
-            { id: "respectNonwear", label: "Respect detected non-wear when available", defaultValue: true },
           ]}
           previewData={previewData}
           previewDataByFile={activityPreviewByFile}
@@ -1836,64 +1832,11 @@ export default function Dashboard() {
       }}
     >
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-        <div className="app-header-centered" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
-          <div style={{ width: "100%", display: "grid", justifyItems: "center", gap: 8 }}>
-            <BrandLogo width={250} />
-            <h1 style={{ fontSize: 30, margin: 0 }}>{appConfig.appName}</h1>
-            <p style={{ color: "#475569", margin: 0, lineHeight: 1.5, maxWidth: 900 }}>
-              Guided 10-step actigraphy workflow covering preprocessing, activity estimation, cleaning, sleep-wake classification, other sensors, analysis, results, and export.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setTermsOpen(true)}
-            style={{ padding: "10px 14px", borderRadius: 12, background: "white", color: "#0f172a", border: "1px solid #cbd5e1", cursor: "pointer", fontWeight: 700 }}
-          >
-            Terms of Use
-          </button>
-          <button
-            type="button"
-            onClick={() => setDocumentationOpen((value) => !value)}
-            style={{ padding: "10px 14px", borderRadius: 12, background: documentationOpen ? "#0f172a" : "white", color: documentationOpen ? "white" : "#0f172a", border: "1px solid #cbd5e1", cursor: "pointer", fontWeight: 700 }}
-          >
-            {documentationOpen ? "Close Documentation" : "Documentation"}
-          </button>
-        </div>
-
-        {ENABLE_AUTH_RUNS && (
-          <>
-            <AuthBar onUserChange={setCurrentUser} />
-            {runSaveStatus && (
-              <div
-                style={{
-                  background: runSaveStatus.startsWith("Saved") ? "#f0fdf4" : "#fef2f2",
-                  border: runSaveStatus.startsWith("Saved") ? "1px solid #bbf7d0" : "1px solid #fecaca",
-                  color: runSaveStatus.startsWith("Saved") ? "#166534" : "#b91c1c",
-                  borderRadius: 12,
-                  padding: 10,
-                  fontSize: 14,
-                  marginBottom: 16,
-                }}
-              >
-                {runSaveStatus}
-              </div>
-            )}
-            <RunHistoryPanel
-              user={currentUser}
-              refreshToken={runHistoryRefresh}
-              onLoadRun={handleLoadSavedRun}
-            />
-          </>
-        )}
-
-        {documentationOpen ? (
-          <DocumentationPanel onClose={() => setDocumentationOpen(false)} />
-        ) : (
         <div
           className="workflow-centered"
           style={{
             display: "grid",
-            gridTemplateColumns: "280px 1fr",
+            gridTemplateColumns: appConfig.layout.sidebarEnabled ? "280px minmax(0, 1fr)" : "1fr",
             gap: 24,
             alignItems: "start",
           }}
@@ -1910,73 +1853,126 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div className="workflow-page-centered" style={{ display: "grid", gap: 16 }}>
-            {content}
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                gap: 12,
-                alignItems: "center",
-                background: "white",
-                border: "1px solid #e2e8f0",
-                borderRadius: 16,
-                padding: 16,
-              }}
-            >
+          <div style={{ minWidth: 0, display: "grid", gap: 16 }}>
+            <div className="app-header-centered" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, flexWrap: "wrap", background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
+              <div style={{ width: "100%", display: "grid", justifyItems: "center", gap: 8 }}>
+                <BrandLogo width={250} />
+                <h1 style={{ fontSize: 30, margin: 0 }}>{appConfig.appName}</h1>
+                <p style={{ color: "#475569", margin: 0, lineHeight: 1.5, maxWidth: 900 }}>
+                  Guided 10-step actigraphy workflow covering preprocessing, activity estimation, cleaning, sleep-wake classification, other sensors, analysis, results, and export.
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={goPrevious}
-                disabled={!canGoPrevious}
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: 12,
-                  background: canGoPrevious ? "white" : "#e2e8f0",
-                  color: canGoPrevious ? "#0f172a" : "#94a3b8",
-                  border: "1px solid #cbd5e1",
-                  cursor: canGoPrevious ? "pointer" : "not-allowed",
-                  fontWeight: 600,
-                }}
+                onClick={() => setTermsOpen(true)}
+                style={{ padding: "10px 14px", borderRadius: 12, background: "white", color: "#0f172a", border: "1px solid #cbd5e1", cursor: "pointer", fontWeight: 700 }}
               >
-                Previous
+                Terms of Use
               </button>
-
-              <div
-                style={{
-                  flex: 1,
-                  textAlign: "center",
-                  color: stepValidation.valid ? "#64748b" : "#b91c1c",
-                  fontSize: 14,
-                }}
+              <button
+                type="button"
+                onClick={() => setDocumentationOpen((value) => !value)}
+                style={{ padding: "10px 14px", borderRadius: 12, background: documentationOpen ? "#0f172a" : "white", color: documentationOpen ? "white" : "#0f172a", border: "1px solid #cbd5e1", cursor: "pointer", fontWeight: 700 }}
               >
-                {stepValidation.message}
-              </div>
+                {documentationOpen ? "Close Documentation" : "Documentation"}
+              </button>
+            </div>
 
-              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  disabled={!canGoNext}
+            {ENABLE_AUTH_RUNS && (
+              <>
+                <AuthBar onUserChange={setCurrentUser} />
+                {runSaveStatus && (
+                  <div
+                    style={{
+                      background: runSaveStatus.startsWith("Saved") ? "#f0fdf4" : "#fef2f2",
+                      border: runSaveStatus.startsWith("Saved") ? "1px solid #bbf7d0" : "1px solid #fecaca",
+                      color: runSaveStatus.startsWith("Saved") ? "#166534" : "#b91c1c",
+                      borderRadius: 12,
+                      padding: 10,
+                      fontSize: 14,
+                    }}
+                  >
+                    {runSaveStatus}
+                  </div>
+                )}
+                <RunHistoryPanel
+                  user={currentUser}
+                  refreshToken={runHistoryRefresh}
+                  onLoadRun={handleLoadSavedRun}
+                />
+              </>
+            )}
+
+            {documentationOpen ? (
+              <DocumentationPanel onClose={() => setDocumentationOpen(false)} />
+            ) : (
+              <div className="workflow-page-centered" style={{ display: "grid", gap: 16 }}>
+                {content}
+
+                <div
                   style={{
-                    padding: "10px 16px",
-                    borderRadius: 12,
-                    background: canGoNext ? "#0f172a" : "#94a3b8",
-                    color: "white",
-                    border: "none",
-                    cursor: canGoNext ? "pointer" : "not-allowed",
-                    fontWeight: 600,
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: 12,
+                    alignItems: "center",
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 16,
+                    padding: 16,
                   }}
                 >
-                  {currentStep === "8" ? "Go to Generate Results" : currentStep === "9" ? "Go to Export Outputs" : "Next"}
-                </button>
+                  <button
+                    type="button"
+                    onClick={goPrevious}
+                    disabled={!canGoPrevious}
+                    style={{
+                      padding: "10px 16px",
+                      borderRadius: 12,
+                      background: canGoPrevious ? "white" : "#e2e8f0",
+                      color: canGoPrevious ? "#0f172a" : "#94a3b8",
+                      border: "1px solid #cbd5e1",
+                      cursor: canGoPrevious ? "pointer" : "not-allowed",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Previous
+                  </button>
+
+                  <div
+                    style={{
+                      flex: 1,
+                      textAlign: "center",
+                      color: stepValidation.valid ? "#64748b" : "#b91c1c",
+                      fontSize: 14,
+                    }}
+                  >
+                    {stepValidation.message}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                    <button
+                      type="button"
+                      onClick={goNext}
+                      disabled={!canGoNext}
+                      style={{
+                        padding: "10px 16px",
+                        borderRadius: 12,
+                        background: canGoNext ? "#0f172a" : "#94a3b8",
+                        color: "white",
+                        border: "none",
+                        cursor: canGoNext ? "pointer" : "not-allowed",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {currentStep === "8" ? "Go to Generate Results" : currentStep === "9" ? "Go to Export Outputs" : "Next"}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
-        )}
       </div>
-
 
       {termsOpen && (
         <div

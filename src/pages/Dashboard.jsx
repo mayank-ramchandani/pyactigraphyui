@@ -153,6 +153,8 @@ export default function Dashboard() {
   const [termsOpen, setTermsOpen] = useState(false);
   const [maxUnlockedStep, setMaxUnlockedStep] = useState("1");
   const [visitedSteps, setVisitedSteps] = useState(["1"]);
+  const workflowContentRef = useRef(null);
+  const previousStepRef = useRef("1");
 
   const [uploadedFiles, setUploadedFiles] = useState({
     actigraphy: [],
@@ -368,6 +370,17 @@ export default function Dashboard() {
       return kept.length ? kept : actigraphyFiles.map((file) => file.name);
     });
   }, [actigraphyFiles]);
+
+  useEffect(() => {
+    if (previousStepRef.current === currentStep) return;
+    previousStepRef.current = currentStep;
+
+    const frame = window.requestAnimationFrame(() => {
+      workflowContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentStep]);
 
   useEffect(() => {
     if (!actigraphyFiles.length) {
@@ -1842,7 +1855,7 @@ export default function Dashboard() {
           }}
         >
           {appConfig.layout.sidebarEnabled && (
-            <div style={{ position: "sticky", top: 24 }}>
+            <div className="workflow-sidebar-sticky" style={{ position: "sticky", top: 16, alignSelf: "start" }}>
               <WorkflowSidebar
                 workflow={workflowSteps}
                 currentStep={currentStep}
@@ -1906,7 +1919,11 @@ export default function Dashboard() {
             {documentationOpen ? (
               <DocumentationPanel onClose={() => setDocumentationOpen(false)} />
             ) : (
-              <div className="workflow-page-centered" style={{ display: "grid", gap: 16 }}>
+              <div
+                ref={workflowContentRef}
+                className="workflow-page-centered"
+                style={{ display: "grid", gap: 16, scrollMarginTop: 16 }}
+              >
                 {content}
 
                 <div

@@ -28,6 +28,12 @@ For each file, the analysis generally follows this order:
 
 Missing and excluded epochs remain unavailable rather than being replaced with zero activity.
 
+### Joined participant recordings
+
+When multiple recordings from the same participant are joined, each source is processed independently before the participant timeline is assembled. If the native accelerometer sampling rates differ, ActiLab does not resample one raw stream to imitate the other. Each recording is converted at its own native rate into the selected activity representation and common analytical epoch, and the epoch-level series are then joined by timestamp.
+
+The join keeps real calendar gaps as missing time, removes exact duplicate boundary timestamps, and records the native sampling rate for every source. Metric-specific safeguards are applied when rates differ: ENMO and processed acceleration proceed with an informational notice; MAD and PIM proceed with a warning; ZCM proceeds with a strong warning; source/device activity or ActiGraph counts are rejected unless they have already been externally harmonized/validated. Files with different processed epoch durations, activity bases, or units are not combined.
+
 ## Information retained with results
 
 Results and exports can retain:
@@ -37,6 +43,8 @@ Results and exports can retain:
 - requested and resolved activity measure;
 - source column or raw-processing method;
 - units and epoch duration;
+- native sampling rate for each source in a joined participant recording;
+- joined-recording harmonization notices and warnings;
 - start/stop intervals;
 - non-wear and masks;
 - quality-window basis and thresholds;

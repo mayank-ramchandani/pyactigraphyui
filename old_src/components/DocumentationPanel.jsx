@@ -149,7 +149,7 @@ export default function DocumentationPanel({ onClose }) {
         <Card title="A simple way to get started">
           <ol style={{ margin: 0, paddingLeft: 22 }}>
             <li>Upload de-identified actigraphy files.</li>
-            <li>Keep the recommended preprocessing and activity settings unless your protocol requires something different.</li>
+            <li>Review preprocessing QC, then keep the recommended Analysis settings and activity settings unless your protocol requires something different.</li>
             <li>Preview each recording and review gaps, dates, and signal quality.</li>
             <li>Add cleaning intervals, sleep windows, or light data when applicable.</li>
             <li>Select metrics, generate results, review warnings, and export the outputs.</li>
@@ -172,20 +172,21 @@ export default function DocumentationPanel({ onClose }) {
     ),
     preprocessing: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Recommended starting settings">
+        <Card title="Pre-processing QC and Analysis settings">
+          <p>Step 2 is for initial recording-coverage and quality-control review. The settings below are configured later under <strong>Analysis settings</strong> on Step 8: Analysis Set-up.</p>
           <ul style={{ margin: 0, paddingLeft: 22 }}>
             <li><strong>Valid quality window:</strong> at least 16 analyzable hours.</li>
             <li><strong>Multi-day rhythm and SRI eligibility:</strong> at least 2 consecutive valid quality windows.</li>
             <li><strong>Sleep-window coverage:</strong> at least 80% of expected epochs remain available and scorable.</li>
           </ul>
-          <p style={{ marginBottom: 0 }}>Keep these settings for a standard analysis. Customize them only when your study protocol or sensitivity analysis specifies different criteria.</p>
+          <p style={{ marginBottom: 0 }}>Keep these settings for a standard analysis. Step 8 also contains the calendar-day versus recording-aligned 24-hour definition and the option to respect detected or mapped non-wear.</p>
         </Card>
         <Card title="Calendar day or recording-aligned window?">
           <p><strong>Calendar day</strong> is the recommended default. It evaluates midnight-to-midnight periods and keeps daily summaries aligned with clock dates.</p>
           <p style={{ marginBottom: 0 }}><strong>Recording-aligned 24-hour windows</strong> begin at the first retained timestamp. They can be useful for short recordings or studies organized around the device-deployment time. The selected approach is included in the results and exports.</p>
         </Card>
         <Card title="How missing and excluded data are handled">
-          Recording gaps, detected non-wear, and manual masks remain unavailable. They are not changed to zero activity. Initial quality information appears on Step 2, and final quality is recalculated after start/stop limits and masks are applied.
+          Recording gaps, detected non-wear, and manual masks remain unavailable. They are not changed to zero activity. Initial quality information appears on Step 2. Final quality is recalculated during analysis using the settings selected in Step 8 after start/stop limits and masks are applied.
         </Card>
         <Card title="Sleep-window coverage">
           Coverage compares the expected epochs inside a sleep window with the epochs still available after gaps, non-wear, start/stop limits, and masks. At the recommended threshold of <Code>0.8</Code>, at least 80% must remain. Lower-coverage windows are excluded from sleep summaries rather than filled in.
@@ -219,6 +220,9 @@ export default function DocumentationPanel({ onClose }) {
         <Card title="Why the choice matters">
           All selected rest-activity metrics use the chosen epoch-level activity series. Counts, mg, mg·s/epoch, and crossings/epoch are different scales, so thresholds must be chosen for the selected measure. The resolved measure, units, epoch duration, and settings are included with the results.
         </Card>
+        <Card title="Joining recordings with different native sampling rates">
+          In joined participant mode, ActiLab does not directly concatenate raw 30-Hz, 100-Hz, or other differently sampled streams. Each source is processed independently at its native rate into the selected activity representation and the same analytical epoch, then the epoch-level series are joined by timestamp. Native rates remain visible in QC, previews, results, and provenance. ENMO and processed acceleration are allowed with an informational notice; MAD and PIM are allowed with a warning; ZCM receives a strong warning because it is sampling-frequency sensitive; and source/device activity or ActiGraph counts are blocked across differing native rates unless already externally harmonized/validated. A join is also blocked when processed epoch durations, resolved activity bases, or units differ.
+        </Card>
       </div>
     ),
     cleaning: (
@@ -250,7 +254,7 @@ export default function DocumentationPanel({ onClose }) {
     sensors: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Light data">
-          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. On the Results page, multiple selected actigraphy files can be analyzed separately or explicitly joined into one timestamp-preserving participant timeline when they all belong to the same participant. Joined mode requires compatible sampling intervals and is intended for activity/sleep metrics; light outputs remain file-level.
+          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. In joined participant mode, light data are also joined by their real timestamps across the participant timeline, and periods without light remain missing rather than being treated as zero exposure.
         </Card>
         <Card title="RGB and multichannel light">
           When red, green, blue, white, or lux channels are available, the preview identifies them separately. Confirm the units and channel used by each selected light metric, especially when choosing thresholds.
@@ -269,7 +273,7 @@ export default function DocumentationPanel({ onClose }) {
           <Table headers={["Code", "Metric", "Category", "What it describes"]} rows={metricRows} />
         </Card>
         <Card title="Choosing Standard or Custom mode">
-          Use Standard mode for common analysis groups with their recommended starting parameters. Use Custom mode when you need individual metrics or protocol-specific settings. Step 8 configures the analysis; Step 9 runs it.
+          Step 8 first lets you review the Analysis settings for validity thresholds, 24-hour period definition, sleep-window coverage, and non-wear handling. Use Standard mode for common analysis groups with their recommended starting parameters. Use Custom mode when you need individual metrics or protocol-specific settings. Step 8 configures the analysis; Step 9 runs it.
         </Card>
       </div>
     ),

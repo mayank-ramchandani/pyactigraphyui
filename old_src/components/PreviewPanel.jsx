@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import ActivityMappingPanel, { activityMappingLabel } from "./ActivityMappingPanel";
+import SamplingHarmonizationNotice from "./SamplingHarmonizationNotice";
 import { downloadBlob, downloadJson, previewToRows, rowsToCsv } from "../services/exportUtils";
 import {
   buildFileEntries,
@@ -24,7 +25,7 @@ function formatTimestampTick(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
-  return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleString([], { year: "2-digit", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function formatTooltipTimestamp(value) {
@@ -198,11 +199,31 @@ export default function PreviewPanel({
     previewData?.light_y_axis_label ||
     "Light intensity";
   const mappingFromResponse = previewData?.activity_mapping || {};
+  const joinedSegments = previewData?.participant_join?.segments || [];
+  const joinedLightSegments = previewData?.participant_join?.light?.segments || [];
+  const samplingHarmonization = previewData?.participant_join?.sampling_harmonization || null;
+  const displayedJoinedSegments = mode === "light" ? joinedLightSegments : joinedSegments;
   const activityAxisLabel = mode === "activity"
     ? activityMappingLabel(mappingFromResponse.resolved || activityMapping)
     : "Activity";
   const yAxisLabel = mode === "light" ? lightAxisLabel : activityAxisLabel;
   const yValueLabel = mode === "light" ? lightAxisLabel : activityAxisLabel;
+  const sampleTablePoints = useMemo(() => {
+    const realPoints = (points || []).filter((row) => !row?.is_gap);
+    if (!joinedParticipantMode || displayedJoinedSegments.length < 2) return realPoints.slice(0, 200);
+    const perSegment = Math.max(1, Math.floor(200 / displayedJoinedSegments.length));
+    const selected = [];
+    displayedJoinedSegments.forEach((segment) => {
+      const matches = realPoints.filter((row) => row?.source_file === segment.source_file);
+      if (matches.length <= perSegment) {
+        selected.push(...matches);
+        return;
+      }
+      const step = Math.max(1, Math.floor(matches.length / perSegment));
+      selected.push(...matches.filter((_, index) => index % step === 0).slice(0, perSegment));
+    });
+    return selected.slice(0, 200);
+  }, [points, joinedParticipantMode, displayedJoinedSegments]);
 
 
   const onExportPreviewCsv = () => {
@@ -398,6 +419,9 @@ export default function PreviewPanel({
 
       {previewLoaded && previewData && (
         <>
+          {mode === "activity" && joinedParticipantMode && (
+            <SamplingHarmonizationNotice harmonization={samplingHarmonization} />
+          )}
           <div
             style={{
               marginBottom: 20,
@@ -488,6 +512,61 @@ export default function PreviewPanel({
             </div>
           ) : (
             <>
+              {joinedParticipantMode && displayedJoinedSegments.length > 0 && (
+                <div
+                  style={{
+                    border: "1px solid #bfdbfe",
+                    borderRadius: 16,
+                    padding: 16,
+                    background: "#eff6ff",
+                    marginBottom: 20,
+                  }}
+                >
+                  <div style={{ fontWeight: 800, marginBottom: 6, color: "#1e3a8a" }}>Joined source coverage</div>
+                  <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
+                    Each uploaded recording is represented separately below. Long gaps between recordings remain missing and are shown as breaks in the preview line.
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bfdbfe" }}>Source file</th>
+                          <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bfdbfe" }}>Start</th>
+                          <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bfdbfe" }}>Stop</th>
+                          <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #bfdbfe" }}>{mode === "light" ? "Channels" : "Epochs"}</th>
+                          {mode !== "light" && (
+                            <>
+                              <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #bfdbfe" }}>Raw Hz</th>
+                              <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #bfdbfe" }}>Activity basis</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displayedJoinedSegments.map((segment, index) => (
+                          <tr key={`${segment.source_file || "segment"}-${index}`}>
+                            <td style={{ padding: 8, borderTop: "1px solid #dbeafe", overflowWrap: "anywhere", fontWeight: 700 }}>{segment.source_file || `Segment ${index + 1}`}</td>
+                            <td style={{ padding: 8, borderTop: "1px solid #dbeafe" }}>{formatTooltipTimestamp(segment.start)}</td>
+                            <td style={{ padding: 8, borderTop: "1px solid #dbeafe" }}>{formatTooltipTimestamp(segment.stop)}</td>
+                            <td style={{ padding: 8, borderTop: "1px solid #dbeafe", textAlign: "right" }}>
+                              {mode === "light"
+                                ? (segment.channels || []).join(", ") || "Light"
+                                : (segment.non_missing_rows ?? segment.rows ?? "—")}
+                            </td>
+                            {mode !== "light" && (
+                              <>
+                                <td style={{ padding: 8, borderTop: "1px solid #dbeafe", textAlign: "right" }}>{segment.raw_sample_rate_hz ?? "—"}</td>
+                                <td style={{ padding: 8, borderTop: "1px solid #dbeafe" }}>{segment.activity_basis || "—"}</td>
+                              </>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div
                 style={{
                   border: "1px solid #e2e8f0",
@@ -508,6 +587,11 @@ export default function PreviewPanel({
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr>
+                          {joinedParticipantMode && (
+                            <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>
+                              Source
+                            </th>
+                          )}
                           <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #cbd5e1" }}>
                             Timestamp
                           </th>
@@ -517,8 +601,13 @@ export default function PreviewPanel({
                         </tr>
                       </thead>
                       <tbody>
-                        {points.slice(0, 200).map((row, index) => (
+                        {sampleTablePoints.map((row, index) => (
                           <tr key={`${row.timestamp}-${index}`}>
+                            {joinedParticipantMode && (
+                              <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", overflowWrap: "anywhere" }}>
+                                {row.source_file || "—"}
+                              </td>
+                            )}
                             <td style={{ padding: 8, borderTop: "1px solid #e2e8f0" }}>
                               {row.timestamp}
                             </td>

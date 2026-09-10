@@ -23,6 +23,11 @@ from email.message import EmailMessage
 
 import pandas as pd
 
+try:
+    from pyActigraphy.io import BaseRaw as PyActigraphyBaseRaw
+except Exception:  # pragma: no cover - dependency is present in deployment
+    PyActigraphyBaseRaw = None
+
 from pydantic import BaseModel, Field
 
 from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping, raw_mapping_metadata
@@ -2155,33 +2160,53 @@ def _light_channels_for_concatenation(raw: Any) -> Dict[str, pd.Series]:
     return result
 
 
-def _attach_joined_light(first: Any, raw_items: List[Any], source_names: List[str]) -> Dict[str, Any]:
-    """Concatenate all available light channels by real timestamp.
+def _joined_light_recording(raw_items: List[Any], source_names: List[str]) -> tuple[Optional[SimpleLightRecording], Dict[str, Any]]:
+    """Build one timestamp-preserving light recording for all selected files.
 
-    Files that contain no light simply contribute a gap. Shared boundary
-    timestamps are de-duplicated with the earliest selected file taking
-    precedence, mirroring the activity-series join.
+    This returns a new ``SimpleLightRecording`` instead of trying to mutate the
+    first pyActigraphy Raw object.  ``BaseRaw.light`` is read-only in
+    pyActigraphy, so mutation silently left joined workflows pointing at the
+    first file's light data only.
     """
     per_file_channels = [_light_channels_for_concatenation(raw) for raw in raw_items]
     all_channels = sorted({channel for item in per_file_channels for channel in item})
+    source_files_with_light = [
+        source_names[index]
+        for index, channels in enumerate(per_file_channels)
+        if channels
+    ]
+
+    light_segments: List[Dict[str, Any]] = []
+    for index, channels in enumerate(per_file_channels):
+        available = [series for series in channels.values() if len(series)]
+        if not available:
+            continue
+        starts = [series.index.min() for series in available]
+        stops = [series.index.max() for series in available]
+        light_segments.append(
+            {
+                "source_file": source_names[index],
+                "start": min(starts).isoformat(),
+                "stop": max(stops).isoformat(),
+                "channels": sorted(channels.keys()),
+                "rows_by_channel": {name: int(len(series)) for name, series in channels.items()},
+            }
+        )
+
     if not all_channels:
-        return {
+        return None, {
             "available": False,
             "channels": [],
             "source_files_with_light": [],
             "source_file_count_with_light": 0,
             "duplicate_timestamps_removed": {},
+            "segments": [],
         }
 
     joined_channels: Dict[str, pd.Series] = {}
     duplicates_by_channel: Dict[str, int] = {}
     starts: List[pd.Timestamp] = []
     stops: List[pd.Timestamp] = []
-    source_files_with_light = [
-        source_names[index]
-        for index, channels in enumerate(per_file_channels)
-        if channels
-    ]
 
     for channel in all_channels:
         pieces_with_sources = [
@@ -2220,36 +2245,16 @@ def _attach_joined_light(first: Any, raw_items: List[Any], source_names: List[st
         stops.append(combined.index.max())
 
     if not joined_channels:
-        return {
+        return None, {
             "available": False,
             "channels": [],
             "source_files_with_light": source_files_with_light,
             "source_file_count_with_light": len(source_files_with_light),
             "duplicate_timestamps_removed": duplicates_by_channel,
+            "segments": light_segments,
         }
 
-    light_recording = SimpleLightRecording(joined_channels)
-    assigned = False
-    for attribute in ("light", "_light"):
-        try:
-            setattr(first, attribute, light_recording)
-            assigned = getattr(first, "light", None) is not None
-            if assigned:
-                break
-        except Exception:
-            continue
-    if not assigned:
-        raise ValueError(
-            "This file type exposes light data but does not allow the joined light timeline to be attached."
-        )
-
-    # Some readers expose convenience properties through raw_light rather than
-    # light. Keep a joined copy there when it is a writable attribute.
-    with contextlib.suppress(Exception):
-        if hasattr(first, "raw_light") and not isinstance(getattr(type(first), "raw_light", None), property):
-            first.raw_light = light_recording
-
-    return {
+    return SimpleLightRecording(joined_channels), {
         "available": True,
         "channels": list(joined_channels.keys()),
         "source_files_with_light": source_files_with_light,
@@ -2257,8 +2262,268 @@ def _attach_joined_light(first: Any, raw_items: List[Any], source_names: List[st
         "duplicate_timestamps_removed": duplicates_by_channel,
         "start": min(starts).isoformat() if starts else None,
         "stop": max(stops).isoformat() if stops else None,
+        "segments": light_segments,
     }
 
+
+def _copy_join_ui_attributes(source: Any, target: Any) -> None:
+    """Copy ActiLab/loader metadata needed after rebuilding a joined BaseRaw."""
+    try:
+        for key, value in vars(source).items():
+            if key.startswith("_ui_"):
+                setattr(target, key, value)
+    except Exception:
+        pass
+
+
+def _build_joined_recording(
+    first: Any,
+    combined: pd.Series,
+    reference_epoch: pd.Timedelta,
+    joined_light: Optional[SimpleLightRecording],
+    source_names: List[str],
+) -> Any:
+    """Return a recording whose public ``data``/``light`` APIs expose the join.
+
+    pyActigraphy's ``BaseRaw.data`` and ``BaseRaw.light`` properties have no
+    setters.  The previous implementation copied the first Raw and assigned
+    ``_data``/``_light`` attributes, but those are *not* the name-mangled
+    private fields used by BaseRaw.  Consequently ``raw.data`` and ``raw.light``
+    still returned the first file.  Reconstructing a fresh BaseRaw is the safe
+    supported way to change its data window.
+    """
+    joined_name = "Joined participant: " + " + ".join(source_names)
+
+    if PyActigraphyBaseRaw is not None and isinstance(first, PyActigraphyBaseRaw):
+        try:
+            first_uuid = str(getattr(first, "uuid", "recording"))
+        except Exception:
+            first_uuid = "recording"
+        joined = PyActigraphyBaseRaw(
+            name=joined_name,
+            uuid=f"joined-{first_uuid}",
+            format=f"Joined participant ({getattr(first, 'format', 'actigraphy')})",
+            axial_mode=getattr(first, "axial_mode", None),
+            start_time=combined.index[0],
+            period=combined.index[-1] - combined.index[0],
+            frequency=reference_epoch,
+            data=combined,
+            light=joined_light,
+            fpath=None,
+        )
+        _copy_join_ui_attributes(first, joined)
+        with contextlib.suppress(Exception):
+            joined.display_name = joined_name
+        return joined
+
+    joined = copy.copy(first)
+    try:
+        joined.data = combined
+    except Exception as exc:
+        raise ValueError(
+            "This file type cannot currently expose a joined participant activity timeline through its public data attribute."
+        ) from exc
+
+    # Verify that assignment changed what downstream preview/analysis reads.
+    try:
+        exposed = _activity_series_for_concatenation(joined)
+        if len(exposed) != len(combined) or exposed.index.min() != combined.index.min() or exposed.index.max() != combined.index.max():
+            raise ValueError(
+                "The joined recording did not expose the full combined activity timeline after assignment."
+            )
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError("Could not verify the joined participant activity timeline.") from exc
+
+    if joined_light is not None:
+        try:
+            joined.light = joined_light
+        except Exception as exc:
+            raise ValueError(
+                "This file type exposes light data but does not allow the joined light timeline to be attached."
+            ) from exc
+
+    for attribute, value in (
+        ("start_time", combined.index[0]),
+        ("period", combined.index[-1] - combined.index[0]),
+        ("frequency", reference_epoch),
+    ):
+        with contextlib.suppress(Exception):
+            setattr(joined, attribute, value)
+    return joined
+
+
+
+def _coerce_positive_float(value: Any) -> Optional[float]:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not pd.notna(number) or number <= 0:
+        return None
+    return number
+
+
+def _native_sample_rate_hz(raw: Any) -> Optional[float]:
+    """Best-effort native/raw accelerometer sampling rate for provenance.
+
+    The joined timeline itself is epoch-level.  Native frequency is therefore
+    metadata used to decide whether two raw recordings can be compared safely;
+    it is not inferred from the already-aggregated epoch index.
+    """
+    summary_candidates = [
+        getattr(raw, "_ui_gt3x_summary", None),
+        getattr(raw, "_ui_accelerometer_summary", None),
+        getattr(raw, "metadata", None),
+    ]
+    for summary in summary_candidates:
+        if not isinstance(summary, dict):
+            continue
+        for key in (
+            "sample_rate",
+            "sample_rate_hz",
+            "_sample_rate_hz",
+            "measurement frequency",
+            "measurement_frequency",
+            "frequency_hz",
+        ):
+            rate = _coerce_positive_float(summary.get(key))
+            if rate is not None:
+                return rate
+        header = summary.get("header")
+        if isinstance(header, dict):
+            for key in ("measurement frequency", "measurement_frequency", "sample rate", "sample_rate"):
+                value = header.get(key)
+                if isinstance(value, str):
+                    match = re.search(r"[-+]?\d+(?:\.\d+)?", value)
+                    value = match.group(0) if match else value
+                rate = _coerce_positive_float(value)
+                if rate is not None:
+                    return rate
+    return None
+
+
+def _rates_materially_differ(rates: List[float]) -> bool:
+    if len(rates) < 2:
+        return False
+    low = min(rates)
+    high = max(rates)
+    return (high - low) > max(0.01, low * 0.001)
+
+
+def _sampling_harmonization_for_join(
+    raw_items: List[Any],
+    source_names: List[str],
+    mapping_items: List[Dict[str, Any]],
+    epochs: List[pd.Timedelta],
+) -> Dict[str, Any]:
+    """Describe/validate native-frequency handling for a participant join.
+
+    Every file is reduced independently to the common analytical epoch before
+    timestamp concatenation.  We never append 30-Hz and 100-Hz raw samples into
+    one raw stream and we do not silently pretend that common epochs eliminate
+    all native-frequency sensitivity of derived metrics.
+    """
+    source_rates = [
+        {
+            "source_file": source_names[index],
+            "native_sample_rate_hz": _native_sample_rate_hz(raw),
+            "processed_epoch_seconds": float(epochs[index].total_seconds()),
+            "activity_basis": mapping_items[index].get("resolved"),
+            "activity_units": mapping_items[index].get("units"),
+        }
+        for index, raw in enumerate(raw_items)
+    ]
+    known_rates = [item["native_sample_rate_hz"] for item in source_rates if item["native_sample_rate_hz"] is not None]
+    rates_differ = _rates_materially_differ(known_rates)
+    all_rates_known = len(known_rates) == len(source_rates)
+    unique_rates = sorted({round(float(rate), 6) for rate in known_rates})
+    resolved_bases = [str(item.get("resolved") or "").lower() for item in mapping_items]
+    reference_basis = resolved_bases[0] if resolved_bases else ""
+    epoch_seconds = float(epochs[0].total_seconds()) if epochs else None
+
+    payload: Dict[str, Any] = {
+        "native_rates_differ": bool(rates_differ),
+        "all_native_rates_known": bool(all_rates_known),
+        "native_sample_rates_hz": unique_rates,
+        "processed_epoch_seconds": epoch_seconds,
+        "resolved_activity_basis": reference_basis or None,
+        "raw_frequency_resampled": False,
+        "common_epoch_harmonized": True,
+        "source_rates": source_rates,
+        "severity": "none",
+        "decision": "allowed",
+        "message": None,
+    }
+
+    if not rates_differ:
+        return payload
+
+    rate_text = ", ".join(f"{rate:g} Hz" for rate in unique_rates)
+    epoch_text = f"{epoch_seconds:g}-second" if epoch_seconds is not None else "common"
+    common_process = (
+        f"Native accelerometer sampling rates differ ({rate_text}). Each recording is processed independently "
+        f"at its native sampling rate into the same {epoch_text} {reference_basis.upper() if reference_basis else 'activity'} "
+        "epochs, and those epoch-level series are then joined by their real timestamps. Raw samples are not directly concatenated or resampled to a common raw Hz."
+    )
+
+    if reference_basis == "original":
+        payload.update(
+            {
+                "severity": "blocked",
+                "decision": "blocked",
+                "message": (
+                    f"{common_process} ActiLab does not join source/device activity or ActiGraph counts across different native sampling rates because their equivalence cannot be assumed. "
+                    "Choose ENMO or Processed acceleration for a common derived representation, or provide externally harmonized/validated counts."
+                ),
+            }
+        )
+        return payload
+
+    if reference_basis in {"enmo", "accelerometer"}:
+        payload.update(
+            {
+                "severity": "info",
+                "decision": "allowed_with_information",
+                "message": (
+                    f"{common_process} This is allowed for {reference_basis.upper() if reference_basis == 'enmo' else 'processed acceleration'}, "
+                    "and the original native rates are retained in provenance."
+                ),
+            }
+        )
+    elif reference_basis in {"mad", "pim"}:
+        payload.update(
+            {
+                "severity": "warning",
+                "decision": "allowed_with_warning",
+                "message": (
+                    f"{common_process} The join is allowed, but {reference_basis.upper()} can retain some sensitivity to native sampling frequency. "
+                    "Interpret cross-recording comparisons cautiously; the native rates are retained in provenance."
+                ),
+            }
+        )
+    elif reference_basis == "zcm":
+        payload.update(
+            {
+                "severity": "strong_warning",
+                "decision": "allowed_with_strong_warning",
+                "message": (
+                    f"{common_process} ZCM is particularly sensitive to sampling frequency because zero-crossing counts depend on the sampled signal. "
+                    "ActiLab will allow the joined analysis but strongly warns that matching the analytical epoch does not make the 30-Hz and 100-Hz ZCM values equivalent. "
+                    "For cross-recording comparability, use ENMO/processed acceleration or harmonize the raw sampling frequency before ZCM calculation."
+                ),
+            }
+        )
+    else:
+        payload.update(
+            {
+                "severity": "warning",
+                "decision": "allowed_with_warning",
+                "message": f"{common_process} Review the metric definition before interpreting values across recordings with different native rates.",
+            }
+        )
+    return payload
 
 def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -> tuple[Any, Dict[str, Any]]:
     if len(raw_items) < 2:
@@ -2272,12 +2537,38 @@ def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -
                 "source_files_with_light": source_names if light_summary else [],
                 "source_file_count_with_light": len(source_names) if light_summary else 0,
                 "duplicate_timestamps_removed": {},
+                "segments": [],
             },
         }
 
     series_items = [_activity_series_for_concatenation(raw) for raw in raw_items]
     epochs = [_median_epoch(series) for series in series_items]
     reference_epoch = epochs[0]
+
+    mapping_items = [raw_mapping_metadata(raw) for raw in raw_items]
+    native_rates = [_native_sample_rate_hz(raw) for raw in raw_items]
+    known_native_rates = [rate for rate in native_rates if rate is not None]
+    native_rates_differ = _rates_materially_differ(known_native_rates)
+    reference_basis = (mapping_items[0].get("resolved"), mapping_items[0].get("units"))
+    incompatible_basis = [
+        source_names[index]
+        for index, mapping in enumerate(mapping_items)
+        if (mapping.get("resolved"), mapping.get("units")) != reference_basis
+    ]
+    if incompatible_basis:
+        if native_rates_differ and any(str(mapping.get("resolved") or "").lower() == "original" for mapping in mapping_items):
+            rates = sorted({round(float(rate), 6) for rate in known_native_rates})
+            rate_text = ", ".join(f"{rate:g} Hz" for rate in rates)
+            raise ValueError(
+                f"Native sampling-rate difference detected ({rate_text}), and the selected mapping does not resolve to the same activity basis for every file. "
+                "ActiLab will not combine source/device activity or ActiGraph counts with processed acceleration, or assume counts from different native rates are equivalent. "
+                "Choose ENMO or Processed acceleration so every recording can be independently reduced to the same analytical epoch before joining."
+            )
+        raise ValueError(
+            "Joined participant analysis requires the same resolved activity basis and units across all files. "
+            f"Files with a different resolved basis: {', '.join(incompatible_basis)}. "
+            "Choose an activity mapping that can be calculated consistently for every selected file."
+        )
     incompatible = [
         source_names[index]
         for index, epoch in enumerate(epochs)
@@ -2285,8 +2576,30 @@ def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -
     ]
     if incompatible:
         raise ValueError(
-            "Joined participant analysis requires compatible sampling intervals across all files. "
+            "Joined participant analysis requires compatible sampling intervals after processing across all files. "
             f"Files with a different interval: {', '.join(incompatible)}."
+        )
+
+    sampling_harmonization = _sampling_harmonization_for_join(
+        raw_items, source_names, mapping_items, epochs
+    )
+    if sampling_harmonization.get("decision") == "blocked":
+        raise ValueError(sampling_harmonization.get("message") or "This sampling-rate combination cannot be joined safely.")
+
+    activity_segments = []
+    for index, (series, epoch) in enumerate(zip(series_items, epochs)):
+        activity_segments.append(
+            {
+                "source_file": source_names[index],
+                "start": series.index.min().isoformat(),
+                "stop": series.index.max().isoformat(),
+                "rows": int(len(series)),
+                "non_missing_rows": int(series.notna().sum()),
+                "epoch_seconds": float(epoch.total_seconds()),
+                "raw_sample_rate_hz": _native_sample_rate_hz(raw_items[index]),
+                "activity_basis": mapping_items[index].get("resolved"),
+                "activity_units": mapping_items[index].get("units"),
+            }
         )
 
     combined = pd.concat(series_items).sort_index()
@@ -2295,23 +2608,14 @@ def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -
     if len(combined) < 2:
         raise ValueError("The joined participant timeline contains fewer than two unique timestamps.")
 
-    first = copy.copy(raw_items[0])
-    assigned = False
-    try:
-        first.data = combined
-        assigned = True
-    except Exception:
-        pass
-    if not assigned:
-        for attribute in ("_data", "data"):
-            try:
-                setattr(first, attribute, combined)
-                assigned = True
-                break
-            except Exception:
-                continue
-    if not assigned:
-        raise ValueError("This file type cannot currently be represented as one joined participant timeline.")
+    joined_light, light_join = _joined_light_recording(raw_items, source_names)
+    first = _build_joined_recording(
+        raw_items[0],
+        combined=combined,
+        reference_epoch=reference_epoch,
+        joined_light=joined_light,
+        source_names=source_names,
+    )
 
     # Reader masks are file-local; concatenate them only when every file exposes one.
     masks = []
@@ -2330,16 +2634,10 @@ def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -
     if masks:
         combined_mask = pd.concat(masks).sort_index()
         combined_mask = combined_mask.loc[~combined_mask.index.duplicated(keep="first")].reindex(combined.index)
-        try:
+        with contextlib.suppress(Exception):
             first.mask = combined_mask
-        except Exception:
-            with contextlib.suppress(Exception):
-                setattr(first, "_mask", combined_mask)
 
-    light_join = _attach_joined_light(first, raw_items, source_names)
-
-    metadata = dict(getattr(first, "metadata", None) or {})
-    metadata["participant_join"] = {
+    participant_join = {
         "joined": True,
         "source_files": source_names,
         "source_file_count": len(source_names),
@@ -2347,13 +2645,17 @@ def _concatenate_raw_recordings(raw_items: List[Any], source_names: List[str]) -
         "epoch_seconds": float(reference_epoch.total_seconds()),
         "start": combined.index.min().isoformat(),
         "stop": combined.index.max().isoformat(),
+        "segments": activity_segments,
+        "sampling_harmonization": sampling_harmonization,
         "light": light_join,
     }
+    metadata = dict(getattr(first, "metadata", None) or {})
+    metadata["participant_join"] = participant_join
     with contextlib.suppress(Exception):
         first.metadata = metadata
     with contextlib.suppress(Exception):
-        first.name = " + ".join(source_names)
-    return first, metadata["participant_join"]
+        first._ui_participant_join = participant_join
+    return first, participant_join
 
 
 @app.post("/api/analyze/basic")
@@ -2573,6 +2875,10 @@ def analyze_basic(
                 ]
 
             warnings = list(data_quality.get("warnings") or []) + list(warnings or [])
+
+            sampling_harmonization = (participant_join or {}).get("sampling_harmonization") or {}
+            if sampling_harmonization.get("severity") in {"warning", "strong_warning"} and sampling_harmonization.get("message"):
+                warnings.append(sampling_harmonization["message"])
 
             if requested_mapping != "original" and (algorithm_request or {}).get("id"):
                 warnings.append(

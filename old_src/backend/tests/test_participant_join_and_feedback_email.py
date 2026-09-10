@@ -116,6 +116,170 @@ class ParticipantJoinTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "compatible sampling intervals"):
             app_module._concatenate_raw_recordings([first, second], ["a.csv", "b.csv"])
 
+    def test_join_rebuilds_read_only_pyactigraphy_baseraw_instead_of_leaving_first_file_only(self):
+        class ReadOnlyBaseRaw:
+            def __init__(self, name, uuid, format, axial_mode, start_time, period, frequency, data, light, fpath=None):
+                self._name = name
+                self._uuid = uuid
+                self._format = format
+                self._axial_mode = axial_mode
+                self._start_time = start_time
+                self._period = period
+                self._frequency = frequency
+                self._raw_data = data
+                self._light = light
+                self.fpath = fpath
+                self.display_name = name
+                self.metadata = {}
+                self.mask = None
+
+            @property
+            def name(self):
+                return self._name
+
+            @property
+            def uuid(self):
+                return self._uuid
+
+            @property
+            def format(self):
+                return self._format
+
+            @property
+            def axial_mode(self):
+                return self._axial_mode
+
+            @property
+            def start_time(self):
+                return self._start_time
+
+            @start_time.setter
+            def start_time(self, value):
+                self._start_time = value
+
+            @property
+            def period(self):
+                return self._period
+
+            @period.setter
+            def period(self, value):
+                self._period = value
+
+            @property
+            def frequency(self):
+                return self._frequency
+
+            @property
+            def raw_data(self):
+                return self._raw_data
+
+            @property
+            def data(self):
+                return self._raw_data.loc[self.start_time:self.start_time + self.period]
+
+            @property
+            def light(self):
+                return self._light
+
+            @property
+            def raw_light(self):
+                return self._light
+
+        first_index = pd.date_range("2017-06-29", periods=6, freq="1min")
+        second_index = pd.date_range("2019-09-17", periods=4, freq="1min")
+        first = ReadOnlyBaseRaw("first", "a", "GT3X", None, first_index[0], first_index[-1] - first_index[0], pd.Timedelta(minutes=1), pd.Series(range(6), index=first_index), None)
+        second = ReadOnlyBaseRaw("second", "b", "GT3X", None, second_index[0], second_index[-1] - second_index[0], pd.Timedelta(minutes=1), pd.Series(range(10, 14), index=second_index), None)
+
+        with mock.patch.object(app_module, "PyActigraphyBaseRaw", ReadOnlyBaseRaw):
+            joined, metadata = app_module._concatenate_raw_recordings([first, second], ["2017.gt3x", "2019.gt3x"])
+
+        self.assertTrue(metadata["joined"])
+        self.assertEqual(joined.data.index.min(), first_index[0])
+        self.assertEqual(joined.data.index.max(), second_index[-1])
+        self.assertEqual(joined.data.loc[second_index[0]], 10)
+        self.assertEqual(len(metadata["segments"]), 2)
+
+    def test_joined_preview_keeps_short_late_segment_visible_across_multi_year_gap(self):
+        first_index = pd.date_range("2017-04-24", periods=24 * 60, freq="1min")
+        second_index = pd.date_range("2019-09-17 18:40", periods=41, freq="1min")
+        first = DummyRaw(pd.Series(range(len(first_index)), index=first_index, dtype=float))
+        second = DummyRaw(pd.Series(range(len(second_index)), index=second_index, dtype=float))
+
+        joined, metadata = app_module._concatenate_raw_recordings([first, second], ["2017.gt3x", "2019.gt3x"])
+        preview = app_module.build_native_preview(joined, activity_channel="activity", resample_freq="1min")
+
+        timestamps = [row["timestamp"] for row in preview["full_recording_preview"] if not row.get("is_gap")]
+        self.assertTrue(any(ts.startswith("2017-") for ts in timestamps))
+        self.assertTrue(any(ts.startswith("2019-") for ts in timestamps))
+        self.assertTrue(any(row.get("is_gap") for row in preview["full_recording_preview"]))
+        # The preview should not materialise every empty minute between 2017 and 2019.
+        self.assertLess(preview["summary"]["rows"], 2000)
+        self.assertEqual(metadata["segments"][1]["source_file"], "2019.gt3x")
+
+    def _raw_with_rate_and_mapping(self, start, rate_hz, mapping):
+        index = pd.date_range(start, periods=4, freq="30s")
+        raw = DummyRaw(pd.Series([1.0, 2.0, 3.0, 4.0], index=index))
+        raw._ui_gt3x_summary = {"sample_rate": rate_hz}
+        raw._ui_activity_mapping_metadata = app_module.mapping_metadata(mapping, mapping)
+        raw._ui_activity_mapping = mapping
+        raw._ui_activity_mapping_requested = mapping
+        raw._ui_activity_units = app_module.mapping_metadata(mapping, mapping).get("units")
+        return raw
+
+    def test_different_native_rates_enmo_join_with_information(self):
+        first = self._raw_with_rate_and_mapping("2026-01-01", 30, "enmo")
+        second = self._raw_with_rate_and_mapping("2026-01-02", 100, "enmo")
+        joined, metadata = app_module._concatenate_raw_recordings([first, second], ["30hz.gt3x", "100hz.gt3x"])
+        harmonization = metadata["sampling_harmonization"]
+        self.assertTrue(harmonization["native_rates_differ"])
+        self.assertEqual(harmonization["severity"], "info")
+        self.assertEqual(harmonization["decision"], "allowed_with_information")
+        self.assertEqual(harmonization["native_sample_rates_hz"], [30.0, 100.0])
+        self.assertEqual(harmonization["processed_epoch_seconds"], 30.0)
+        self.assertFalse(harmonization["raw_frequency_resampled"])
+        self.assertEqual(len(joined.data), 8)
+
+    def test_different_native_rates_mad_and_pim_join_with_warning(self):
+        for mapping in ("mad", "pim"):
+            with self.subTest(mapping=mapping):
+                first = self._raw_with_rate_and_mapping("2026-01-01", 30, mapping)
+                second = self._raw_with_rate_and_mapping("2026-01-02", 100, mapping)
+                _, metadata = app_module._concatenate_raw_recordings([first, second], ["30hz.gt3x", "100hz.gt3x"])
+                self.assertEqual(metadata["sampling_harmonization"]["severity"], "warning")
+                self.assertIn(mapping.upper(), metadata["sampling_harmonization"]["message"])
+
+    def test_different_native_rates_zcm_join_with_strong_warning(self):
+        first = self._raw_with_rate_and_mapping("2026-01-01", 30, "zcm")
+        second = self._raw_with_rate_and_mapping("2026-01-02", 100, "zcm")
+        _, metadata = app_module._concatenate_raw_recordings([first, second], ["30hz.gt3x", "100hz.gt3x"])
+        harmonization = metadata["sampling_harmonization"]
+        self.assertEqual(harmonization["severity"], "strong_warning")
+        self.assertIn("sampling frequency", harmonization["message"])
+
+    def test_different_native_rates_source_activity_is_blocked(self):
+        first = self._raw_with_rate_and_mapping("2026-01-01", 30, "original")
+        second = self._raw_with_rate_and_mapping("2026-01-02", 100, "original")
+        with self.assertRaisesRegex(ValueError, "does not join source/device activity or ActiGraph counts"):
+            app_module._concatenate_raw_recordings([first, second], ["30hz.gt3x", "100hz.gt3x"])
+
+    def test_joined_light_preview_keeps_each_source_visible_across_multi_year_gap(self):
+        first_index = pd.date_range("2017-04-24", periods=240, freq="1min")
+        second_index = pd.date_range("2019-09-17 18:40", periods=41, freq="1min")
+        first = DummyRaw(
+            pd.Series(range(len(first_index)), index=first_index, dtype=float),
+            {"LIGHT": pd.Series(range(len(first_index)), index=first_index, dtype=float)},
+        )
+        second = DummyRaw(
+            pd.Series(range(len(second_index)), index=second_index, dtype=float),
+            {"LIGHT": pd.Series(range(len(second_index)), index=second_index, dtype=float)},
+        )
+        joined, _ = app_module._concatenate_raw_recordings([first, second], ["2017.gt3x", "2019.gt3x"])
+        preview = app_module.build_light_preview(joined, resample_freq="1min")
+        timestamps = [row["timestamp"] for row in preview["light_preview"] if not row.get("is_gap")]
+        self.assertTrue(any(ts.startswith("2017-") for ts in timestamps))
+        self.assertTrue(any(ts.startswith("2019-") for ts in timestamps))
+        self.assertTrue(any(row.get("is_gap") for row in preview["light_preview"]))
+
 
 class FeedbackNotificationTests(unittest.TestCase):
     @mock.patch("backend.app.smtplib.SMTP")
