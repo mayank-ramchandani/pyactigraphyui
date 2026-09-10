@@ -7,7 +7,7 @@ This directory contains the public documentation for researchers and analysts us
 ## Start here
 
 1. Read the [User guide](USER_GUIDE.md) for the complete ten-step workflow.
-2. Review [Preprocessing and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) before changing the recommended defaults.
+2. Review [Preprocessing and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) before changing the recommended Analysis settings in Step 8.
 3. Check [Supported file formats](FILE_FORMATS.md) and [Choosing an activity measure](ACTIVITY_PROCESSING.md) when preparing data.
 4. Use [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) to understand the available analyses.
 5. Use [Troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) when a result is missing or a run fails.
@@ -52,4 +52,4 @@ After at least one actigraphy file is uploaded, Steps 2–9 can be opened direct
 - **Unavailable result:** a metric that could not be calculated because required data, valid windows, sleep windows, or supported signals were not available.
 - **Warning:** processing continued, but the result or data quality requires review.
 
-Last updated: **2026-09-08**.
+Last updated: **2026-09-10**.

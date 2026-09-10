@@ -1,3 +1,15 @@
+# What’s new
+
+This page summarizes changes that affect users of the application. Internal deployment and implementation details are documented separately from the public user guide.
+
+## 2026-09-10
+
+- Fixed theme inconsistency by making ActiLab use a consistent light colour scheme instead of inheriting the operating system/browser dark-mode preference.
+- Moved the workflow sidebar to the top of the page and centred the ActiLab logo/header within the main workflow content area.
+- Moved accepted-file and multiple-file guidance into a hover tooltip on the actigraphy upload box.
+- Moved validity thresholds, 24-hour period definition, and detected/mapped non-wear handling to **Step 8: Analysis Set-up** under **Analysis settings**.
+- Removed the duplicate detected non-wear toggle from Cleaning and Masking.
+
 ## 2026-09-08 — Joined participant fixes and sampling-rate harmonization
 
 - Joined participant mode now distinguishes native/raw accelerometer sampling rate from the common analytical epoch used after processing. Raw 30-Hz and 100-Hz samples are never directly concatenated.
@@ -10,6 +22,7 @@
 - Added validation that all joined files resolve to the same activity basis/units before they are combined.
 - Updated the user documentation and in-app Documentation panel to explain native sampling rate versus analytical epoch, metric-specific join safeguards, blocking conditions, and provenance for mixed-frequency recordings.
 
+
 ## 2026-08-26 — Participant-level file joining and feedback alerts
 
 - Expanded the opt-in same-participant join into an end-to-end workflow mode selected from Step 1 (and reviewable in Results).
@@ -18,10 +31,6 @@
 - Joined analysis validates compatible sampling intervals, preserves real timestamp gaps, and removes duplicate boundary timestamps before metric calculation.
 - Added optional minimal feedback notification emails to the designated project contact; notifications contain only feedback ID, submitter email, filename, workflow step, and category.
 - Updated privacy wording so uploaded/job data and feedback are described as automatically deleted no later than 30 days, with temporary files potentially deleted sooner.
-
-# What’s new
-
-This page summarizes changes that affect users of the application. Internal deployment and implementation details are documented separately from the public user guide.
 
 ## 2026-08-05 — User-focused documentation
 

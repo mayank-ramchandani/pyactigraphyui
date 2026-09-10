@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import InteractiveIntervalSelector from "./InteractiveIntervalSelector";
+import AnalysisSettingsPanel from "./AnalysisSettingsPanel";
 import {
   getAlgorithmDescription,
   getAlgorithmParameters,
@@ -137,6 +138,8 @@ export default function MetricsPanel({
   previewData = null,
   analysisWindowSettings = {},
   setAnalysisWindowSettings = () => {},
+  dataQualitySettings = {},
+  setDataQualitySettings = () => {},
   mode = "all",
 }) {
   const [detailsAlgorithmId, setDetailsAlgorithmId] = useState(null);
@@ -464,6 +467,13 @@ export default function MetricsPanel({
       >
         Detected input type: <strong>{detectedInputLabel}</strong>.
       </div>
+
+      {showMetricSections && (
+        <AnalysisSettingsPanel
+          settings={dataQualitySettings}
+          onSettingsChange={setDataQualitySettings}
+        />
+      )}
 
       {showSleepSections && (
         <>

@@ -1,6 +1,6 @@
 # User guide
 
-This guide follows the ten pages in the application. For a standard first analysis, keep the recommended preprocessing and activity settings, preview every recording, review warnings, and export the configuration with the results.
+This guide follows the ten pages in the application. For a standard first analysis, review preprocessing QC, keep the recommended analysis and activity settings, preview every recording, review warnings, and export the configuration with the results.
 
 ## Before you begin
 
@@ -25,17 +25,9 @@ After upload, confirm that each file appears in the list and that duplicate file
 
 ## 2. Pre-processing
 
-Review the initial recording-coverage table and the recommended settings:
+Review the initial recording-coverage table for each uploaded recording. This page is intended for early quality-control review before activity estimation, cleaning, sleep-wake classification, and final analysis.
 
-- at least **16 analyzable hours** for a valid quality window;
-- **calendar-day windows** as the recommended default;
-- at least **2 consecutive valid quality windows** for multi-day rhythm metrics and SRI eligibility;
-- at least **80% sleep-window coverage** for sleep summaries;
-- detected or mapped non-wear respected when available.
-
-Choose recording-aligned 24-hour windows only when the study is intentionally organized around deployment time or when you are performing a sensitivity analysis for short recordings.
-
-Customize the recommended thresholds only when your protocol or analysis plan specifies different values.
+The table summarizes recorded time, gaps, detected or mapped non-wear, and the current validity assessment. Final analysis settings—including the quality-window definition, thresholds, and whether detected or mapped non-wear should be respected—are configured in **Step 8: Analysis Set-up**.
 
 ## 3. Estimating Activity Metric
 
@@ -114,6 +106,16 @@ A file with no usable light still proceeds through activity analysis. Only the l
 Temperature and other sensor files can be attached for record-keeping, but the current version does not calculate temperature or generic sensor metrics. These files are labelled as not yet analysed.
 
 ## 8. Analysis Set-up
+
+Configure the **Analysis settings** first. The recommended starting settings are:
+
+- at least **16 analyzable hours** for a valid quality window;
+- **calendar-day windows** as the recommended 24-hour definition;
+- at least **2 consecutive valid quality windows** for multi-day rhythm metrics and SRI eligibility;
+- at least **80% sleep-window coverage** for sleep summaries;
+- detected or mapped non-wear respected when available.
+
+Choose recording-aligned 24-hour windows or customize the thresholds only when required by the study protocol or a planned sensitivity analysis.
 
 Use **Standard mode** for common analysis groups and recommended starting parameters. Use **Custom mode** when individual metrics or protocol-specific settings are required.
 

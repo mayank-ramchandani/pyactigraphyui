@@ -37,7 +37,7 @@ Start with the [ActiLab user documentation](docs/README.md).
 ## Recommended first analysis
 
 - Use de-identified files.
-- Keep the recommended preprocessing settings unless the study protocol requires different criteria.
+- Review preprocessing QC, then keep the recommended Analysis settings in Step 8 unless the study protocol requires different criteria.
 - Use the recommended source / processed acc activity measure unless a specific signal is required.
 - Preview every recording before analysis.
 - Review all warnings, missing metrics, valid-window decisions, and sleep-window exclusions.
