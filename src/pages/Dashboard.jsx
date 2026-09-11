@@ -1484,11 +1484,6 @@ export default function Dashboard() {
         };
       case "7":
         return {
-          valid: true,
-          message: lightPreviewLoaded ? "" : "Light and other sensor processing is optional.",
-        };
-      case "8":
-        return {
           valid: customThresholdsValid && selectedAnalysisFileNames.length > 0 && hasMetrics,
           message: !customThresholdsValid
             ? "Use 1–24 valid hours, at least 1 consecutive valid window, and sleep-window coverage between 0 and 1."
@@ -1497,6 +1492,11 @@ export default function Dashboard() {
             : !hasMetrics
             ? "Choose at least one analysis family or metric."
             : "",
+        };
+      case "8":
+        return {
+          valid: true,
+          message: lightPreviewLoaded ? "" : "Light and other sensor processing is optional.",
         };
       case "9":
         return {
@@ -1717,6 +1717,14 @@ export default function Dashboard() {
     );
   } else if (currentStep === "7") {
     content = (
+      <MetricsPanel
+        {...metricsPanelProps}
+        title={appConfig.panels.metrics.title}
+        mode="metrics"
+      />
+    );
+  } else if (currentStep === "8") {
+    content = (
       <OtherSensorsPanel
         title={appConfig.panels.otherSensors.title}
         participantFileMode={participantFileMode}
@@ -1767,14 +1775,6 @@ export default function Dashboard() {
           setLightPreviewData({ ...data, light_preview_file_name: joinedParticipantMode ? joinedParticipantLabel : lightFile.name, light_preview_file_key: lightFileKey });
           setLightPreviewLoaded(true);
         }}
-      />
-    );
-  } else if (currentStep === "8") {
-    content = (
-      <MetricsPanel
-        {...metricsPanelProps}
-        title={appConfig.panels.metrics.title}
-        mode="metrics"
       />
     );
   } else if (currentStep === "9") {

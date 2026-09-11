@@ -1,14 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 
 export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep, visitedSteps = [], onStepClick }) {
   const currentStepNumber = Number(currentStep);
   const unlockedStepNumber = Number(maxUnlockedStep || currentStep);
-  const activeStepRef = useRef(null);
-
-  useEffect(() => {
-    if (!activeStepRef.current) return;
-    activeStepRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [currentStep]);
 
   const progressPercent = workflow.length
     ? Math.max(0, Math.min(100, (currentStepNumber / workflow.length) * 100))
@@ -25,11 +19,10 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
         boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
         display: "flex",
         flexDirection: "column",
-        maxHeight: "calc(100vh - 32px)",
-        overflow: "hidden",
+        overflow: "visible",
       }}
     >
-      <div style={{ flex: "0 0 auto", padding: "2px 2px 10px" }}>
+      <div style={{ flex: "0 0 auto", padding: "2px 2px 12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}>
             Workflow
@@ -52,7 +45,7 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
         </div>
 
         <div style={{ fontSize: 12.5, color: "#475569", lineHeight: 1.5 }}>
-          Jump to any unlocked step. The current step stays visible as you move through the workflow.
+          Jump to any unlocked step. Hover over a step to view its description.
         </div>
       </div>
 
@@ -60,10 +53,9 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
         className="workflow-step-list"
         style={{
           display: "grid",
-          gap: 7,
-          overflowY: "auto",
-          overscrollBehavior: "contain",
-          paddingRight: 2,
+          gap: 8,
+          paddingRight: 0,
+          overflow: "visible",
         }}
       >
         {workflow.map((item) => {
@@ -75,11 +67,12 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
           return (
             <button
               key={item.id}
-              ref={isActive ? activeStepRef : null}
               type="button"
+              className={`workflow-step-button${isActive ? " is-active" : ""}${!isUnlocked ? " is-locked" : ""}`}
               disabled={!isUnlocked}
               onClick={() => isUnlocked && onStepClick?.(item.id)}
               aria-current={isActive ? "step" : undefined}
+              aria-label={item.description ? `${item.title}. ${item.description}` : item.title}
               title={item.description ? `${item.title}: ${item.description}` : item.title}
               style={{
                 display: "grid",
@@ -89,12 +82,14 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
                 width: "100%",
                 border: isActive ? "1px solid #0f172a" : "1px solid #e2e8f0",
                 borderRadius: 12,
-                padding: isActive ? "11px 10px" : "9px 10px",
-                background: isActive ? "#f1f5f9" : "white",
+                padding: "10px 10px",
+                background: isActive ? "#f8fafc" : "white",
                 opacity: isUnlocked ? 1 : 0.5,
                 textAlign: "left",
                 cursor: isUnlocked ? "pointer" : "not-allowed",
-                minHeight: isActive ? 66 : 50,
+                minHeight: 50,
+                position: "relative",
+                overflow: "visible",
               }}
             >
               <span
@@ -117,14 +112,9 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
               </span>
 
               <span style={{ minWidth: 0 }}>
-                <span style={{ display: "block", fontWeight: isActive ? 800 : 700, color: "#0f172a", lineHeight: 1.3, fontSize: 13.5 }}>
+                <span style={{ display: "block", fontWeight: isActive ? 800 : 700, color: "#0f172a", lineHeight: 1.35, fontSize: 13.5 }}>
                   {item.title}
                 </span>
-                {isActive && item.description && (
-                  <span style={{ display: "block", color: "#334155", fontSize: 12.5, lineHeight: 1.5, marginTop: 5, fontWeight: 500 }}>
-                    {item.description}
-                  </span>
-                )}
               </span>
 
               <span
@@ -140,6 +130,13 @@ export default function WorkflowSidebar({ workflow, currentStep, maxUnlockedStep
               >
                 {isActive ? "Current" : isUnlocked ? "" : "Locked"}
               </span>
+
+              {item.description && (
+                <span className="workflow-step-tooltip" role="tooltip" aria-hidden="true">
+                  <span className="workflow-step-tooltip-title">{item.title}</span>
+                  <span>{item.description}</span>
+                </span>
+              )}
             </button>
           );
         })}

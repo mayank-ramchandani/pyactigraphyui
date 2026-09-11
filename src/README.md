@@ -7,13 +7,13 @@ A web application for importing actigraphy recordings, reviewing data quality, s
 ## User workflow
 
 1. Importing Actigraphy Files
-2. Pre-processing
+2. Initial QC
 3. Estimating Activity Metric
 4. Activity Preview
 5. Cleaning and Masking
 6. Sleep-wake Classification
-7. Other Sensors
-8. Analysis Set-up
+7. Analysis Set-up
+8. Other Sensors
 9. Generate Results
 10. Export Outputs
 
@@ -24,7 +24,7 @@ After an actigraphy file is uploaded, Steps 2–9 can be opened directly from th
 Start with the [ActiLab user documentation](docs/README.md).
 
 - [User guide](docs/USER_GUIDE.md)
-- [Preprocessing and data-quality settings](docs/PREPROCESSING_VALIDITY_RULES.md)
+- [Initial QC and data-quality settings](docs/PREPROCESSING_VALIDITY_RULES.md)
 - [Supported file formats](docs/FILE_FORMATS.md)
 - [Choosing an activity measure](docs/ACTIVITY_PROCESSING.md)
 - [Metrics and algorithms](docs/METRICS_AND_ALGORITHMS.md)
@@ -37,7 +37,7 @@ Start with the [ActiLab user documentation](docs/README.md).
 ## Recommended first analysis
 
 - Use de-identified files.
-- Review preprocessing QC, then keep the recommended Analysis settings in Step 8 unless the study protocol requires different criteria.
+- Review preprocessing QC, then keep the recommended Analysis settings in Step 7 unless the study protocol requires different criteria.
 - Use the recommended source / processed acc activity measure unless a specific signal is required.
 - Preview every recording before analysis.
 - Review all warnings, missing metrics, valid-window decisions, and sleep-window exclusions.

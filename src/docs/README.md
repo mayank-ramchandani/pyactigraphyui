@@ -7,7 +7,7 @@ This directory contains the public documentation for researchers and analysts us
 ## Start here
 
 1. Read the [User guide](USER_GUIDE.md) for the complete ten-step workflow.
-2. Review [Preprocessing and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) before changing the recommended Analysis settings in Step 8.
+2. Review [Initial QC and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) before changing the recommended Analysis settings in Step 7.
 3. Check [Supported file formats](FILE_FORMATS.md) and [Choosing an activity measure](ACTIVITY_PROCESSING.md) when preparing data.
 4. Use [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) to understand the available analyses.
 5. Use [Troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) when a result is missing or a run fails.
@@ -17,7 +17,7 @@ This directory contains the public documentation for researchers and analysts us
 | I need to… | Read… |
 |---|---|
 | Complete an analysis from upload to export | [User guide](USER_GUIDE.md) |
-| Decide whether to keep or change the recommended quality thresholds | [Preprocessing and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) |
+| Decide whether to keep or change the recommended quality thresholds | [Initial QC and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) |
 | Confirm whether a recording or CSV layout is supported | [Supported file formats](FILE_FORMATS.md) |
 | Choose between processed acceleration, ENMO, MAD, PIM, ZCM, or source counts | [Choosing an activity measure](ACTIVITY_PROCESSING.md) |
 | Join recordings collected at different native sampling rates | [Choosing an activity measure](ACTIVITY_PROCESSING.md#joining-recordings-with-different-native-sampling-rates) |
@@ -30,13 +30,13 @@ This directory contains the public documentation for researchers and analysts us
 ## Workflow
 
 1. Importing Actigraphy Files
-2. Pre-processing
+2. Initial QC
 3. Estimating Activity Metric
 4. Activity Preview
 5. Cleaning and Masking
 6. Sleep-wake Classification
-7. Other Sensors
-8. Analysis Set-up
+7. Analysis Set-up
+8. Other Sensors
 9. Generate Results
 10. Export Outputs
 
@@ -52,4 +52,4 @@ After at least one actigraphy file is uploaded, Steps 2–9 can be opened direct
 - **Unavailable result:** a metric that could not be calculated because required data, valid windows, sleep windows, or supported signals were not available.
 - **Warning:** processing continued, but the result or data quality requires review.
 
-Last updated: **2026-09-10**.
+Last updated: **2026-09-11**.

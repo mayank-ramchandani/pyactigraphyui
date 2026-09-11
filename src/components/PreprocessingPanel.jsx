@@ -101,7 +101,7 @@ function InitialQcCard({ entry, payload, loading, error, settings }) {
 }
 
 export default function PreprocessingPanel({
-  title = "2. Pre-processing",
+  title = "2. Initial QC",
   settings = {},
   actigraphyFiles = [],
   initialQcByFile = {},
@@ -137,7 +137,7 @@ export default function PreprocessingPanel({
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 18, lineHeight: 1.55 }}>
-        Review initial data coverage before continuing through the workflow. Final analysis settings are configured in Step 8, Analysis Set-up.
+        Review initial data coverage before continuing through the workflow. Final analysis settings are configured in Step 7, Analysis Set-up.
       </p>
 
       <div style={{ border: "1px solid #bfdbfe", borderRadius: 16, padding: 16, background: "#eff6ff", marginBottom: 16 }}>

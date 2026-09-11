@@ -61,7 +61,7 @@
     {
       "id": "2",
       "key": "preprocessing",
-      "title": "Pre-processing",
+      "title": "Initial QC",
       "description": "Review initial per-file data coverage and quality-control information before activity estimation."
     },
     {
@@ -90,15 +90,15 @@
     },
     {
       "id": "7",
-      "key": "otherSensors",
-      "title": "Other Sensors",
-      "description": "Preview and configure light analysis; attach temperature or other sensor files for future support."
-    },
-    {
-      "id": "8",
       "key": "metrics",
       "title": "Analysis Set-up",
       "description": "Configure analysis settings, including validity thresholds, 24-hour period definition and non-wear handling, then choose analysis families or individual metrics."
+    },
+    {
+      "id": "8",
+      "key": "otherSensors",
+      "title": "Other Sensors",
+      "description": "Preview and configure light analysis; attach temperature or other sensor files for future support."
     },
     {
       "id": "9",
@@ -120,7 +120,7 @@
     },
     "preprocessing": {
       "enabled": true,
-      "title": "2. Pre-processing"
+      "title": "2. Initial QC"
     },
     "activityMapping": {
       "enabled": true,
@@ -152,7 +152,7 @@
     },
     "otherSensors": {
       "enabled": true,
-      "title": "7. Other Sensors"
+      "title": "8. Other Sensors"
     },
     "lightPreview": {
       "enabled": true,
@@ -160,7 +160,7 @@
     },
     "metrics": {
       "enabled": true,
-      "title": "8. Analysis Set-up"
+      "title": "7. Analysis Set-up"
     },
     "results": {
       "enabled": true,

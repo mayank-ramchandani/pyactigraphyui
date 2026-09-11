@@ -1,3 +1,9 @@
+## 2026-09-11 — Workflow order and labels
+
+- Renamed Step 2 from **Pre-processing** to **Initial QC**.
+- Moved **Analysis Set-up** to Step 7 and **Other Sensors** to Step 8.
+- Simplified the Analysis settings wording by removing “recommended” labels and shortening the consecutive-valid-window label.
+
 ## 2026-09-10 — Workflow sidebar readability
 
 - Increased the workflow sidebar width slightly on desktop so long step names and descriptions wrap less aggressively.

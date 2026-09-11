@@ -42,13 +42,13 @@ const NARRATIVE_SEARCH_TEXT = {
 const SECTIONS = [
   { id: "overview", label: "Start here" },
   { id: "workflow", label: "10-step workflow" },
-  { id: "preprocessing", label: "Pre-processing" },
+  { id: "preprocessing", label: "Initial QC" },
   { id: "files", label: "File formats" },
   { id: "activity", label: "Choosing an activity measure" },
   { id: "cleaning", label: "Cleaning & masking" },
   { id: "sleep", label: "Sleep-wake classification" },
-  { id: "sensors", label: "Light & other sensors" },
   { id: "metrics", label: "Metrics & analysis" },
+  { id: "sensors", label: "Light & other sensors" },
   { id: "results", label: "Results & export" },
   { id: "troubleshooting", label: "Troubleshooting" },
   { id: "methods", label: "Methods & reproducibility" },
@@ -166,27 +166,27 @@ export default function DocumentationPanel({ onClose }) {
           <Table headers={["Step", "Page", "What you do"]} rows={appConfig.workflow.map((step) => [step.id, step.title, step.description])} />
         </Card>
         <Card title="Where to add supporting files">
-          Upload actigraphy recordings on Step 1. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 7. Steps 2–9 can be opened from the left workflow after at least one actigraphy file is uploaded. Export unlocks after results are generated.
+          Upload actigraphy recordings on Step 1. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 8. Steps 2–9 can be opened from the left workflow after at least one actigraphy file is uploaded. Export unlocks after results are generated.
         </Card>
       </div>
     ),
     preprocessing: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Pre-processing QC and Analysis settings">
-          <p>Step 2 is for initial recording-coverage and quality-control review. The settings below are configured later under <strong>Analysis settings</strong> on Step 8: Analysis Set-up.</p>
+        <Card title="Initial QC and Analysis settings">
+          <p>Step 2 is for initial recording-coverage and quality-control review. The settings below are configured later under <strong>Analysis settings</strong> on Step 7: Analysis Set-up.</p>
           <ul style={{ margin: 0, paddingLeft: 22 }}>
             <li><strong>Valid quality window:</strong> at least 16 analyzable hours.</li>
             <li><strong>Multi-day rhythm and SRI eligibility:</strong> at least 2 consecutive valid quality windows.</li>
             <li><strong>Sleep-window coverage:</strong> at least 80% of expected epochs remain available and scorable.</li>
           </ul>
-          <p style={{ marginBottom: 0 }}>Keep these settings for a standard analysis. Step 8 also contains the calendar-day versus recording-aligned 24-hour definition and the option to respect detected or mapped non-wear.</p>
+          <p style={{ marginBottom: 0 }}>Keep these settings for a standard analysis. Step 7 also contains the calendar-day versus recording-aligned 24-hour definition and the option to respect detected or mapped non-wear.</p>
         </Card>
         <Card title="Calendar day or recording-aligned window?">
           <p><strong>Calendar day</strong> is the recommended default. It evaluates midnight-to-midnight periods and keeps daily summaries aligned with clock dates.</p>
           <p style={{ marginBottom: 0 }}><strong>Recording-aligned 24-hour windows</strong> begin at the first retained timestamp. They can be useful for short recordings or studies organized around the device-deployment time. The selected approach is included in the results and exports.</p>
         </Card>
         <Card title="How missing and excluded data are handled">
-          Recording gaps, detected non-wear, and manual masks remain unavailable. They are not changed to zero activity. Initial quality information appears on Step 2. Final quality is recalculated during analysis using the settings selected in Step 8 after start/stop limits and masks are applied.
+          Recording gaps, detected non-wear, and manual masks remain unavailable. They are not changed to zero activity. Initial quality information appears on Step 2. Final quality is recalculated during analysis using the settings selected in Step 7 after start/stop limits and masks are applied.
         </Card>
         <Card title="Sleep-window coverage">
           Coverage compares the expected epochs inside a sleep window with the epochs still available after gaps, non-wear, start/stop limits, and masks. At the recommended threshold of <Code>0.8</Code>, at least 80% must remain. Lower-coverage windows are excluded from sleep summaries rather than filled in.
@@ -254,7 +254,7 @@ export default function DocumentationPanel({ onClose }) {
     sensors: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Light data">
-          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. In joined participant mode, light data are also joined by their real timestamps across the participant timeline, and periods without light remain missing rather than being treated as zero exposure.
+          Step 8 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. In joined participant mode, light data are also joined by their real timestamps across the participant timeline, and periods without light remain missing rather than being treated as zero exposure.
         </Card>
         <Card title="RGB and multichannel light">
           When red, green, blue, white, or lux channels are available, the preview identifies them separately. Confirm the units and channel used by each selected light metric, especially when choosing thresholds.
@@ -273,7 +273,7 @@ export default function DocumentationPanel({ onClose }) {
           <Table headers={["Code", "Metric", "Category", "What it describes"]} rows={metricRows} />
         </Card>
         <Card title="Choosing Standard or Custom mode">
-          Step 8 first lets you review the Analysis settings for validity thresholds, 24-hour period definition, sleep-window coverage, and non-wear handling. Use Standard mode for common analysis groups with their recommended starting parameters. Use Custom mode when you need individual metrics or protocol-specific settings. Step 8 configures the analysis; Step 9 runs it.
+          Step 7 first lets you review the Analysis settings for validity thresholds, 24-hour period definition, sleep-window coverage, and non-wear handling. Use Standard mode for common analysis groups with their recommended starting parameters. Use Custom mode when you need individual metrics or protocol-specific settings. Step 7 configures the analysis; Step 8 handles optional sensor review; Step 9 runs the analysis.
         </Card>
       </div>
     ),

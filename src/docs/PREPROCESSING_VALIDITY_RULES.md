@@ -1,6 +1,6 @@
 # Preprocessing and data-quality settings
 
-These settings are configured under **Analysis settings** on **Step 8: Analysis Set-up**. Step 2 is used for initial preprocessing/data-coverage QC, while start/stop limits and manual/uploaded masks are configured on **Step 5: Cleaning and Masking**.
+These settings are configured under **Analysis settings** on **Step 7: Analysis Set-up**. Step 2 is used for Initial QC/data-coverage review, while start/stop limits and manual/uploaded masks are configured on **Step 5: Cleaning and Masking**.
 
 ## Recommended starting settings
 
@@ -15,7 +15,7 @@ These values are starting points. A study protocol may require different criteri
 
 ## Initial and final quality checks
 
-The initial table on Step 2 summarizes each candidate quality window before manual start/stop limits and masks are applied. It shows recorded time, gaps, detected or mapped non-wear, effective analyzable time, and whether the currently configured minimum-hours threshold is met. The final settings are reviewed or changed later in Step 8.
+The Initial QC table on Step 2 summarizes each candidate quality window before manual start/stop limits and masks are applied. It shows recorded time, gaps, detected or mapped non-wear, effective analyzable time, and whether the currently configured minimum-hours threshold is met. The final settings are reviewed or changed later in Step 7.
 
 Final quality is recalculated during analysis after all selected preprocessing choices have been applied.
 

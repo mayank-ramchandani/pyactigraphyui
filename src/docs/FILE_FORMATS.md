@@ -1,6 +1,6 @@
 # Supported file formats
 
-Upload actigraphy recordings on **Step 1**. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 7.
+Upload actigraphy recordings on **Step 1**. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 8.
 
 Support depends on both the file extension and the signals or columns actually contained in the file.
 

@@ -17,17 +17,17 @@ Upload one or more actigraphy recordings. Supporting files are added later, besi
 
 - start/stop files and masks: Step 5;
 - sleep diaries: Step 6;
-- separate light or other sensor files: Step 7.
+- separate light or other sensor files: Step 8.
 
 For CSV or TXT files, the application attempts to detect timestamp, activity, light, temperature, and non-wear columns. Enable manual mapping only when the detected columns are incorrect.
 
 After upload, confirm that each file appears in the list and that duplicate filenames can be distinguished by their file ID.
 
-## 2. Pre-processing
+## 2. Initial QC
 
 Review the initial recording-coverage table for each uploaded recording. This page is intended for early quality-control review before activity estimation, cleaning, sleep-wake classification, and final analysis.
 
-The table summarizes recorded time, gaps, detected or mapped non-wear, and the current validity assessment. Final analysis settings—including the quality-window definition, thresholds, and whether detected or mapped non-wear should be respected—are configured in **Step 8: Analysis Set-up**.
+The table summarizes recorded time, gaps, detected or mapped non-wear, and the current validity assessment. Final analysis settings—including the quality-window definition, thresholds, and whether detected or mapped non-wear should be respected—are configured in **Step 7: Analysis Set-up**.
 
 ## 3. Estimating Activity Metric
 
@@ -93,19 +93,7 @@ A sleep result may be unavailable when:
 - the classification method could not score the signal;
 - the window did not meet the configured coverage threshold.
 
-## 7. Other Sensors
-
-### Light
-
-Use light embedded in a supported actigraphy file or upload separate light files. In joined participant mode, all separate light files are joined by their real timestamps; when no separate light files are supplied, embedded light is collected across the joined actigraphy files. Files or periods without light remain missing rather than being interpreted as zero lux. Review the joined channels and preview before selecting light metrics.
-
-A file with no usable light still proceeds through activity analysis. Only the light outputs are skipped.
-
-### Temperature and additional sensors
-
-Temperature and other sensor files can be attached for record-keeping, but the current version does not calculate temperature or generic sensor metrics. These files are labelled as not yet analysed.
-
-## 8. Analysis Set-up
+## 7. Analysis Set-up
 
 Configure the **Analysis settings** first. The recommended starting settings are:
 
@@ -127,7 +115,20 @@ Available families include:
 - fragmentation;
 - Cosinor.
 
-Step 8 configures the analysis. It does not run it.
+Step 7 configures the analysis. It does not run it.
+
+
+## 8. Other Sensors
+
+### Light
+
+Use light embedded in a supported actigraphy file or upload separate light files. In joined participant mode, all separate light files are joined by their real timestamps; when no separate light files are supplied, embedded light is collected across the joined actigraphy files. Files or periods without light remain missing rather than being interpreted as zero lux. Review the joined channels and preview before selecting light metrics.
+
+A file with no usable light still proceeds through activity analysis. Only the light outputs are skipped.
+
+### Temperature and additional sensors
+
+Temperature and other sensor files can be attached for record-keeping, but the current version does not calculate temperature or generic sensor metrics. These files are labelled as not yet analysed.
 
 ## 9. Generate Results
 
