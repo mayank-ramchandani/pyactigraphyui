@@ -1,8 +1,10 @@
 """Streaming epoch reducers for raw acceleration-derived activity mappings.
 
-The reducers operate on calibrated vector magnitude after optional filtering.
-They retain only epoch totals, so memory use scales with the number of output
-rows rather than the raw sample count.
+The reducers in this module intentionally receive *metric-specific* inputs.
+PIM, ZCM, and TAT use unfiltered gravity-normalized vector magnitude
+``abs(VM - 1 g)`` in milligravity units.  ENMO and MAD are calculated by their
+dedicated loaders.  This keeps signal processing order explicit instead of
+applying one global filter to every activity representation.
 """
 
 from __future__ import annotations
@@ -15,6 +17,40 @@ import pandas as pd
 
 
 DEFAULT_ZCM_THRESHOLD_MG = float(os.getenv("ACTIVITY_ZCM_THRESHOLD_MG", "4"))
+DEFAULT_TAT_THRESHOLD_MG = float(os.getenv("ACTIVITY_TAT_THRESHOLD_MG", "150"))
+
+
+class StreamingMoments:
+    """Numerically stable streaming mean/variance for a complete recording."""
+
+    def __init__(self):
+        self.count = 0
+        self.mean = 0.0
+        self.m2 = 0.0
+
+    def add(self, values: np.ndarray) -> None:
+        clean = np.asarray(values, dtype=np.float64).reshape(-1)
+        clean = clean[np.isfinite(clean)]
+        if not len(clean):
+            return
+        chunk_count = int(len(clean))
+        chunk_mean = float(np.mean(clean))
+        chunk_m2 = float(np.sum(np.square(clean - chunk_mean)))
+        if self.count == 0:
+            self.count = chunk_count
+            self.mean = chunk_mean
+            self.m2 = chunk_m2
+            return
+        total = self.count + chunk_count
+        delta = chunk_mean - self.mean
+        self.m2 += chunk_m2 + (delta * delta) * self.count * chunk_count / total
+        self.mean += delta * chunk_count / total
+        self.count = total
+
+    def standard_deviation(self) -> float:
+        if self.count <= 0:
+            return float("nan")
+        return float(np.sqrt(max(0.0, self.m2 / self.count)))
 
 
 def _regular_epoch_series(keys, values, epoch_seconds: int, name: str) -> pd.Series:
@@ -27,11 +63,12 @@ def _regular_epoch_series(keys, values, epoch_seconds: int, name: str) -> pd.Ser
 
 
 class EpochPIMAccumulator:
-    """Integrate absolute dynamic acceleration within each epoch.
+    """Integrate gravity-normalized vector magnitude within each epoch.
 
-    Input values are signed dynamic vector magnitude in mg (VM - 1 g). The
-    resulting PIM is the area under ``abs(dynamic acceleration)`` and is
-    reported in mg·s per epoch.
+    Input values are ``abs(VM - 1 g)`` in mg.  The resulting PIM is the area
+    under the normalized magnitude and is reported in mg·s per epoch.  The
+    native sample interval is included so sampling rate alone does not inflate
+    the result.
     """
 
     def __init__(self, epoch_seconds: int):
@@ -45,7 +82,7 @@ class EpochPIMAccumulator:
             return
         sample_times = float(start_seconds) + np.arange(len(values), dtype=np.float64) / float(sample_rate)
         epochs = np.floor(sample_times / self.epoch_seconds).astype(np.int64) * self.epoch_seconds
-        weighted = np.abs(values) / float(sample_rate)
+        weighted = np.maximum(values, 0.0) / float(sample_rate)
         unique, inverse = np.unique(epochs, return_inverse=True)
         totals = np.bincount(inverse, weights=weighted)
         counts = np.bincount(inverse)
@@ -65,19 +102,18 @@ class EpochPIMAccumulator:
 
 
 class EpochZCMAccumulator:
-    """Count dead-band zero crossings of dynamic acceleration per epoch.
+    """Count level crossings of normalized magnitude per epoch.
 
-    Values within ``±threshold_mg`` are treated as a neutral zone. A crossing
-    is counted when the last non-neutral sign changes. Continuity is reset when
-    a timestamp gap is detected, preventing artificial crossings across missing
-    recording periods.
+    ZCM is defined here as the number of transitions across one positive
+    threshold in ``abs(VM - 1 g)``.  Continuity is reset when a timestamp gap is
+    detected, preventing artificial crossings across missing periods.
     """
 
     def __init__(self, epoch_seconds: int, threshold_mg: float = DEFAULT_ZCM_THRESHOLD_MG):
         self.epoch_seconds = int(epoch_seconds)
         self.threshold_mg = max(0.0, float(threshold_mg))
         self.counts: Dict[int, int] = {}
-        self.last_sign: int = 0
+        self.last_above: Optional[bool] = None
         self.expected_next: Optional[float] = None
         self.resets = 0
 
@@ -89,29 +125,23 @@ class EpochZCMAccumulator:
 
         tolerance = max(1e-6, 0.51 / rate)
         if self.expected_next is not None and abs(float(start_seconds) - self.expected_next) > tolerance:
-            self.last_sign = 0
+            self.last_above = None
             self.resets += 1
 
-        signs = np.zeros(len(values), dtype=np.int8)
-        signs[values > self.threshold_mg] = 1
-        signs[values < -self.threshold_mg] = -1
-        nonzero_indices = np.flatnonzero(signs)
-        if len(nonzero_indices):
-            nonzero_signs = signs[nonzero_indices]
-            previous = np.empty_like(nonzero_signs)
-            previous[0] = self.last_sign
-            if len(nonzero_signs) > 1:
-                previous[1:] = nonzero_signs[:-1]
-            crossing_mask = (previous != 0) & (nonzero_signs != previous)
-            crossing_indices = nonzero_indices[crossing_mask]
-            if len(crossing_indices):
-                crossing_times = float(start_seconds) + crossing_indices.astype(np.float64) / rate
-                epochs = np.floor(crossing_times / self.epoch_seconds).astype(np.int64) * self.epoch_seconds
-                unique, counts = np.unique(epochs, return_counts=True)
-                for epoch, count in zip(unique, counts):
-                    key = int(epoch)
-                    self.counts[key] = self.counts.get(key, 0) + int(count)
-            self.last_sign = int(nonzero_signs[-1])
+        above = values > self.threshold_mg
+        previous = np.empty_like(above)
+        previous[0] = above[0] if self.last_above is None else self.last_above
+        if len(above) > 1:
+            previous[1:] = above[:-1]
+        crossing_indices = np.flatnonzero(above != previous)
+        if len(crossing_indices):
+            crossing_times = float(start_seconds) + crossing_indices.astype(np.float64) / rate
+            epochs = np.floor(crossing_times / self.epoch_seconds).astype(np.int64) * self.epoch_seconds
+            unique, counts = np.unique(epochs, return_counts=True)
+            for epoch, count in zip(unique, counts):
+                key = int(epoch)
+                self.counts[key] = self.counts.get(key, 0) + int(count)
+        self.last_above = bool(above[-1])
 
         # Ensure epochs with samples but no crossings are represented as zero.
         sample_times = float(start_seconds) + np.array([0.0, (len(values) - 1) / rate])
@@ -129,4 +159,36 @@ class EpochZCMAccumulator:
             [self.counts[key] for key in keys],
             self.epoch_seconds,
             "ZCM_crossings",
+        )
+
+
+class EpochTATAccumulator:
+    """Accumulate time above a positive normalized-magnitude threshold."""
+
+    def __init__(self, epoch_seconds: int, threshold_mg: float = DEFAULT_TAT_THRESHOLD_MG):
+        self.epoch_seconds = int(epoch_seconds)
+        self.threshold_mg = max(0.0, float(threshold_mg))
+        self.seconds: Dict[int, float] = {}
+
+    def add(self, normalized_mg: np.ndarray, start_seconds: float, sample_rate: float) -> None:
+        values = np.asarray(normalized_mg, dtype=np.float64).reshape(-1)
+        rate = float(sample_rate)
+        if not len(values) or rate <= 0:
+            return
+        sample_times = float(start_seconds) + np.arange(len(values), dtype=np.float64) / rate
+        epochs = np.floor(sample_times / self.epoch_seconds).astype(np.int64) * self.epoch_seconds
+        weights = (values > self.threshold_mg).astype(np.float64) / rate
+        unique, inverse = np.unique(epochs, return_inverse=True)
+        totals = np.bincount(inverse, weights=weights)
+        for idx, epoch in enumerate(unique):
+            key = int(epoch)
+            self.seconds[key] = self.seconds.get(key, 0.0) + float(totals[idx])
+
+    def series(self) -> pd.Series:
+        keys = sorted(self.seconds)
+        return _regular_epoch_series(
+            keys,
+            [self.seconds[key] for key in keys],
+            self.epoch_seconds,
+            "TAT_seconds",
         )

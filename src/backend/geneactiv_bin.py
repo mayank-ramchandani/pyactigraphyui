@@ -6,8 +6,18 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
-from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
-from .activity_metrics import EpochPIMAccumulator, EpochZCMAccumulator
+from .activity_mapping import (
+    attach_mapping_metadata,
+    mapping_metadata,
+    normalize_activity_mapping,
+    normalize_activity_signal_settings,
+)
+from .activity_metrics import (
+    EpochPIMAccumulator,
+    EpochTATAccumulator,
+    EpochZCMAccumulator,
+    StreamingMoments,
+)
 from .diagnostics import record_diagnostic_event, update_current_stage
 import numpy as np
 
@@ -618,6 +628,8 @@ def read_raw_geneactiv_bin(
     file_path: str,
     resample_freq: str = "1min",
     activity_mapping: str = "auto",
+    activity_signal_settings: Optional[Dict] = None,
+    _adaptive_threshold_mg: Optional[float] = None,
 ) -> GeneActivRaw:
     """Read a GENEActiv .bin file without shelling out to accProcess.
 
@@ -628,7 +640,14 @@ def read_raw_geneactiv_bin(
     previewed/analyzed without hitting the Oxford accProcess size gate.
     """
     requested_mapping = normalize_activity_mapping(activity_mapping)
-    if requested_mapping in {"mad", "pim", "zcm"} and not resample_freq:
+    signal_settings = normalize_activity_signal_settings(activity_signal_settings, requested_mapping)
+    threshold_method = signal_settings["threshold_method"]
+    threshold_mg = (
+        float(_adaptive_threshold_mg)
+        if _adaptive_threshold_mg is not None
+        else signal_settings.get("threshold_mg")
+    )
+    if requested_mapping in {"mad", "pim", "zcm", "tat"} and not resample_freq:
         raise ValueError(f"{requested_mapping.upper()} requires an epoch/resample frequency so within-epoch aggregation can be calculated.")
 
     header: Dict[str, str] = {}
@@ -658,7 +677,21 @@ def read_raw_geneactiv_bin(
     resample_ns = _parse_resample_freq_ns(resample_freq)
     epoch_seconds = max(1, int(round(resample_ns / 1_000_000_000))) if resample_ns else None
     pim_accumulator = EpochPIMAccumulator(epoch_seconds) if requested_mapping == "pim" and epoch_seconds else None
-    zcm_accumulator = EpochZCMAccumulator(epoch_seconds) if requested_mapping == "zcm" and epoch_seconds else None
+    zcm_accumulator = (
+        EpochZCMAccumulator(epoch_seconds, threshold_mg=threshold_mg)
+        if requested_mapping == "zcm" and epoch_seconds and threshold_mg is not None
+        else None
+    )
+    tat_accumulator = (
+        EpochTATAccumulator(epoch_seconds, threshold_mg=threshold_mg)
+        if requested_mapping == "tat" and epoch_seconds and threshold_mg is not None
+        else None
+    )
+    threshold_moments = (
+        StreamingMoments()
+        if requested_mapping in {"zcm", "tat"} and threshold_method == "adaptive" and _adaptive_threshold_mg is None
+        else None
+    )
 
     acc_filter_sos = None
     acc_filter_zi = None
@@ -750,17 +783,22 @@ def read_raw_geneactiv_bin(
         enmo_values, vm_values, light_lux_values = _decode_measurement_array(page_hex, calibration)
         if enmo_values is None or vm_values is None or light_lux_values is None or len(enmo_values) == 0:
             return
-        use_processed_acc = requested_mapping not in {"mad", "enmo"}
+        use_processed_acc = requested_mapping in {"auto", "accelerometer"}
         dynamic_values = (
             processed_dynamic_values(vm_values, float(freq), page_ns, ns_per_sample)
             if use_processed_acc
             else (np.asarray(vm_values, dtype=np.float64) - 1.0) * 1000.0
         )
+        normalized_values = np.abs(dynamic_values)
         acc_values = np.maximum(dynamic_values, 0.0) if use_processed_acc else enmo_values
         if pim_accumulator is not None:
-            pim_accumulator.add(dynamic_values, page_ns / 1_000_000_000.0, float(freq))
+            pim_accumulator.add(normalized_values, page_ns / 1_000_000_000.0, float(freq))
         if zcm_accumulator is not None:
-            zcm_accumulator.add(dynamic_values, page_ns / 1_000_000_000.0, float(freq))
+            zcm_accumulator.add(normalized_values, page_ns / 1_000_000_000.0, float(freq))
+        if tat_accumulator is not None:
+            tat_accumulator.add(normalized_values, page_ns / 1_000_000_000.0, float(freq))
+        if threshold_moments is not None:
+            threshold_moments.add(normalized_values)
 
         n = len(enmo_values)
         if resample_ns:
@@ -859,6 +897,18 @@ def read_raw_geneactiv_bin(
     if requested_mapping == "mad":
         flush_active_mad_bucket()
 
+    if threshold_moments is not None:
+        adaptive_threshold = threshold_moments.standard_deviation()
+        if not np.isfinite(adaptive_threshold):
+            raise ValueError("Could not estimate an adaptive ZCM/TAT threshold from valid raw samples.")
+        return read_raw_geneactiv_bin(
+            file_path,
+            resample_freq=resample_freq,
+            activity_mapping=requested_mapping,
+            activity_signal_settings=activity_signal_settings,
+            _adaptive_threshold_mg=float(adaptive_threshold),
+        )
+
     if resample_ns:
         if not buckets:
             raise ValueError("This looks like a GENEActiv .bin file, but no page data could be decoded.")
@@ -910,19 +960,25 @@ def read_raw_geneactiv_bin(
         activity = zcm_accumulator.series().dropna() if zcm_accumulator is not None else pd.Series(dtype=float)
         if len(activity) < 2:
             raise ValueError("ZCM mapping did not produce enough valid GENEActiv epochs.")
+    elif requested_mapping == "tat":
+        resolved_mapping = "tat"
+        activity = tat_accumulator.series().dropna() if tat_accumulator is not None else pd.Series(dtype=float)
+        if len(activity) < 2:
+            raise ValueError("TAT mapping did not produce enough valid GENEActiv epochs.")
     else:
         resolved_mapping = "accelerometer"
         activity = df["acc"].astype(float).rename("ACC_mg")
 
-    is_processed_acc = resolved_mapping in {"accelerometer", "pim", "zcm"}
+    is_processed_acc = resolved_mapping == "accelerometer"
     activity_mapping_metadata = mapping_metadata(
         requested_mapping,
         resolved_mapping,
         source="direct_geneactiv_streaming_acc",
         processing_engine=(
             "streaming_calibrated_filtered_vm_acc" if resolved_mapping == "accelerometer"
-            else "streaming_calibrated_filtered_vm_pim" if resolved_mapping == "pim"
-            else "streaming_calibrated_filtered_vm_zcm" if resolved_mapping == "zcm"
+            else "streaming_unfiltered_normalized_vm_pim" if resolved_mapping == "pim"
+            else "streaming_unfiltered_normalized_vm_zcm" if resolved_mapping == "zcm"
+            else "streaming_unfiltered_normalized_vm_tat" if resolved_mapping == "tat"
             else f"streaming_custom_{resolved_mapping}"
         ),
         epoch=str(resample_freq),
@@ -930,16 +986,21 @@ def read_raw_geneactiv_bin(
         vector_magnitude_lowpass_hz=20 if is_processed_acc and acc_filter_applied else None,
         vector_magnitude_filter_order=4 if is_processed_acc and acc_filter_applied else None,
         raw_resampled_to_100_hz=False if is_processed_acc else None,
-        pim_definition="integral_abs_dynamic_vm_mg_seconds_per_epoch" if resolved_mapping == "pim" else None,
-        zcm_definition="deadband_sign_changes_dynamic_vm_per_epoch" if resolved_mapping == "zcm" else None,
+        pim_definition="integral_unfiltered_abs_vm_minus_1g_mg_seconds_per_epoch" if resolved_mapping == "pim" else None,
+        zcm_definition="level_crossings_unfiltered_abs_vm_minus_1g_per_epoch" if resolved_mapping == "zcm" else None,
         zcm_threshold_mg=zcm_accumulator.threshold_mg if zcm_accumulator is not None else None,
-        available_mappings=["auto", "accelerometer", "mad", "enmo", "pim", "zcm"],
+        tat_definition="seconds_above_threshold_unfiltered_abs_vm_minus_1g_per_epoch" if resolved_mapping == "tat" else None,
+        tat_threshold_mg=tat_accumulator.threshold_mg if tat_accumulator is not None else None,
+        threshold_method=threshold_method if resolved_mapping in {"zcm", "tat"} else None,
+        input_signal="unfiltered_abs_vm_minus_1g_mg" if resolved_mapping in {"pim", "zcm", "tat"} else None,
+        filtering="none" if resolved_mapping in {"mad", "enmo", "pim", "zcm", "tat"} else "20_hz_lowpass_when_supported",
+        available_mappings=["auto", "accelerometer", "mad", "enmo", "pim", "zcm", "tat"],
         note=(
             "Large GENEActiv files use chunked calibrated vector-magnitude processing with fourth-order "
             "20 Hz filtering when the sample rate permits, followed by streaming epoch aggregation for "
-            f"the resolved {resolved_mapping.upper()} activity basis."
+            "the processed ACC activity basis."
             if is_processed_acc
-            else "This mapping is calculated directly from calibrated raw samples using streaming epoch aggregation."
+            else "This metric is calculated directly from calibrated unfiltered raw samples using its metric-specific definition."
         ),
     )
     light_lux = df["light_lux"].astype(float).rename("LIGHT_LUX")
@@ -983,7 +1044,7 @@ def read_raw_geneactiv_bin(
             },
             "direct_geneactiv_reader": True,
             "activity_mapping": activity_mapping_metadata,
-            "available_activity_mappings": ["auto", "accelerometer", "mad", "enmo", "pim", "zcm"],
+            "available_activity_mappings": ["auto", "accelerometer", "mad", "enmo", "pim", "zcm", "tat"],
         },
     )
     return attach_mapping_metadata(raw, activity_mapping_metadata)

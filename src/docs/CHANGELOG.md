@@ -1,3 +1,12 @@
+## 2026-10-07 — Metric-specific raw processing and provenance
+
+- Added TAT (seconds above threshold per epoch) for raw GENEActiv/GT3X and compatible preprocessed columns.
+- Replaced the former filtered/dead-band PIM/ZCM path with documented metric-specific unfiltered `|VM - 1 g|` processing.
+- Added adaptive recording-SD and fixed-mg threshold modes for ZCM/TAT; adaptive processing uses two bounded-memory passes.
+- Required one fixed ZCM/TAT threshold for joined participant files so source definitions remain consistent.
+- Added complete activity-processing provenance and copyable Methods text to analysis results.
+- Added the preprocessing rationale and citation to Maczák et al. (2021), while retaining the paper's limitations.
+
 ## 2026-09-11 — Workflow order and labels
 
 - Renamed Step 2 from **Pre-processing** to **Initial QC**.

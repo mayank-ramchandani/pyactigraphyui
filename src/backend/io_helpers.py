@@ -347,6 +347,7 @@ def load_native_file(
     reader_type: str,
     activity_mapping: str = "auto",
     purpose: str = "activity",
+    activity_signal_settings: Optional[Dict[str, Any]] = None,
 ):
     requested_mapping = normalize_activity_mapping(activity_mapping)
 
@@ -357,7 +358,10 @@ def load_native_file(
 
     if reader_type == "geneactiv_bin_accelerometer":
         return read_raw_geneactiv_bin(
-            file_path, resample_freq="30s", activity_mapping=requested_mapping
+            file_path,
+            resample_freq="30s",
+            activity_mapping=requested_mapping,
+            activity_signal_settings=activity_signal_settings,
         )
 
     if reader_type == "accelerometer_timeseries_csv":
@@ -369,7 +373,10 @@ def load_native_file(
         if str(purpose or "activity").strip().lower() == "light":
             return load_gt3x_light_as_raw(file_path, epoch_period=30)
         return load_gt3x_as_baseraw(
-            file_path, epoch_period=30, activity_mapping=requested_mapping
+            file_path,
+            epoch_period=30,
+            activity_mapping=requested_mapping,
+            activity_signal_settings=activity_signal_settings,
         )
 
     if reader_type == "atr":
@@ -377,7 +384,7 @@ def load_native_file(
         reader = getattr(pyActigraphy.io, method_name, None) if method_name else None
         if reader is None:
             raise ValueError("This pyActigraphy installation does not expose the ATR reader.")
-        if requested_mapping in {"pim", "zcm"}:
+        if requested_mapping in {"pim", "zcm", "tat"}:
             raw = _unwrap_pyactigraphy_reader(reader(file_path, mode=requested_mapping.upper()))
             resolved = requested_mapping
         elif requested_mapping in {"auto", "original"}:
@@ -386,7 +393,7 @@ def load_native_file(
         else:
             raise ValueError(
                 f"{requested_mapping.upper()} is not supplied by the ATR reader. "
-                "Choose source activity, PIM, or ZCM for this format."
+                "Choose source activity, PIM, ZCM, or TAT for this format."
             )
         return attach_mapping_metadata(
             raw,
@@ -394,8 +401,8 @@ def load_native_file(
                 requested_mapping,
                 resolved,
                 source="pyActigraphy:atr",
-                available_mappings=["auto", "original", "pim", "zcm"],
-                note="ATR PIM and ZCM modes are read through pyActigraphy's native ATR reader.",
+                available_mappings=["auto", "original", "pim", "zcm", "tat"],
+                note="ATR PIM, ZCM, and TAT modes are read through pyActigraphy's native ATR reader.",
             ),
         )
 
@@ -1014,4 +1021,3 @@ def build_baseraw_from_dataframe(
             note="The mapped source activity column is used without deriving ENMO, MAD, or processed acceleration.",
         ),
     )
-

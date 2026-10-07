@@ -30,7 +30,13 @@ except Exception:  # pragma: no cover - dependency is present in deployment
 
 from pydantic import BaseModel, Field
 
-from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping, raw_mapping_metadata
+from .activity_mapping import (
+    attach_mapping_metadata,
+    mapping_metadata,
+    normalize_activity_mapping,
+    normalize_activity_signal_settings,
+    raw_mapping_metadata,
+)
 from .analysis import (
     run_basic_pyactigraphy_analysis,
     build_native_preview,
@@ -411,6 +417,9 @@ def version():
             "accelerometer_acc_default": True,
             "activity_pim": True,
             "activity_zcm": True,
+            "activity_tat": True,
+            "metric_specific_signal_processing": True,
+            "activity_processing_provenance": True,
             "family_cosinor": True,
             "feedback_admin_export": True,
             "feedback_email_required": True,
@@ -720,12 +729,108 @@ def _clean_csv_mapping(value) -> dict:
     }
 
 
+def _clean_activity_signal_settings(value, activity_mapping: str) -> dict:
+    if not isinstance(value, (str, dict)) and hasattr(value, "default"):
+        value = value.default
+    parsed = _json_or_empty(value) if isinstance(value, str) else (value or {})
+    if not isinstance(parsed, dict):
+        raise ValueError("activitySignalSettings must be a JSON object.")
+    return normalize_activity_signal_settings(parsed, activity_mapping)
+
+
+def _validate_joined_threshold_settings(file_count: int, activity_mapping: str, settings: dict) -> None:
+    if file_count > 1 and activity_mapping in {"zcm", "tat"} and settings.get("threshold_method") == "adaptive":
+        raise ValueError(
+            f"Joined-participant {activity_mapping.upper()} requires a fixed threshold so every source file uses the same definition. "
+            "Choose Fixed threshold and enter one mg value, or analyze the files separately."
+        )
+
+
+def _build_processing_provenance(
+    mapping_details: dict,
+    signal_settings: dict,
+    participant_join: dict,
+    data_quality: dict,
+) -> dict:
+    """Create a compact machine-readable and copyable Methods description."""
+    def first_defined(*values):
+        return next((value for value in values if value is not None), None)
+
+    mapping = str(mapping_details.get("resolved") or mapping_details.get("requested") or "original")
+    signal_meta = mapping_details.get("signal_processing") if isinstance(mapping_details.get("signal_processing"), dict) else {}
+    epoch_seconds = first_defined(
+        mapping_details.get("epoch_seconds"),
+        (participant_join or {}).get("epoch_seconds"),
+        signal_meta.get("_epoch_period_seconds"),
+    )
+    threshold_mg = first_defined(
+        mapping_details.get("zcm_threshold_mg"),
+        mapping_details.get("tat_threshold_mg"),
+        signal_meta.get("_zcm_threshold_mg"),
+        signal_meta.get("_tat_threshold_mg"),
+        signal_settings.get("threshold_mg"),
+    )
+    threshold_method = first_defined(
+        mapping_details.get("threshold_method"),
+        signal_meta.get("_threshold_method"),
+        signal_settings.get("threshold_method"),
+    )
+
+    definitions = {
+        "enmo": "calibrated unfiltered triaxial acceleration was converted to vector magnitude; 1 g was subtracted, negative values were truncated at zero, and values were averaged within each epoch",
+        "mad": "calibrated unfiltered triaxial acceleration was converted to vector magnitude and mean amplitude deviation was calculated within each epoch",
+        "pim": "calibrated unfiltered triaxial acceleration was converted to |vector magnitude - 1 g| and integrated within each epoch using the native sampling interval",
+        "zcm": "calibrated unfiltered triaxial acceleration was converted to |vector magnitude - 1 g| and level crossings of the selected positive threshold were counted within each epoch",
+        "tat": "calibrated unfiltered triaxial acceleration was converted to |vector magnitude - 1 g| and time above the selected positive threshold was accumulated within each epoch",
+        "accelerometer": "the processed acceleration representation was generated at the native sampling rate and averaged within each epoch",
+        "original": "the source/device epoch-level activity series was used as supplied",
+    }
+    source = str(mapping_details.get("source") or "")
+    raw_generated = source in {"pygt3x_streaming_raw_axes", "direct_geneactiv_streaming_acc"}
+    definition = (
+        definitions.get(mapping, definitions["original"])
+        if raw_generated or mapping in {"accelerometer", "original"}
+        else f"the supplied epoch-level {mapping.upper()} column was used directly; upstream raw-signal processing was not reconstructed by ActiLab"
+    )
+    method_parts = [f"Activity representation: {mapping_details.get('label') or mapping.upper()}; {definition}."]
+    if raw_generated and mapping in {"zcm", "tat"} and threshold_mg is not None:
+        method_label = "recording-level SD" if threshold_method == "adaptive" else "fixed"
+        method_parts.append(f"The {mapping.upper()} threshold was {float(threshold_mg):.6g} mg ({method_label}).")
+    if epoch_seconds is not None:
+        method_parts.append(f"The analytical epoch was {float(epoch_seconds):g} s.")
+    if (participant_join or {}).get("joined"):
+        method_parts.append(
+            "Source recordings were processed independently at their native sampling rates, reduced to the common analytical epoch, and then joined by timestamp; true gaps remained missing."
+        )
+    quality_settings = (data_quality or {}).get("settings") or {}
+    min_hours = quality_settings.get("minimum_valid_hours_per_day") or quality_settings.get("minimumValidHoursPerDay")
+    if min_hours is not None:
+        method_parts.append(f"A valid day required at least {float(min_hours):g} analyzable hours after masks and non-wear handling.")
+
+    return {
+        "schema_version": "activity-processing-1.0",
+        "activity_mapping": mapping_details,
+        "signal_settings": signal_settings,
+        "epoch_seconds": epoch_seconds,
+        "threshold_method": threshold_method if raw_generated and mapping in {"zcm", "tat"} else None,
+        "threshold_mg": threshold_mg if raw_generated and mapping in {"zcm", "tat"} else None,
+        "joined_recordings": bool((participant_join or {}).get("joined")),
+        "native_sampling_rates_hz": (participant_join or {}).get("sampling_harmonization", {}).get("native_sample_rates_hz", []),
+        "methods_text": " ".join(method_parts),
+        "reference": {
+            "citation": "Maczák B, Vadai G, Dér A, Szendi I, Gingl Z. Detailed analysis and comparison of different activity metrics. PLOS ONE. 2021;16(12):e0261718.",
+            "doi": "10.1371/journal.pone.0261718",
+        },
+    }
+
+
 def _load_native_supported_file(
     file_path: str,
     activity_mapping: str = "auto",
     purpose: str = "activity",
     csv_mapping=None,
     csv_separator: str = ",",
+    activity_signal_settings=None,
 ):
     """Load native recordings and mapped tabular files through one path."""
     if not isinstance(csv_separator, str) and hasattr(csv_separator, "default"):
@@ -768,7 +873,7 @@ def _load_native_supported_file(
             resolved_mapping,
             source="mapped_tabular_activity_column",
             activity_column=mapping.get("activity_col"),
-            available_mappings=["auto", "original", "accelerometer", "mad", "enmo", "pim", "zcm"],
+            available_mappings=["auto", "original", "accelerometer", "mad", "enmo", "pim", "zcm", "tat"],
             note=(
                 "The selected mapped activity column is treated as the requested activity basis; "
                 "no raw-sample reconstruction is performed for generic tabular uploads."
@@ -786,6 +891,7 @@ def _load_native_supported_file(
         reader_type,
         activity_mapping=activity_mapping,
         purpose=purpose,
+        activity_signal_settings=activity_signal_settings,
     )
     return raw, reader_type
 
@@ -830,6 +936,7 @@ def convert_accelerometer_lite(
     epochPeriod: int = Form(30),
     javaHeapMb: Optional[int] = Form(DEFAULT_JAVA_HEAP_MB or 0),
     activityMapping: str = Form("auto"),
+    activitySignalSettings: str = Form("{}"),
 ):
     """Diagnostic endpoint for raw .bin/.cwa/.gt3x files or uploaded timeSeries CSVs.
 
@@ -840,6 +947,7 @@ def convert_accelerometer_lite(
     try:
         tmp_path = _write_upload_to_temp(file)
         requested_mapping = normalize_activity_mapping(activityMapping)
+        signal_settings = _clean_activity_signal_settings(activitySignalSettings, requested_mapping)
         suffix = Path(file.filename or tmp_path).suffix.lower()
 
         if suffix in (".bin", ".cwa"):
@@ -848,6 +956,7 @@ def convert_accelerometer_lite(
                 epoch_period=epochPeriod,
                 java_heap_mb=javaHeapMb or None,
                 activity_mapping=requested_mapping,
+                activity_signal_settings=signal_settings,
             )
             mode = "server_side_raw_bin_conversion"
         elif suffix == ".gt3x":
@@ -856,6 +965,7 @@ def convert_accelerometer_lite(
                 epoch_period=epochPeriod,
                 activity_mode=DEFAULT_GT3X_ACTIVITY_MODE,
                 activity_mapping=requested_mapping,
+                activity_signal_settings=signal_settings,
             )
             mode = "server_side_gt3x_pygt3x"
         else:
@@ -925,6 +1035,7 @@ def preview_basic(
     additionalFiles: Optional[List[UploadFile]] = File(None),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
+    activitySignalSettings: str = Form("{}"),
     resampleFreq: str = Form("1min"),
     csvMapping: str = Form("{}"),
     csvSeparator: str = Form(","),
@@ -936,6 +1047,10 @@ def preview_basic(
     try:
         parsed_csv_mapping = _clean_csv_mapping(csvMapping)
         requested_mapping = normalize_activity_mapping(activityMapping)
+        signal_settings = _clean_activity_signal_settings(activitySignalSettings, requested_mapping)
+        _validate_joined_threshold_settings(
+            1 + len(_upload_file_list(additionalFiles)), requested_mapping, signal_settings
+        )
 
         tmp_path = _write_upload_to_temp(file)
         temp_paths.append(tmp_path)
@@ -944,6 +1059,7 @@ def preview_basic(
             activity_mapping=requested_mapping,
             csv_mapping=parsed_csv_mapping,
             csv_separator=csvSeparator,
+            activity_signal_settings=signal_settings,
         )
         raw_items = [raw]
         source_names = [file.filename or Path(tmp_path).name]
@@ -956,6 +1072,7 @@ def preview_basic(
                 activity_mapping=requested_mapping,
                 csv_mapping=parsed_csv_mapping,
                 csv_separator=csvSeparator,
+                activity_signal_settings=signal_settings,
             )
             raw_items.append(additional_raw)
             source_names.append(upload.filename or Path(path).name)
@@ -1001,6 +1118,7 @@ def initial_data_qc(
     file: UploadFile = File(...),
     additionalFiles: Optional[List[UploadFile]] = File(None),
     activityMapping: str = Form("auto"),
+    activitySignalSettings: str = Form("{}"),
     csvMapping: str = Form("{}"),
     csvSeparator: str = Form(","),
 ):
@@ -1015,6 +1133,10 @@ def initial_data_qc(
     try:
         parsed_csv_mapping = _clean_csv_mapping(csvMapping)
         requested_mapping = normalize_activity_mapping(activityMapping)
+        signal_settings = _clean_activity_signal_settings(activitySignalSettings, requested_mapping)
+        _validate_joined_threshold_settings(
+            1 + len(_upload_file_list(additionalFiles)), requested_mapping, signal_settings
+        )
 
         tmp_path = _write_upload_to_temp(file)
         temp_paths.append(tmp_path)
@@ -1023,6 +1145,7 @@ def initial_data_qc(
             activity_mapping=requested_mapping,
             csv_mapping=parsed_csv_mapping,
             csv_separator=csvSeparator,
+            activity_signal_settings=signal_settings,
         )
         raw_items = [raw]
         source_names = [file.filename or Path(tmp_path).name]
@@ -1035,6 +1158,7 @@ def initial_data_qc(
                 activity_mapping=requested_mapping,
                 csv_mapping=parsed_csv_mapping,
                 csv_separator=csvSeparator,
+                activity_signal_settings=signal_settings,
             )
             raw_items.append(additional_raw)
             source_names.append(upload.filename or Path(path).name)
@@ -2104,7 +2228,7 @@ def _activity_series_for_concatenation(raw: Any) -> pd.Series:
         numeric = data.select_dtypes(include="number")
         if numeric.shape[1] == 0:
             raise ValueError("A selected file does not expose a numeric activity series.")
-        preferred = next((c for c in ["VM", "vm", "activity", "Activity", "data", "counts", "acc", "ACC_mg", "ENMO_mg", "MAD_mg"] if c in numeric.columns), numeric.columns[0])
+        preferred = next((c for c in ["VM", "vm", "activity", "Activity", "data", "counts", "acc", "ACC_mg", "ENMO_mg", "MAD_mg", "PIM_mg_s", "ZCM_crossings", "TAT_seconds"] if c in numeric.columns), numeric.columns[0])
         data = numeric[preferred]
     if not isinstance(data, pd.Series):
         data = pd.Series(data)
@@ -2492,7 +2616,7 @@ def _sampling_harmonization_for_join(
                 ),
             }
         )
-    elif reference_basis in {"mad", "pim"}:
+    elif reference_basis in {"mad", "pim", "tat"}:
         payload.update(
             {
                 "severity": "warning",
@@ -2664,6 +2788,7 @@ def analyze_basic(
     additionalFiles: Optional[List[UploadFile]] = File(None),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
+    activitySignalSettings: str = Form("{}"),
     activityTransform: str = Form("none"),
     lightTransform: str = Form("none"),
     analysisMode: str = Form("standard"),
@@ -2693,6 +2818,10 @@ def analyze_basic(
         with session.stage("request.parse_analysis_config", category="request"):
             analysis_config = json.loads(analysisConfig or "{}")
             requested_mapping = normalize_activity_mapping(activityMapping)
+            signal_settings = _clean_activity_signal_settings(activitySignalSettings, requested_mapping)
+            _validate_joined_threshold_settings(
+                1 + len(_upload_file_list(additionalFiles)), requested_mapping, signal_settings
+            )
             metric_requests = analysis_config.get("metrics", [])
             family_requests = analysis_config.get("families", [])
             analysis_scope = analysis_config.get("analysisScope", "metric")
@@ -2712,6 +2841,7 @@ def analyze_basic(
                 algorithm=(algorithm_request or {}).get("id"),
                 analysis_window_mode=analysis_window_settings.get("mode", "full"),
                 activity_mapping_requested=requested_mapping,
+                activity_signal_settings=signal_settings,
                 participant_file_count=1 + len(_upload_file_list(additionalFiles)),
                 support_file_counts={
                     "masking": len(maskingFiles or []),
@@ -2744,6 +2874,7 @@ def analyze_basic(
                 activity_mapping=requested_mapping,
                 csv_mapping=parsed_csv_mapping,
                 csv_separator=csvSeparator,
+                activity_signal_settings=signal_settings,
             )
             raw_items = [raw]
             joined_source_names = [file.filename or Path(tmp_path).name]
@@ -2756,6 +2887,7 @@ def analyze_basic(
                     activity_mapping=requested_mapping,
                     csv_mapping=parsed_csv_mapping,
                     csv_separator=csvSeparator,
+                    activity_signal_settings=signal_settings,
                 )
                 raw_items.append(additional_raw)
                 joined_source_names.append(additional_upload.filename or Path(additional_path).name)
@@ -2899,6 +3031,13 @@ def analyze_basic(
         if failed_or_warning_stages:
             final_status = "completed_with_warnings"
 
+        processing_provenance = _build_processing_provenance(
+            mapping_details=mapping_details,
+            signal_settings=signal_settings,
+            participant_join=participant_join,
+            data_quality=data_quality,
+        )
+
         response_content = {
             "results": results,
             "qcWarnings": warnings,
@@ -2908,6 +3047,7 @@ def analyze_basic(
             "native_reader_used": reader_type != "tabular_mapped",
             "activity_mapping": mapping_details,
             "participant_join": participant_join,
+            "processing_provenance": processing_provenance,
         }
 
     except ValueError as exc:
@@ -2948,6 +3088,7 @@ def _background_initial_qc_worker(primary_spec: dict, additional_specs: List[dic
             file=primary_uploads[0],
             additionalFiles=additional_uploads or None,
             activityMapping=options.get("activityMapping", "auto"),
+            activitySignalSettings=options.get("activitySignalSettings", "{}"),
             csvMapping=options.get("csvMapping", "{}"),
             csvSeparator=options.get("csvSeparator", ","),
         )
@@ -2970,6 +3111,7 @@ def _background_preview_worker(primary_spec: dict, additional_specs: List[dict],
             additionalFiles=additional_uploads or None,
             activityChannel=options.get("activityChannel", "VM"),
             activityMapping=options.get("activityMapping", "auto"),
+            activitySignalSettings=options.get("activitySignalSettings", "{}"),
             resampleFreq=options.get("resampleFreq", "1min"),
             csvMapping=options.get("csvMapping", "{}"),
             csvSeparator=options.get("csvSeparator", ","),
@@ -3061,6 +3203,7 @@ def _background_analysis_worker(primary_spec: dict, additional_specs: List[dict]
             additionalFiles=additional_uploads or None,
             activityChannel=options.get("activityChannel", "VM"),
             activityMapping=options.get("activityMapping", "auto"),
+            activitySignalSettings=options.get("activitySignalSettings", "{}"),
             activityTransform=options.get("activityTransform", "none"),
             lightTransform=options.get("lightTransform", "none"),
             analysisMode=options.get("analysisMode", "standard"),
@@ -3188,6 +3331,7 @@ def start_background_initial_qc(
     file: UploadFile = File(...),
     additionalFiles: Optional[List[UploadFile]] = File(None),
     activityMapping: str = Form("auto"),
+    activitySignalSettings: str = Form("{}"),
     csvMapping: str = Form("{}"),
     csvSeparator: str = Form(","),
     jobId: Optional[str] = Form(None),
@@ -3207,6 +3351,7 @@ def start_background_initial_qc(
         ]
         options = {
             "activityMapping": activityMapping,
+            "activitySignalSettings": activitySignalSettings,
             "csvMapping": csvMapping,
             "csvSeparator": csvSeparator,
         }
@@ -3245,6 +3390,7 @@ def start_background_preview_basic(
     additionalFiles: Optional[List[UploadFile]] = File(None),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
+    activitySignalSettings: str = Form("{}"),
     resampleFreq: str = Form("1min"),
     csvMapping: str = Form("{}"),
     csvSeparator: str = Form(","),
@@ -3266,6 +3412,7 @@ def start_background_preview_basic(
         options = {
             "activityChannel": activityChannel,
             "activityMapping": activityMapping,
+            "activitySignalSettings": activitySignalSettings,
             "resampleFreq": resampleFreq,
             "csvMapping": csvMapping,
             "csvSeparator": csvSeparator,
@@ -3406,6 +3553,7 @@ def start_background_analyze_basic(
     additionalFiles: Optional[List[UploadFile]] = File(None),
     activityChannel: str = Form("VM"),
     activityMapping: str = Form("auto"),
+    activitySignalSettings: str = Form("{}"),
     activityTransform: str = Form("none"),
     lightTransform: str = Form("none"),
     analysisMode: str = Form("standard"),
@@ -3444,6 +3592,7 @@ def start_background_analyze_basic(
         options = {
             "activityChannel": activityChannel,
             "activityMapping": activityMapping,
+            "activitySignalSettings": activitySignalSettings,
             "activityTransform": activityTransform,
             "lightTransform": lightTransform,
             "analysisMode": analysisMode,

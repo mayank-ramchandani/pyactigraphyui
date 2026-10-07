@@ -132,6 +132,19 @@ def _pick_activity_column(df: pd.DataFrame, activity_mapping: str = "auto") -> T
             )
         return str(col), "zcm"
 
+    if requested_mapping == "tat":
+        col = _pick_column(
+            df,
+            ["tat", "TAT", "tat_seconds", "TAT_seconds", "timeAboveThreshold", "time_above_threshold"],
+        )
+        if col is None:
+            raise AccelerometerProcessingError(
+                "TAT was selected, but this Oxford/preprocessed time-series does not contain a TAT/time-above-threshold column. "
+                "Raw GENEActiv .bin and ActiGraph .gt3x files can be reduced directly; for Axivity .cwa, "
+                "provide a converted time-series containing a TAT column."
+            )
+        return str(col), "tat"
+
     acc_candidates = [
         "acc", "accOverallAvg", "acc_overall_avg", "acc-overall-avg",
         "acc-overall-avg(mg)", "accImputed",
@@ -180,7 +193,7 @@ def _pick_activity_column(df: pd.DataFrame, activity_mapping: str = "auto") -> T
         return str(numeric_cols[0]), "original"
 
     raise AccelerometerProcessingError(
-        "Could not find a compatible activity column. Expected source activity/counts, Oxford `acc`, ENMO, MAD, PIM, or ZCM."
+        "Could not find a compatible activity column. Expected source activity/counts, Oxford `acc`, ENMO, MAD, PIM, ZCM, or TAT."
     )
 
 
@@ -203,6 +216,7 @@ def looks_like_accelerometer_timeseries_df(df: pd.DataFrame) -> bool:
     activity_columns = {
         "acc", "enmo", "mad", "pim", "pimmgs", "proportionalintegratingmode",
         "zcm", "zcmcrossings", "zerocrossings", "zerocrossingmode",
+        "tat", "tatseconds", "timeabovethreshold",
         "activity", "vm",
     }
     return "time" in cols and bool(cols & activity_columns)
@@ -408,7 +422,7 @@ def load_accelerometer_timeseries_csv(
     if not looks_like_accelerometer_timeseries_df(df):
         raise AccelerometerProcessingError(
             "This CSV does not look like an accelerometer timeSeries file. Expected at least "
-            "a `time` column and an `acc`/`ENMO`/`MAD`/`PIM`/`ZCM`/`activity`/`VM` column."
+            "a `time` column and an `acc`/`ENMO`/`MAD`/`PIM`/`ZCM`/`TAT`/`activity`/`VM` column."
         )
     return df, {
         "_server_side_conversion": False,
@@ -454,6 +468,7 @@ def _prepare_timeseries(
         else "ENMO_mg" if resolved_mapping == "enmo"
         else "PIM_mg_s" if resolved_mapping == "pim"
         else "ZCM_crossings" if resolved_mapping == "zcm"
+        else "TAT_seconds" if resolved_mapping == "tat"
         else "ACC_mg" if resolved_mapping == "accelerometer"
         else "activity"
     )
@@ -463,13 +478,14 @@ def _prepare_timeseries(
         source="accelerometer_timeseries",
         activity_column=str(activity_col),
         epoch_seconds=int(epoch_period),
-        available_mappings=list(dict.fromkeys(["auto", resolved_mapping, "original", "accelerometer", "mad", "enmo", "pim", "zcm"])),
+        available_mappings=list(dict.fromkeys(["auto", resolved_mapping, "original", "accelerometer", "mad", "enmo", "pim", "zcm", "tat"])),
         note=(
             "The Oxford accelerometer `acc` column is used directly as the epoch-level activity basis in mg."
             if resolved_mapping == "accelerometer"
             else "A supplied ENMO column is used directly." if resolved_mapping == "enmo"
             else "A supplied PIM column is used directly." if resolved_mapping == "pim"
-            else "A supplied ZCM/zero-crossings column is used directly." if resolved_mapping == "zcm" else None
+            else "A supplied ZCM/zero-crossings column is used directly." if resolved_mapping == "zcm"
+            else "A supplied TAT/time-above-threshold column is used directly." if resolved_mapping == "tat" else None
         ),
     )
     return activity.rename(activity_name), light, inferred_freq, str(time_col), str(activity_col), str(light_col) if light_col else None, details
@@ -582,6 +598,7 @@ def convert_bin_lightweight_summary(
     epoch_period: int = DEFAULT_EPOCH_PERIOD,
     java_heap_mb: Optional[int] = DEFAULT_JAVA_HEAP_MB,
     activity_mapping: str = "auto",
+    activity_signal_settings: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     df, summary = run_accelerometer_process_lightweight(
         input_path,

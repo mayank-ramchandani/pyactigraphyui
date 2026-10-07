@@ -284,6 +284,10 @@ export default function Dashboard() {
   const [activityChannel, setActivityChannel] = useState("VM");
   const [previewActivityMapping, setPreviewActivityMapping] = useState("auto");
   const [activityMapping, setActivityMapping] = useState("auto");
+  const [activitySignalSettings, setActivitySignalSettings] = useState({
+    thresholdMethod: "adaptive",
+    thresholdMg: 4,
+  });
   const [activityTransform, setActivityTransform] = useState("none");
   const [lightTransform, setLightTransform] = useState("none");
 
@@ -440,6 +444,7 @@ export default function Dashboard() {
       sleepWindowSettings,
       supportFileSettings,
       analysisWindowSettings,
+      activitySignalSettings,
       lightAnalysisSettings: {
         selectedLightMetrics,
         lightMetricSettings,
@@ -465,6 +470,7 @@ export default function Dashboard() {
       sleepWindowSettings,
       supportFileSettings,
       analysisWindowSettings,
+      activitySignalSettings,
       selectedLightMetrics,
       lightMetricSettings,
       uploadedFiles.temperature,
@@ -668,7 +674,7 @@ export default function Dashboard() {
         if (cancelled) return;
         const filesForEntry = entry.joinedFiles || [entry.file];
         const fileSignature = filesForEntry.map((file) => `${file.name}:${file.size}:${file.lastModified || 0}`).join("|");
-        const requestToken = `${entry.key}:${fileSignature}:${activityMapping}:${showManualMapping ? JSON.stringify(csvMapping) : "native"}:${csvSeparator}`;
+        const requestToken = `${entry.key}:${fileSignature}:${activityMapping}:${JSON.stringify(activitySignalSettings)}:${showManualMapping ? JSON.stringify(csvMapping) : "native"}:${csvSeparator}`;
         if (initialQcRequestedRef.current.has(requestToken)) continue;
         initialQcRequestedRef.current.add(requestToken);
         setInitialQcLoadingByFile((previous) => ({ ...previous, [entry.key]: true }));
@@ -679,6 +685,7 @@ export default function Dashboard() {
           formData.append("file", filesForEntry[0]);
           filesForEntry.slice(1).forEach((file) => formData.append("additionalFiles", file));
           formData.append("activityMapping", activityMapping);
+          formData.append("activitySignalSettings", JSON.stringify(activitySignalSettings));
           formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
           formData.append("csvSeparator", csvSeparator);
           const data = await runBackgroundFormJob({
@@ -716,7 +723,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [currentStep, actigraphyFiles, joinedParticipantMode, joinedParticipantLabel, activityMapping, showManualMapping, csvMapping, csvSeparator]);
+  }, [currentStep, actigraphyFiles, joinedParticipantMode, joinedParticipantLabel, activityMapping, activitySignalSettings, showManualMapping, csvMapping, csvSeparator]);
 
   const goToStep = (stepId) => {
     if (Number(stepId) <= Number(maxUnlockedStep)) {
@@ -805,6 +812,11 @@ export default function Dashboard() {
   const handleActivityMappingChange = (nextMapping) => {
     setActivityMapping(nextMapping);
     setPreviewActivityMapping(nextMapping);
+    if (nextMapping === "zcm") {
+      setActivitySignalSettings((previous) => ({ ...previous, thresholdMethod: joinedParticipantMode ? "fixed" : previous.thresholdMethod, thresholdMg: 4 }));
+    } else if (nextMapping === "tat") {
+      setActivitySignalSettings((previous) => ({ ...previous, thresholdMethod: joinedParticipantMode ? "fixed" : previous.thresholdMethod, thresholdMg: 150 }));
+    }
     setPreviewLoaded(false);
     setPreviewData(null);
     setActivityPreviewByFile({});
@@ -821,6 +833,9 @@ export default function Dashboard() {
     const resolvedMode = nextMode === "join" ? "join" : "separate";
     setParticipantFileMode(resolvedMode);
     if (resolvedMode === "join") {
+      if (["zcm", "tat"].includes(activityMapping)) {
+        setActivitySignalSettings((previous) => ({ ...previous, thresholdMethod: "fixed" }));
+      }
       setSelectedAnalysisFileNames(actigraphyFiles.map((file) => file.name));
       setSelectedPreviewFile(actigraphyFiles.length > 1 ? JOINED_PARTICIPANT_KEY : (actigraphyFiles[0] ? fileSelectionKey(actigraphyFiles[0], 0) : ""));
       setSelectedLightPreviewFile("");
@@ -887,6 +902,7 @@ export default function Dashboard() {
       filesForPreview.slice(1).forEach((file) => formData.append("additionalFiles", file));
       formData.append("activityChannel", activityChannel);
       formData.append("activityMapping", previewActivityMapping);
+      formData.append("activitySignalSettings", JSON.stringify(activitySignalSettings));
       formData.append("resampleFreq", "1min");
       formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
       formData.append("csvSeparator", csvSeparator);
@@ -1155,6 +1171,7 @@ export default function Dashboard() {
           formData.append("sourceFileName", joinParticipantFiles ? joinedFileLabel : sourceFile.name);
           formData.append("activityChannel", activityChannel);
           formData.append("activityMapping", activityMapping);
+          formData.append("activitySignalSettings", JSON.stringify(activitySignalSettings));
           formData.append("activityTransform", activityTransform);
           formData.append("lightTransform", lightTransform);
           formData.append("analysisMode", analysisMode);
@@ -1284,6 +1301,7 @@ export default function Dashboard() {
             activityMapping: data.activity_mapping || { requested: activityMapping, resolved: activityMapping },
             diagnostics: data.diagnostics || null,
             participantJoin: data.participant_join || null,
+            processingProvenance: data.processing_provenance || null,
             lightResults: generatedLightResults,
             lightDiagnostics: generatedLightDiagnostics,
           };
@@ -1613,6 +1631,16 @@ export default function Dashboard() {
         title={appConfig.panels.activityMapping.title}
         value={activityMapping}
         onChange={handleActivityMappingChange}
+        signalSettings={activitySignalSettings}
+        onSignalSettingsChange={(nextSettings) => {
+          setActivitySignalSettings(nextSettings);
+          setPreviewLoaded(false);
+          setPreviewData(null);
+          setActivityPreviewByFile({});
+          setResultsGenerated(false);
+          setInitialQcByFile({});
+          initialQcRequestedRef.current = new Set();
+        }}
       />
     );
   } else if (currentStep === "4") {

@@ -239,8 +239,8 @@ class ParticipantJoinTests(unittest.TestCase):
         self.assertFalse(harmonization["raw_frequency_resampled"])
         self.assertEqual(len(joined.data), 8)
 
-    def test_different_native_rates_mad_and_pim_join_with_warning(self):
-        for mapping in ("mad", "pim"):
+    def test_different_native_rates_mad_pim_and_tat_join_with_warning(self):
+        for mapping in ("mad", "pim", "tat"):
             with self.subTest(mapping=mapping):
                 first = self._raw_with_rate_and_mapping("2026-01-01", 30, mapping)
                 second = self._raw_with_rate_and_mapping("2026-01-02", 100, mapping)
@@ -279,6 +279,42 @@ class ParticipantJoinTests(unittest.TestCase):
         self.assertTrue(any(ts.startswith("2017-") for ts in timestamps))
         self.assertTrue(any(ts.startswith("2019-") for ts in timestamps))
         self.assertTrue(any(row.get("is_gap") for row in preview["light_preview"]))
+
+    def test_joined_threshold_metrics_require_one_fixed_threshold(self):
+        with self.assertRaisesRegex(ValueError, "requires a fixed threshold"):
+            app_module._validate_joined_threshold_settings(
+                2,
+                "zcm",
+                {"threshold_method": "adaptive", "threshold_mg": None},
+            )
+        app_module._validate_joined_threshold_settings(
+            2,
+            "tat",
+            {"threshold_method": "fixed", "threshold_mg": 150.0},
+        )
+
+    def test_processing_provenance_includes_resolved_threshold_and_methods_text(self):
+        provenance = app_module._build_processing_provenance(
+            mapping_details={
+                "requested": "zcm",
+                "resolved": "zcm",
+                "label": "ZCM",
+                "units": "crossings/epoch",
+                "epoch_seconds": 30,
+                "source": "pygt3x_streaming_raw_axes",
+                "signal_processing": {
+                    "_zcm_threshold_mg": 12.5,
+                    "_threshold_method": "adaptive",
+                },
+            },
+            signal_settings={"threshold_method": "adaptive", "threshold_mg": None},
+            participant_join={"joined": False},
+            data_quality={"settings": {"minimumValidHoursPerDay": 16}},
+        )
+        self.assertEqual(provenance["threshold_mg"], 12.5)
+        self.assertEqual(provenance["threshold_method"], "adaptive")
+        self.assertIn("12.5 mg", provenance["methods_text"])
+        self.assertIn("10.1371/journal.pone.0261718", provenance["reference"]["doi"])
 
 
 class FeedbackNotificationTests(unittest.TestCase):

@@ -31,8 +31,18 @@ try:
 except Exception:  # pragma: no cover - deployment dependency
     butter = lfilter = lfilter_zi = sosfilt = sosfilt_zi = None
 
-from .activity_mapping import attach_mapping_metadata, mapping_metadata, normalize_activity_mapping
-from .activity_metrics import EpochPIMAccumulator, EpochZCMAccumulator
+from .activity_mapping import (
+    attach_mapping_metadata,
+    mapping_metadata,
+    normalize_activity_mapping,
+    normalize_activity_signal_settings,
+)
+from .activity_metrics import (
+    EpochPIMAccumulator,
+    EpochTATAccumulator,
+    EpochZCMAccumulator,
+    StreamingMoments,
+)
 from .geneactiv_bin import SimpleLightRecording
 
 try:
@@ -446,6 +456,8 @@ def _resolve_mode(
         return "pim", "pim", None
     if requested_mapping == "zcm":
         return "zcm", "zcm", None
+    if requested_mapping == "tat":
+        return "tat", "tat", None
 
     mode = (activity_mode or "counts").strip().lower()
     if mode in {"enmo", "enmo_mg"}:
@@ -458,6 +470,8 @@ def _resolve_mode(
         return "pim", "pim", None
     if mode in {"zcm", "zero_crossing_mode"}:
         return "zcm", "zcm", None
+    if mode in {"tat", "time_above_threshold"}:
+        return "tat", "tat", None
     if mode != "counts":
         raise GT3XProcessingError(f"Unsupported GT3X activity mode/mapping: {mode}")
 
@@ -668,6 +682,8 @@ def _stream_gt3x_activity(
     epoch_period: int,
     activity_mode: str,
     activity_mapping: str,
+    activity_signal_settings: Optional[Dict[str, Any]] = None,
+    _adaptive_threshold_mg: Optional[float] = None,
 ) -> Tuple[pd.Series, Dict[str, Any], pd.DataFrame]:
     api = _require_pygt3x()
     source = Path(file_path)
@@ -700,6 +716,13 @@ def _stream_gt3x_activity(
         sample_rate = _coerce_sample_rate(getattr(info, "sample_rate", None))
         timezone_offset = int(metadata["timezone_offset_seconds"])
         requested_mapping = normalize_activity_mapping(activity_mapping)
+        signal_settings = normalize_activity_signal_settings(activity_signal_settings, requested_mapping)
+        threshold_method = signal_settings["threshold_method"]
+        threshold_mg = (
+            float(_adaptive_threshold_mg)
+            if _adaptive_threshold_mg is not None
+            else signal_settings.get("threshold_mg")
+        )
         mode, resolved_mapping, fallback_reason = _resolve_mode(
             requested_mapping, activity_mode, sample_rate
         )
@@ -711,6 +734,8 @@ def _stream_gt3x_activity(
         mad_accumulator = None
         pim_accumulator = None
         zcm_accumulator = None
+        tat_accumulator = None
+        threshold_moments = StreamingMoments() if mode in {"zcm", "tat"} and threshold_method == "adaptive" and _adaptive_threshold_mg is None else None
         vm_filter = _StreamingVmLowPass(sample_rate)
         if mode == "counts":
             try:
@@ -724,7 +749,11 @@ def _stream_gt3x_activity(
         elif mode == "pim":
             pim_accumulator = EpochPIMAccumulator(epoch_period)
         elif mode == "zcm":
-            zcm_accumulator = EpochZCMAccumulator(epoch_period)
+            if threshold_mg is not None:
+                zcm_accumulator = EpochZCMAccumulator(epoch_period, threshold_mg=threshold_mg)
+        elif mode == "tat":
+            if threshold_mg is not None:
+                tat_accumulator = EpochTATAccumulator(epoch_period, threshold_mg=threshold_mg)
         elif mode != "counts":
             name = "ACC_mg" if mode == "accelerometer" else "ENMO_mg"
             mean_accumulator = _EpochMeanAccumulator(epoch_period, name)
@@ -797,16 +826,23 @@ def _stream_gt3x_activity(
             if mad_accumulator is not None and mode == "mad":
                 mad_accumulator.add(vm, local_start, sample_rate)
                 return
-            if mode in {"accelerometer", "pim", "zcm"}:
+            if mode == "accelerometer":
                 vm = vm_filter.apply(vm, local_start)
             dynamic_mg = (vm - 1.0) * 1000.0
+            normalized_mg = np.abs(dynamic_mg)
+            if threshold_moments is not None:
+                threshold_moments.add(normalized_mg)
             if mode == "pim":
                 assert pim_accumulator is not None
-                pim_accumulator.add(dynamic_mg, local_start, sample_rate)
+                pim_accumulator.add(normalized_mg, local_start, sample_rate)
                 return
             if mode == "zcm":
-                assert zcm_accumulator is not None
-                zcm_accumulator.add(dynamic_mg, local_start, sample_rate)
+                if zcm_accumulator is not None:
+                    zcm_accumulator.add(normalized_mg, local_start, sample_rate)
+                return
+            if mode == "tat":
+                if tat_accumulator is not None:
+                    tat_accumulator.add(normalized_mg, local_start, sample_rate)
                 return
             values = np.maximum(dynamic_mg, 0.0)
             assert mean_accumulator is not None
@@ -986,6 +1022,19 @@ def _stream_gt3x_activity(
     else:
         q95 = None
 
+    if threshold_moments is not None:
+        adaptive_threshold = threshold_moments.standard_deviation()
+        if not np.isfinite(adaptive_threshold):
+            raise GT3XProcessingError("Could not estimate an adaptive ZCM/TAT threshold from valid raw samples.")
+        return _stream_gt3x_activity(
+            file_path,
+            epoch_period=epoch_period,
+            activity_mode=activity_mode,
+            activity_mapping=requested_mapping,
+            activity_signal_settings=activity_signal_settings,
+            _adaptive_threshold_mg=float(adaptive_threshold),
+        )
+
     if mode == "counts" and counts_accumulator is not None:
         activity = counts_accumulator.series()
         mode_meta: Dict[str, Any] = {
@@ -1006,9 +1055,8 @@ def _stream_gt3x_activity(
         mode_meta = {
             "_gt3x_activity_mode": "pim",
             "_activity_units": "mg·s/epoch",
-            "_vector_magnitude_lowpass_hz": 20 if vm_filter.enabled else None,
-            "_vector_magnitude_filter_order": 4 if vm_filter.enabled else None,
-            "_filter_state_resets": vm_filter.resets,
+            "_activity_input_signal": "unfiltered_abs_vm_minus_1g_mg",
+            "_activity_filtering": "none",
         }
     elif mode == "zcm" and zcm_accumulator is not None:
         activity = zcm_accumulator.series()
@@ -1016,9 +1064,20 @@ def _stream_gt3x_activity(
             "_gt3x_activity_mode": "zcm",
             "_activity_units": "crossings/epoch",
             "_zcm_threshold_mg": zcm_accumulator.threshold_mg,
-            "_vector_magnitude_lowpass_hz": 20 if vm_filter.enabled else None,
-            "_vector_magnitude_filter_order": 4 if vm_filter.enabled else None,
-            "_filter_state_resets": vm_filter.resets + zcm_accumulator.resets,
+            "_threshold_method": threshold_method,
+            "_activity_input_signal": "unfiltered_abs_vm_minus_1g_mg",
+            "_activity_filtering": "none",
+            "_filter_state_resets": zcm_accumulator.resets,
+        }
+    elif mode == "tat" and tat_accumulator is not None:
+        activity = tat_accumulator.series()
+        mode_meta = {
+            "_gt3x_activity_mode": "tat",
+            "_activity_units": "s/epoch",
+            "_tat_threshold_mg": tat_accumulator.threshold_mg,
+            "_threshold_method": threshold_method,
+            "_activity_input_signal": "unfiltered_abs_vm_minus_1g_mg",
+            "_activity_filtering": "none",
         }
     else:
         assert mean_accumulator is not None
@@ -1042,8 +1101,9 @@ def _stream_gt3x_activity(
         source="pygt3x_streaming_raw_axes",
         epoch_seconds=int(epoch_period),
         calibrated_axes=True,
-        available_mappings=["auto", "accelerometer", "original", "mad", "enmo", "pim", "zcm"],
+        available_mappings=["auto", "accelerometer", "original", "mad", "enmo", "pim", "zcm", "tat"],
         original_mode=activity_mode,
+        signal_processing=mode_meta,
     )
     metadata.update(mode_meta)
     metadata.update(
@@ -1088,6 +1148,7 @@ def prepare_gt3x_activity_series(
     epoch_period: int = DEFAULT_GT3X_EPOCH_PERIOD,
     activity_mode: str = DEFAULT_GT3X_ACTIVITY_MODE,
     activity_mapping: str = "auto",
+    activity_signal_settings: Optional[Dict[str, Any]] = None,
 ) -> Tuple[pd.Series, Dict[str, Any], pd.DataFrame]:
     """Stream a GT3X recording directly into an epoch-level activity series."""
     try:
@@ -1096,6 +1157,7 @@ def prepare_gt3x_activity_series(
             epoch_period=int(epoch_period),
             activity_mode=activity_mode,
             activity_mapping=activity_mapping,
+            activity_signal_settings=activity_signal_settings,
         )
     except GT3XProcessingError:
         raise
@@ -1122,6 +1184,7 @@ def load_gt3x_as_baseraw(
     epoch_period: int = DEFAULT_GT3X_EPOCH_PERIOD,
     activity_mode: str = DEFAULT_GT3X_ACTIVITY_MODE,
     activity_mapping: str = "auto",
+    activity_signal_settings: Optional[Dict[str, Any]] = None,
 ):
     if BaseRaw is None:
         raise GT3XProcessingError("pyActigraphy.io.BaseRaw is not available in this backend environment.")
@@ -1131,6 +1194,7 @@ def load_gt3x_as_baseraw(
         epoch_period=epoch_period,
         activity_mode=activity_mode,
         activity_mapping=activity_mapping,
+        activity_signal_settings=activity_signal_settings,
     )
     raw = BaseRaw(
         name=Path(file_path).stem,
@@ -1153,12 +1217,14 @@ def summarize_gt3x_file(
     epoch_period: int = DEFAULT_GT3X_EPOCH_PERIOD,
     activity_mode: str = DEFAULT_GT3X_ACTIVITY_MODE,
     activity_mapping: str = "auto",
+    activity_signal_settings: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     activity, metadata, preview = prepare_gt3x_activity_series(
         file_path,
         epoch_period=epoch_period,
         activity_mode=activity_mode,
         activity_mapping=activity_mapping,
+        activity_signal_settings=activity_signal_settings,
     )
     valid = activity.dropna()
     return {

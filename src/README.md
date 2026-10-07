@@ -2,7 +2,7 @@
 
 ![ActiLab logo](assets/actilab-logo.png)
 
-A web application for importing actigraphy recordings, reviewing data quality, selecting transparent preprocessing and activity measures, classifying sleep/wake, calculating activity and light outcomes, and exporting reproducible results.
+A web application for importing actigraphy recordings, reviewing data quality, selecting transparent preprocessing and activity representations, classifying sleep/wake, calculating activity and light outcomes, and exporting reproducible results.
 
 ## User workflow
 
@@ -26,7 +26,7 @@ Start with the [ActiLab user documentation](docs/README.md).
 - [User guide](docs/USER_GUIDE.md)
 - [Initial QC and data-quality settings](docs/PREPROCESSING_VALIDITY_RULES.md)
 - [Supported file formats](docs/FILE_FORMATS.md)
-- [Choosing an activity measure](docs/ACTIVITY_PROCESSING.md)
+- [Choosing an activity representation](docs/ACTIVITY_PROCESSING.md)
 - [Metrics and algorithms](docs/METRICS_AND_ALGORITHMS.md)
 - [Methods and reproducibility](docs/PREPROCESSING_AND_PROVENANCE.md)
 - [Troubleshooting](docs/DIAGNOSTICS_AND_TROUBLESHOOTING.md)
@@ -55,4 +55,6 @@ ActiLab accepts suggestions and pull requests, but proposed changes do not modif
 
 ### Joined participant recordings with different native sampling rates
 
-When files from the same participant were recorded at different native accelerometer sampling rates (for example 30 Hz and 100 Hz), ActiLab does not concatenate the raw samples. Each recording is processed independently at its native rate into the selected activity representation and the same analytical epoch (30 seconds for current raw GT3X/GENEActiv processing), then the epoch-level series are joined by timestamp. The original sampling rates are retained in participant-join provenance. ENMO and processed acceleration are allowed with an informational notice; MAD and PIM are allowed with a warning; ZCM is allowed with a strong warning because zero-crossing counts are sampling-frequency sensitive; source/device activity or ActiGraph counts are blocked across differing native rates unless they have been externally harmonized/validated. Different processed epoch intervals or different resolved activity bases/units remain incompatible.
+When files from the same participant were recorded at different native accelerometer sampling rates (for example 30 Hz and 100 Hz), ActiLab does not concatenate the raw samples. Each recording is processed independently at its native rate into the selected activity representation and the same analytical epoch (30 seconds for current raw GT3X/GENEActiv processing), then the epoch-level series are joined by timestamp. The original sampling rates are retained in participant-join provenance. ENMO and processed acceleration are allowed with an informational notice; MAD, PIM, and TAT are allowed with a warning; ZCM is allowed with a strong warning because level-crossing counts are sampling-frequency sensitive; source/device activity or ActiGraph counts are blocked across differing native rates unless they have been externally harmonized/validated. Joined ZCM/TAT requires one fixed threshold. Different processed epoch intervals or different resolved activity bases/units remain incompatible.
+
+Raw-derived activity metrics use explicit metric-specific pipelines. ENMO and MAD use unfiltered vector magnitude; PIM integrates unfiltered `|VM - 1 g|`; ZCM counts threshold crossings in that normalized magnitude; and TAT reports seconds above threshold. Results include machine-readable processing provenance and copyable Methods text. See [Activity processing](docs/ACTIVITY_PROCESSING.md) and [Maczák et al. (2021)](https://doi.org/10.1371/journal.pone.0261718).

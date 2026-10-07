@@ -38,8 +38,11 @@ Other choices are:
 - **Processed acceleration (acc):** gravity-adjusted epoch-level acceleration;
 - **ENMO:** positive Euclidean Norm Minus One;
 - **MAD:** mean amplitude deviation;
-- **PIM:** integrated dynamic movement intensity within each epoch;
-- **ZCM:** movement-frequency measure based on zero crossings.
+- **PIM:** integral of unfiltered `|vector magnitude - 1 g|` within each epoch;
+- **ZCM:** crossings of a positive threshold in unfiltered gravity-normalized vector magnitude;
+- **TAT:** seconds per epoch above a positive threshold in unfiltered gravity-normalized vector magnitude.
+
+ZCM and TAT can use an adaptive recording-level SD threshold or a fixed mg threshold. Joined-participant ZCM/TAT requires a fixed threshold so every source uses the same definition. The resolved value appears in the processing summary.
 
 The selected measure becomes the activity basis for the chosen rest-activity metrics. Thresholds must match the selected units.
 
@@ -48,8 +51,9 @@ The selected measure becomes the activity basis for the chosen rest-activity met
 If joined recordings were collected at different native sampling rates (for example, 30 Hz and 100 Hz), ActiLab does not append those raw samples directly. Each file is processed independently at its native rate into the selected activity representation, summarized to the same analytical epoch, and then joined by timestamp. The original native rates remain visible in QC, preview information, results, and provenance.
 
 - **ENMO / processed acceleration:** allowed with an informational notice.
-- **MAD / PIM:** allowed with a warning.
+- **MAD / PIM / TAT:** allowed with a warning.
 - **ZCM:** allowed with a strong warning because it is especially sensitive to sampling frequency.
+- **Joined ZCM/TAT threshold:** one fixed mg value is required across all source files.
 - **Source/device activity or ActiGraph counts:** blocked across different native rates unless already externally harmonized/validated.
 - **Different processed epoch durations, activity bases, or units:** blocked.
 

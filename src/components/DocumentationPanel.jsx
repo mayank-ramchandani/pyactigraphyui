@@ -12,12 +12,12 @@ const DEFAULT_REPOSITORY_URL = "https://github.com/mayank-ramchandani/pyactigrap
 const DEFAULT_DOCS_URL = "https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs";
 
 const FILE_ROWS = [
-  ["GENEActiv .bin", "Raw X/Y/Z acceleration, with embedded light and temperature", "Recommended source / processed acc", "ENMO, MAD, PIM, and ZCM are available. Embedded light is used only when present."],
+  ["GENEActiv .bin", "Raw X/Y/Z acceleration, with embedded light and temperature", "Recommended source / processed acc", "ENMO, MAD, PIM, ZCM, and TAT are available. Embedded light is used only when present."],
   ["Axivity .cwa", "Raw X/Y/Z acceleration", "Processed acc", "Other activity measures are available when they are present in a converted time-series file."],
   ["ActiGraph .gt3x", "Raw X/Y/Z acceleration, with optional lux", "Recommended source / processed acc", "Activity analysis still works when the file contains no light data."],
   ["ActiGraph .agd", "Device activity counts", "Source/device activity", "Use this when the analysis should remain on the ActiGraph count scale."],
   ["Actiwatch .awd and other native pyActigraphy formats", "Device activity", "Source/device activity", "Available options depend on the information contained in the file."],
-  ["Oxford timeSeries.csv(.gz)", "Epoch-level processed acceleration", "Existing acc column", "Existing ENMO, MAD, PIM, or ZCM columns can also be selected."],
+  ["Oxford timeSeries.csv(.gz)", "Epoch-level processed acceleration", "Existing acc column", "Existing ENMO, MAD, PIM, ZCM, or TAT columns can also be selected."],
   ["Philips Actiware/RPX CSV", "Epoch activity with optional white/RGB light", "Source activity", "English, French, and German exports are supported, including Windows-1252 files."],
   ["Generic CSV/TXT", "User-defined columns", "Mapped activity column", "The app detects columns automatically; manual mapping is available when needed."],
   ["NHANES PAXHR_H", "Hourly summaries for multiple participants", "PAXMTSH after preparation", "Select one participant and create a documented participant-relative time index before upload."],
@@ -44,7 +44,7 @@ const SECTIONS = [
   { id: "workflow", label: "10-step workflow" },
   { id: "preprocessing", label: "Initial QC" },
   { id: "files", label: "File formats" },
-  { id: "activity", label: "Choosing an activity measure" },
+  { id: "activity", label: "Choosing an activity representation" },
   { id: "cleaning", label: "Cleaning & masking" },
   { id: "sleep", label: "Sleep-wake classification" },
   { id: "metrics", label: "Metrics & analysis" },
@@ -220,8 +220,11 @@ export default function DocumentationPanel({ onClose }) {
         <Card title="Why the choice matters">
           All selected rest-activity metrics use the chosen epoch-level activity series. Counts, mg, mg·s/epoch, and crossings/epoch are different scales, so thresholds must be chosen for the selected measure. The resolved measure, units, epoch duration, and settings are included with the results.
         </Card>
+        <Card title="Metric-specific raw processing">
+          ENMO and MAD use unfiltered vector magnitude. PIM integrates unfiltered <Code>|VM - 1 g|</Code>. ZCM counts crossings of a positive threshold in that normalized magnitude, and TAT reports seconds above it. ZCM/TAT can use a recording-level SD threshold or a fixed mg threshold. This explicit separation follows the reproducibility concern described by <a href="https://doi.org/10.1371/journal.pone.0261718" target="_blank" rel="noreferrer">Maczák et al. (2021)</a>: filtering order and metric definition are part of the method. The paper compared correlations in a young healthy sample, so it does not establish one universally optimal clinical pipeline.
+        </Card>
         <Card title="Joining recordings with different native sampling rates">
-          In joined participant mode, ActiLab does not directly concatenate raw 30-Hz, 100-Hz, or other differently sampled streams. Each source is processed independently at its native rate into the selected activity representation and the same analytical epoch, then the epoch-level series are joined by timestamp. Native rates remain visible in QC, previews, results, and provenance. ENMO and processed acceleration are allowed with an informational notice; MAD and PIM are allowed with a warning; ZCM receives a strong warning because it is sampling-frequency sensitive; and source/device activity or ActiGraph counts are blocked across differing native rates unless already externally harmonized/validated. A join is also blocked when processed epoch durations, resolved activity bases, or units differ.
+          In joined participant mode, ActiLab does not directly concatenate raw 30-Hz, 100-Hz, or other differently sampled streams. Each source is processed independently at its native rate into the selected activity representation and the same analytical epoch, then the epoch-level series are joined by timestamp. Native rates remain visible in QC, previews, results, and provenance. ENMO and processed acceleration are allowed with an informational notice; MAD, PIM, and TAT are allowed with a warning; ZCM receives a strong warning because it is sampling-frequency sensitive; and source/device activity or ActiGraph counts are blocked across differing native rates unless already externally harmonized/validated. Joined ZCM/TAT requires one fixed threshold across all sources. A join is also blocked when processed epoch durations, resolved activity bases, or units differ.
         </Card>
       </div>
     ),

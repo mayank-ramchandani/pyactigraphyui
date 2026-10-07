@@ -35,7 +35,13 @@ export const ACTIVITY_MAPPING_OPTIONS = [
     id: "zcm",
     label: "ZCM",
     units: "crossings/epoch",
-    description: "Zero-crossing mode. Counts dead-band sign changes in dynamic vector magnitude within each epoch, emphasizing movement frequency.",
+    description: "Counts level crossings of a positive threshold in unfiltered |vector magnitude - 1 g|, emphasizing movement frequency.",
+  },
+  {
+    id: "tat",
+    label: "TAT",
+    units: "s/epoch",
+    description: "Time above threshold. Reports the seconds per epoch for which unfiltered |vector magnitude - 1 g| exceeds the selected threshold.",
   },
 ];
 
@@ -50,6 +56,8 @@ export default function ActivityMappingPanel({
   compact = false,
   context = "analysis",
   title = "",
+  signalSettings = { thresholdMethod: "adaptive", thresholdMg: 4 },
+  onSignalSettingsChange = () => {},
 }) {
   const selected = ACTIVITY_MAPPING_OPTIONS.find((item) => item.id === value) || ACTIVITY_MAPPING_OPTIONS[0];
   const isPreview = context === "preview";
@@ -65,12 +73,12 @@ export default function ActivityMappingPanel({
     >
       {title && !compact && <h2 style={{ marginTop: 0, marginBottom: 10 }}>{title}</h2>}
       <div style={{ fontWeight: 800, marginBottom: 6 }}>
-        {isPreview ? "Preview activity signal" : "Activity metric / magnitude of acceleration"}
+        {isPreview ? "Preview activity signal" : "Activity representation / metric"}
       </div>
       <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
         {isPreview
           ? "This only controls the plotted preview. It does not change the activity basis selected later for analysis."
-          : "Choose one of six supported activity-basis options. The selected epoch-level series becomes the basis for all chosen rest/activity metrics and is also used as the initial Activity Preview setting."}
+          : "Choose one of seven supported activity representations. Raw-signal processing is metric-specific; the resulting epoch-level series becomes the basis for the selected rest/activity analyses."}
       </div>
       <select
         value={value}
@@ -91,9 +99,41 @@ export default function ActivityMappingPanel({
       <div style={{ color: "#1e3a8a", fontSize: 13, marginTop: 8, lineHeight: 1.45 }}>
         {selected.description}
       </div>
-      {["auto", "accelerometer", "mad", "enmo", "pim", "zcm"].includes(value) && !isPreview && (
+      {["zcm", "tat"].includes(value) && !isPreview && (
+        <div style={{ marginTop: 14, padding: 12, border: "1px solid #fdba74", borderRadius: 12, background: "#fff7ed" }}>
+          <div style={{ fontWeight: 800, color: "#9a3412", marginBottom: 8 }}>Threshold definition</div>
+          <label style={{ display: "block", color: "#7c2d12", fontSize: 13, lineHeight: 1.5 }}>
+            Method
+            <select
+              value={signalSettings?.thresholdMethod || "adaptive"}
+              onChange={(event) => onSignalSettingsChange({ ...signalSettings, thresholdMethod: event.target.value })}
+              style={{ display: "block", width: "100%", marginTop: 5, padding: "9px 10px", borderRadius: 9, border: "1px solid #fdba74", background: "white" }}
+            >
+              <option value="adaptive">Adaptive (SD of the recording)</option>
+              <option value="fixed">Fixed threshold</option>
+            </select>
+          </label>
+          {signalSettings?.thresholdMethod === "fixed" && (
+            <label style={{ display: "block", color: "#7c2d12", fontSize: 13, lineHeight: 1.5, marginTop: 10 }}>
+              Threshold (mg)
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={signalSettings?.thresholdMg ?? ""}
+                onChange={(event) => onSignalSettingsChange({ ...signalSettings, thresholdMg: event.target.value })}
+                style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 5, padding: "9px 10px", borderRadius: 9, border: "1px solid #fdba74", background: "white" }}
+              />
+            </label>
+          )}
+          <div style={{ color: "#9a3412", fontSize: 12, lineHeight: 1.45, marginTop: 8 }}>
+            Adaptive uses one recording-level SD threshold and requires a second streaming pass through raw data. Joined-participant ZCM/TAT requires a fixed threshold so every source uses the same definition.
+          </div>
+        </div>
+      )}
+      {["auto", "accelerometer", "mad", "enmo", "pim", "zcm", "tat"].includes(value) && !isPreview && (
         <div style={{ color: "#9a3412", fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>
-          Thresholds are tied to the selected signal scale (counts, mg, mg·s/epoch, or crossings/epoch). The chosen value and binarization setting are retained with the analysis configuration.
+          Thresholds are tied to the selected signal scale (counts, mg, mg·s/epoch, crossings/epoch, or s/epoch). The chosen value and binarization setting are retained with the analysis configuration.
         </div>
       )}
     </div>

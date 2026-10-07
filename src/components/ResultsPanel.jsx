@@ -52,6 +52,39 @@ const RESULT_LABEL_OVERRIDES = {
   cosinor: "Cosinor family",
 };
 
+function ProcessingProvenanceCard({ provenance }) {
+  const [copyStatus, setCopyStatus] = useState("");
+  if (!provenance?.methods_text) return null;
+
+  const copyMethods = async () => {
+    try {
+      await navigator.clipboard.writeText(provenance.methods_text);
+      setCopyStatus("Copied");
+    } catch (_error) {
+      setCopyStatus("Copy unavailable");
+    }
+  };
+
+  return (
+    <div style={{ border: "1px solid #a7f3d0", borderRadius: 14, padding: 12, background: "#ecfdf5", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 800, color: "#065f46" }}>Activity Processing & Methods Text</div>
+        <button type="button" onClick={copyMethods} style={{ padding: "7px 10px", borderRadius: 9, border: "1px solid #6ee7b7", background: "white", color: "#065f46", cursor: "pointer", fontWeight: 700 }}>
+          {copyStatus || "Copy methods text"}
+        </button>
+      </div>
+      <div style={{ color: "#064e3b", fontSize: 13, lineHeight: 1.6, marginTop: 8 }}>
+        {provenance.methods_text}
+      </div>
+      {provenance?.reference?.doi && (
+        <div style={{ color: "#047857", fontSize: 12, lineHeight: 1.5, marginTop: 8 }}>
+          Processing rationale: <a href={`https://doi.org/${provenance.reference.doi}`} target="_blank" rel="noreferrer">Maczák et al. (2021)</a>. The citation supports transparent, metric-specific preprocessing; it does not validate one universally optimal pipeline.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function resultLabel(metricRegistry, key) {
   return RESULT_LABEL_OVERRIDES[key] || getMetricLabel(metricRegistry, key);
 }
@@ -679,6 +712,7 @@ export default function ResultsPanel({
                         Activity mapping used: <strong>{activityMappingLabel(item.activityMapping?.resolved || item.activityMapping?.requested || activityMapping)}</strong>
                         {item.activityMapping?.source ? ` · Source: ${item.activityMapping.source}` : ""}
                       </div>
+                      <ProcessingProvenanceCard provenance={item.processingProvenance} />
                       <SamplingHarmonizationNotice harmonization={item.participantJoin?.sampling_harmonization} />
                       <div style={{ border: "1px solid #e2e8f0", borderRadius: 14, padding: 12, background: "#f8fafc", marginBottom: 12, maxHeight: 460, overflowY: "auto" }}>
                         <div style={{ fontWeight: 700, marginBottom: 8 }}>Summary Table</div>
