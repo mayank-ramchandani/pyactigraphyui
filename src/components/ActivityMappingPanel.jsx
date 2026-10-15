@@ -99,6 +99,11 @@ export default function ActivityMappingPanel({
       <div style={{ color: "#1e3a8a", fontSize: 13, marginTop: 8, lineHeight: 1.45 }}>
         {selected.description}
       </div>
+      {!isPreview && signalSettings?.rawSignal?.enabled && (
+        <div style={{ fontSize: 12, background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 9, padding: 10, marginTop: 12, lineHeight: 1.6, color: "#9a3412" }}>
+          Custom raw preprocessing is enabled in Step 2. Your chosen activity metric will be computed from that processed signal, so its values and validation assumptions may differ from the standard metric definition. Source counts and pre-aggregated files cannot use this setting.
+        </div>
+      )}
       {["zcm", "tat"].includes(value) && !isPreview && (
         <div style={{ marginTop: 14, padding: 12, border: "1px solid #fdba74", borderRadius: 12, background: "#fff7ed" }}>
           <div style={{ fontWeight: 800, color: "#9a3412", marginBottom: 8 }}>Threshold definition</div>

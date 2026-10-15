@@ -1,6 +1,6 @@
 # Choosing an activity representation
 
-The activity measure is selected on **Step 3: Estimating Activity Metric**. It becomes the epoch-level signal used by the selected rest-activity analyses.
+An optional **raw-signal preprocessing** panel is available in **Step 2: Initial QC** (off by default), followed by the activity measure selected on **Step 3: Estimating Activity Metric**. It becomes the epoch-level signal used by the selected rest-activity analyses.
 
 ## Recommended choice
 
@@ -36,7 +36,7 @@ Do not compare thresholds across counts, mg, mg·s/epoch, and crossings/epoch as
 
 ## Raw accelerometer files
 
-Raw X/Y/Z acceleration must be reduced to one scalar epoch-level series before pyActigraphy metrics can be calculated. ActiLab uses metric-specific pipelines rather than one universal filter:
+Raw X/Y/Z acceleration must be reduced to one scalar epoch-level series before pyActigraphy metrics can be calculated. With Step 2 custom preprocessing turned off, ActiLab uses metric-specific pipelines rather than one universal filter:
 
 - **ENMO:** unfiltered vector magnitude → subtract 1 g → truncate negative values to zero → epoch mean.
 - **MAD:** unfiltered vector magnitude → within-epoch mean amplitude deviation.
@@ -48,6 +48,12 @@ Raw X/Y/Z acceleration must be reduced to one scalar epoch-level series before p
 This distinction matters because filtering individual axes before calculating vector magnitude is not mathematically equivalent to filtering vector magnitude afterward. Maczák et al. found that preprocessing order could materially change the resulting activity series and emphasized complete reporting of the signal-processing definition ([Maczák et al., 2021](https://doi.org/10.1371/journal.pone.0261718)).
 
 The exact resolved measure, units, epoch duration, and processing details are included with the results.
+
+## Optional filtering, magnitude and normalization in Step 2
+
+Enable **Custom raw acceleration preprocessing** to choose low-pass, high-pass or band-pass Butterworth filtering, orders 1–8, corner frequencies (Hz), and whether filtering happens on each calibrated axis **before magnitude** or on the combined magnitude **after**. Magnitude means `sqrt(X² + Y² + Z²)`; per-axis and magnitude-first filtering are different operations. You may select uncorrected magnitude, absolute amplitude, signed gravity subtraction, absolute gravity deviation, or positive deviation (ENMO), plus an optional 1 g reference and output units (mg, g, m/s²). High-/band-pass filter choices that remove static gravity cannot be combined with subtraction of another 1 g.
+
+Filtering is causal and forward-only, implemented on native high-frequency GT3X and GENEActiv BIN samples, and has state resets at recording gaps. Custom processing **does not run** on already-aggregated or converted activity files, including current CWA conversions. It does not reinterpret device count data as raw acceleration. Configured ZCM/TAT thresholds remain in mg. Not all custom signals have established sleep classification thresholds. See [the full preprocessing description](PREPROCESSING_AND_PROVENANCE.md) and [Maczák et al. (2021)](https://doi.org/10.1371/journal.pone.0261718).
 
 ## Joining recordings with different native sampling rates
 

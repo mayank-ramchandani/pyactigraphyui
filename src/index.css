@@ -334,3 +334,19 @@ code {
     display: none;
   }
 }
+
+/* Step 2: optional raw-acceleration preprocessing */
+.raw-signal-panel { margin-top: 18px; padding: 16px; border: 1px solid #cbd5e1; border-radius: 16px; background: #f8fafc; }
+.raw-signal-heading h3 { margin: 0 0 5px; font-size: 17px; color: #0f172a; }
+.raw-signal-heading p { margin: 0 0 13px; line-height: 1.5; font-size: 13px; color: #475569; }
+.raw-signal-enable { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; color: #0f172a; cursor: pointer; }
+.raw-signal-enable input { width: 17px; height: 17px; accent-color: #2563eb; }
+.raw-signal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; margin-top: 17px; }
+.raw-signal-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 13px; color: #334155; }
+.raw-signal-label { font-weight: 700; }
+.raw-signal-field select:disabled, .raw-signal-field input:disabled { background: #e2e8f0 !important; }
+.raw-signal-info { display: inline-flex; position: relative; margin-left: 3px; align-items: center; justify-content: center; cursor: help; vertical-align: middle; width: 17px; height: 17px; border: 1.5px solid #2563eb; color: #1d4ed8; border-radius: 999px; font: 800 11px/1 system-ui, sans-serif; background: white; }
+.raw-signal-info-popup { display: none; position: absolute; left: 50%; bottom: calc(100% + 9px); transform: translateX(-50%); width: min(290px, 75vw); padding: 10px 12px; border-radius: 9px; z-index: 30; pointer-events: none; white-space: normal; text-align: left; font: 400 12px/1.5 system-ui, sans-serif; box-shadow: 0 5px 18px #0f172a33; color: white; background: #0f172a; }
+.raw-signal-info:hover .raw-signal-info-popup, .raw-signal-info:focus .raw-signal-info-popup { display: block; }
+.raw-signal-warning { color: #9a3412; background: #fff7ed; border: 1px solid #fdba74; border-radius: 9px; padding: 10px; font-size: 13px; }
+.raw-signal-footnote { color: #475569; font-size: 12px; margin-bottom: 0; margin-top: 12px; line-height: 1.6; }

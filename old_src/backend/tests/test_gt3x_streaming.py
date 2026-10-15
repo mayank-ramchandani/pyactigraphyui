@@ -166,7 +166,7 @@ class StreamingGT3XTests(unittest.TestCase):
 
     def test_pim_and_zcm_are_streamed_from_raw_axes(self):
         start = 1_577_836_800
-        alternating = np.tile(np.asarray([230, 282], dtype=np.int16), 15)
+        alternating = np.tile(np.asarray([256, 282], dtype=np.int16), 15)
         events = [
             _event(start + second, 26, _activity2_payload(alternating))
             for second in range(4)
@@ -179,16 +179,63 @@ class StreamingGT3XTests(unittest.TestCase):
                 str(path), epoch_period=2, activity_mapping="pim"
             )
             zcm, zcm_meta, _ = prepare_gt3x_activity_series(
-                str(path), epoch_period=2, activity_mapping="zcm"
+                str(path),
+                epoch_period=2,
+                activity_mapping="zcm",
+                activity_signal_settings={"thresholdMethod": "fixed", "thresholdMg": 4},
             )
 
         dynamic = (alternating.astype(float) / 256.0 - 1.0) * 1000.0
         expected_pim = float(2 * np.abs(dynamic).sum() / 30.0)
         np.testing.assert_allclose(pim.dropna().to_numpy(), [expected_pim, expected_pim], rtol=1e-6)
-        np.testing.assert_allclose(zcm.dropna().to_numpy(), [59.0, 59.0], rtol=0, atol=0)
+        np.testing.assert_allclose(zcm.dropna().to_numpy(), [59.0, 60.0], rtol=0, atol=0)
         self.assertEqual(pim_meta["_activity_mapping"]["resolved"], "pim")
         self.assertEqual(zcm_meta["_activity_mapping"]["resolved"], "zcm")
         self.assertEqual(zcm_meta["_zcm_threshold_mg"], 4.0)
+        self.assertEqual(pim_meta["_activity_filtering"], "none")
+        self.assertEqual(zcm_meta["_activity_filtering"], "none")
+
+    def test_tat_uses_unfiltered_normalized_magnitude_and_seconds(self):
+        start = 1_577_836_800
+        alternating = np.tile(np.asarray([256, 282], dtype=np.int16), 15)
+        events = [
+            _event(start + second, 26, _activity2_payload(alternating))
+            for second in range(4)
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tat.gt3x"
+            _write_gt3x(path, start, start + 3, events)
+            tat, metadata, _ = prepare_gt3x_activity_series(
+                str(path),
+                epoch_period=2,
+                activity_mapping="tat",
+                activity_signal_settings={"thresholdMethod": "fixed", "thresholdMg": 4},
+            )
+
+        np.testing.assert_allclose(tat.dropna().to_numpy(), [1.0, 1.0], rtol=0, atol=1e-9)
+        self.assertEqual(metadata["_tat_threshold_mg"], 4.0)
+        self.assertEqual(metadata["_threshold_method"], "fixed")
+
+    def test_adaptive_zcm_uses_recording_sd_once(self):
+        start = 1_577_836_800
+        alternating = np.tile(np.asarray([256, 282], dtype=np.int16), 15)
+        events = [
+            _event(start + second, 26, _activity2_payload(alternating))
+            for second in range(4)
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "adaptive-zcm.gt3x"
+            _write_gt3x(path, start, start + 3, events)
+            zcm, metadata, _ = prepare_gt3x_activity_series(
+                str(path), epoch_period=2, activity_mapping="zcm"
+            )
+
+        normalized = np.abs((alternating.astype(float) / 256.0 - 1.0) * 1000.0)
+        self.assertAlmostEqual(metadata["_zcm_threshold_mg"], float(np.std(normalized)), places=6)
+        self.assertEqual(metadata["_threshold_method"], "adaptive")
+        np.testing.assert_allclose(zcm.dropna().to_numpy(), [59.0, 60.0], rtol=0, atol=0)
 
     def test_streaming_counts_keeps_filter_and_group_state_across_chunks(self):
         from scipy.signal import lfilter, lfilter_zi

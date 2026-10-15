@@ -6,7 +6,7 @@ Processed acceleration is one of the six choices on page 3. The maintained docum
 
 - `auto` selects source/device activity for compatible native/count files and processed epoch-level acceleration for supported raw X/Y/Z files.
 - `accelerometer` explicitly requests processed `acc`.
-- `enmo`, `mad`, `pim`, and `zcm` are distinct alternative scalar mappings.
+- `enmo`, `mad`, `pim`, `zcm`, and `tat` are distinct alternative scalar mappings with metric-specific definitions.
 - Page 4 previews the activity series; page 8 selects metric- or family-level processing; page 9 generates results.
 
 ## Large raw files

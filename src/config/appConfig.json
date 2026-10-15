@@ -62,7 +62,7 @@
       "id": "2",
       "key": "preprocessing",
       "title": "Initial QC",
-      "description": "Review initial per-file data coverage and quality-control information before activity estimation."
+      "description": "Review initial data quality and optionally customize native raw X/Y/Z filtering, magnitude calculation, normalization, and units before activity estimation."
     },
     {
       "id": "3",

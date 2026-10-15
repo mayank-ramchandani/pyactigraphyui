@@ -1616,6 +1616,17 @@ export default function Dashboard() {
       <PreprocessingPanel
         title={appConfig.panels.preprocessing.title}
         settings={supportFileSettings.masking}
+        rawSignalSettings={activitySignalSettings.rawSignal}
+        activityMapping={activityMapping}
+        onRawSignalSettingsChange={(rawSignal) => {
+          setActivitySignalSettings((previous) => ({ ...previous, rawSignal }));
+          setPreviewLoaded(false);
+          setPreviewData(null);
+          setActivityPreviewByFile({});
+          setResultsGenerated(false);
+          setInitialQcByFile({});
+          initialQcRequestedRef.current = new Set();
+        }}
         actigraphyFiles={actigraphyFiles}
         initialQcByFile={initialQcByFile}
         initialQcLoadingByFile={initialQcLoadingByFile}

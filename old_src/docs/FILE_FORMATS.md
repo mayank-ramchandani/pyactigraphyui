@@ -1,17 +1,17 @@
 # Supported file formats
 
-Upload actigraphy recordings on **Step 1**. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 7.
+Upload actigraphy recordings on **Step 1**. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 8.
 
 Support depends on both the file extension and the signals or columns actually contained in the file.
 
 | Format | Typical content | Recommended activity basis | User notes |
 |---|---|---|---|
-| GENEActiv `.bin` | Raw X/Y/Z acceleration, light, and temperature | Recommended source / processed acc | ENMO, MAD, PIM, and ZCM are available. Embedded light is used when present. |
+| GENEActiv `.bin` | Raw X/Y/Z acceleration, light, and temperature | Recommended source / processed acc | ENMO, MAD, PIM, ZCM, and TAT are available. Embedded light is used when present. |
 | Axivity `.cwa` | Raw X/Y/Z acceleration | Processed acc | Other measures require corresponding columns in a converted time-series file. |
 | ActiGraph `.gt3x` | Raw X/Y/Z acceleration, with optional lux | Recommended source / processed acc | A file without light can still be analysed for activity. |
 | ActiGraph `.agd` | Device activity counts | Source/device activity | Use when the analysis should remain on the ActiGraph count scale. |
 | Actiwatch `.awd` and other native pyActigraphy formats | Device activity | Source/device activity | Available options depend on the information supported by the reader. |
-| Oxford `*timeSeries.csv(.gz)` | Epoch-level processed acceleration | Existing acc column | Existing ENMO, MAD, PIM, or ZCM columns can also be selected. |
+| Oxford `*timeSeries.csv(.gz)` | Epoch-level processed acceleration | Existing acc column | Existing ENMO, MAD, PIM, ZCM, or TAT columns can also be selected. |
 | Philips Actiware/RPX CSV | Epoch activity with optional white/RGB light | Source activity | English, French, and German exports are supported. |
 | Generic CSV/TXT | User-defined timestamp, activity, and sensor columns | Mapped activity column | Automatic detection is attempted first; manual mapping is available. |
 | NHANES `PAXHR_H` | Hourly summaries for multiple participants | PAXMTSH after preparation | Prepare one participant and a participant-relative time index before upload. |

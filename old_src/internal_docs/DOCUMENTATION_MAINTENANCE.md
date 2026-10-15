@@ -21,7 +21,7 @@ The in-app workflow, metric, algorithm, family, and format content is partly reg
 The documented public flow contains exactly ten pages:
 
 1. Import Actigraphy Files
-2. Pre-processing
+2. Initial QC
 3. Estimating Activity Metric / Magnitude of Acceleration
 4. Activity Preview
 5. Cleaning and Masking

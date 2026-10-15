@@ -1,6 +1,6 @@
 # Metrics and algorithms
 
-Sleep-window and classification choices are made on **Step 6**. Analysis families and individual metrics are selected on **Step 8**. Results are generated on **Step 9**.
+Sleep-window and classification choices are made on **Step 6**. Analysis families and individual metrics are selected on **Step 7**. Results are generated on **Step 9**.
 
 ## Analysis families
 

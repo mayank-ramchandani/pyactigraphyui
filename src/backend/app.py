@@ -792,6 +792,26 @@ def _build_processing_provenance(
         if raw_generated or mapping in {"accelerometer", "original"}
         else f"the supplied epoch-level {mapping.upper()} column was used directly; upstream raw-signal processing was not reconstructed by ActiLab"
     )
+    custom = signal_settings.get("raw_signal") or {}
+    if custom.get("enabled") and raw_generated:
+        order = "filter each X/Y/Z axis before magnitude" if custom.get("filter_stage") == "axes" else "calculate magnitude before filtering"
+        kind = custom.get("filter_type", "none")
+        if kind == "none":
+            filter_details = "without a digital filter"
+        else:
+            cutoffs = (
+                f"{custom.get('low_cutoff_hz'):g}–{custom.get('high_cutoff_hz'):g} Hz" if kind == "bandpass"
+                else f"{custom.get('low_cutoff_hz'):g} Hz" if kind == "highpass"
+                else f"{custom.get('high_cutoff_hz'):g} Hz"
+            )
+            filter_details = f"using a causal, forward-only Butterworth {kind} filter (order {custom.get('filter_order')}, cutoff {cutoffs})"
+        definition = (
+            "calibrated raw X/Y/Z samples were processed with the user-selected custom pipeline: "
+            f"{order}, {filter_details}, then {custom.get('normalization')} normalization "
+            f"(reference gravity {custom.get('gravity_g')} g where applicable); "
+            f"values were aggregated as {mapping.upper()} and exported in {mapping_details.get('units') or custom.get('output_unit')}. "
+            "This custom signal may not match published validated metric input definitions"
+        )
     method_parts = [f"Activity representation: {mapping_details.get('label') or mapping.upper()}; {definition}."]
     if raw_generated and mapping in {"zcm", "tat"} and threshold_mg is not None:
         method_label = "recording-level SD" if threshold_method == "adaptive" else "fixed"
@@ -808,7 +828,8 @@ def _build_processing_provenance(
         method_parts.append(f"A valid day required at least {float(min_hours):g} analyzable hours after masks and non-wear handling.")
 
     return {
-        "schema_version": "activity-processing-1.0",
+        "schema_version": "activity-processing-1.1",
+        "custom_raw_signal_processing": custom if custom.get("enabled") and raw_generated else None,
         "activity_mapping": mapping_details,
         "signal_settings": signal_settings,
         "epoch_seconds": epoch_seconds,
@@ -839,6 +860,8 @@ def _load_native_supported_file(
     reader_type = infer_reader_type(file_path)
 
     if reader_type == "tabular":
+        if (activity_signal_settings or {}).get("raw_signal", (activity_signal_settings or {}).get("rawSignal", {})).get("enabled"):
+            raise ValueError("Custom raw acceleration filtering requires an original X/Y/Z recording (.gt3x or GENEActiv .bin), not an already-aggregated CSV or spreadsheet.")
         requested_mapping = normalize_activity_mapping(activity_mapping)
         mapping = _clean_csv_mapping(csv_mapping)
         require_activity = str(purpose or "activity").strip().lower() != "light"
@@ -3011,6 +3034,13 @@ def analyze_basic(
             sampling_harmonization = (participant_join or {}).get("sampling_harmonization") or {}
             if sampling_harmonization.get("severity") in {"warning", "strong_warning"} and sampling_harmonization.get("message"):
                 warnings.append(sampling_harmonization["message"])
+
+            if signal_settings.get("raw_signal", {}).get("enabled"):
+                warnings.append(
+                    "A custom raw-acceleration preprocessing pipeline was applied. Activity metric values are custom signal variants; "
+                    "do not assume that published device-count thresholds or sleep-wake algorithm validation apply to this signal. "
+                    "Report filter order/cutoffs, magnitude/filter ordering, gravity normalization, native sampling rate, and output units."
+                )
 
             if requested_mapping != "original" and (algorithm_request or {}).get("id"):
                 warnings.append(

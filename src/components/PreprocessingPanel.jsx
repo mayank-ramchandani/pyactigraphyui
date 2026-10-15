@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { buildFileEntries, fileEntryLabel, formatFileSize } from "../services/fileIdentityUtils";
 import SamplingHarmonizationNotice from "./SamplingHarmonizationNotice";
+import RawSignalProcessingPanel from "./RawSignalProcessingPanel";
 
 function formatHours(value) {
   const number = Number(value);
@@ -103,6 +104,9 @@ function InitialQcCard({ entry, payload, loading, error, settings }) {
 export default function PreprocessingPanel({
   title = "2. Initial QC",
   settings = {},
+  rawSignalSettings = {},
+  onRawSignalSettingsChange = () => {},
+  activityMapping = "auto",
   actigraphyFiles = [],
   initialQcByFile = {},
   initialQcLoadingByFile = {},
@@ -161,7 +165,7 @@ export default function PreprocessingPanel({
           {entries.length === 0 && <div style={{ color: "#64748b" }}>Upload an actigraphy file in Step 1 to run initial QC.</div>}
         </div>
       </div>
-
+      <RawSignalProcessingPanel settings={rawSignalSettings} onChange={onRawSignalSettingsChange} activityMapping={activityMapping} />
     </div>
   );
 }

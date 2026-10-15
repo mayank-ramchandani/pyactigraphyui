@@ -28,11 +28,20 @@ For each file, the analysis generally follows this order:
 
 Missing and excluded epochs remain unavailable rather than being replaced with zero activity.
 
+### Signal processing versus actigraphy preprocessing
+
+ActiLab records these as two separate layers:
+
+1. **Activity signal generation:** calibrated raw X/Y/Z → metric-specific vector-magnitude/gravity handling → epoch-level ENMO, MAD, PIM, ZCM, TAT, or processed acceleration.
+2. **Actigraphy preprocessing:** epoch series → timestamp regularization → start/stop limits → non-wear/manual masks → valid-window rules → rhythm and sleep analyses.
+
+No universal band-pass filter is applied before every raw-derived metric. ENMO, MAD, PIM, ZCM, and TAT use their documented metric-specific unfiltered inputs; the processed-acceleration option retains its own named processing path. This separation follows the reproducibility concern described by [Maczák et al. (2021)](https://doi.org/10.1371/journal.pone.0261718): preprocessing order and metric definition are part of the result, not interchangeable implementation details.
+
 ### Joined participant recordings
 
 When multiple recordings from the same participant are joined, each source is processed independently before the participant timeline is assembled. If the native accelerometer sampling rates differ, ActiLab does not resample one raw stream to imitate the other. Each recording is converted at its own native rate into the selected activity representation and common analytical epoch, and the epoch-level series are then joined by timestamp.
 
-The join keeps real calendar gaps as missing time, removes exact duplicate boundary timestamps, and records the native sampling rate for every source. Metric-specific safeguards are applied when rates differ: ENMO and processed acceleration proceed with an informational notice; MAD and PIM proceed with a warning; ZCM proceeds with a strong warning; source/device activity or ActiGraph counts are rejected unless they have already been externally harmonized/validated. Files with different processed epoch durations, activity bases, or units are not combined.
+The join keeps real calendar gaps as missing time, removes exact duplicate boundary timestamps, and records the native sampling rate for every source. Metric-specific safeguards are applied when rates differ: ENMO and processed acceleration proceed with an informational notice; MAD, PIM, and TAT proceed with a warning; ZCM proceeds with a strong warning; source/device activity or ActiGraph counts are rejected unless they have already been externally harmonized/validated. Joined ZCM/TAT also requires one fixed threshold shared by every source. Files with different processed epoch durations, activity bases, or units are not combined.
 
 ## Information retained with results
 
@@ -42,6 +51,8 @@ Results and exports can retain:
 - detected reader or file format;
 - requested and resolved activity measure;
 - source column or raw-processing method;
+- raw input signal, gravity handling, filtering status, and operation order;
+- ZCM/TAT threshold method and resolved threshold value;
 - units and epoch duration;
 - native sampling rate for each source in a joined participant recording;
 - joined-recording harmonization notices and warnings;
@@ -53,6 +64,8 @@ Results and exports can retain:
 - selected algorithms, metrics, families, and parameters;
 - warnings and unavailable-result explanations;
 - application version and build information.
+
+The Results page includes a copyable Methods paragraph assembled from these fields. It is a reporting aid and should be reviewed alongside the study protocol before publication.
 
 ## Reproducible analysis checklist
 

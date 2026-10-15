@@ -19,6 +19,7 @@ from .activity_metrics import (
     StreamingMoments,
 )
 from .diagnostics import record_diagnostic_event, update_current_stage
+from .raw_signal_processing import RawSignalProcessor, output_unit_factor, raw_signal_units
 import numpy as np
 
 try:
@@ -97,15 +98,15 @@ def _decode_measurement(hex12: str, calibration: Dict[str, float]):
     }
 
 
-def _decode_measurement_array(page_hex: str, calibration: Dict[str, float]):
+def _decode_measurement_array(page_hex: str, calibration: Dict[str, float], include_axes: bool = False):
     """Vectorized decoder for GENEActiv 48-bit samples."""
     usable_len = (len(page_hex) // 12) * 12
     if usable_len <= 0:
-        return None, None
+        return (None, None, None, None) if include_axes else (None, None, None)
     try:
         raw = np.frombuffer(bytes.fromhex(page_hex[:usable_len]), dtype=np.uint8).reshape(-1, 6).astype(np.uint64)
     except Exception:
-        return None, None, None
+        return (None, None, None, None) if include_axes else (None, None, None)
 
     values = (
         (raw[:, 0] << 40)
@@ -140,6 +141,8 @@ def _decode_measurement_array(page_hex: str, calibration: Dict[str, float]):
     vm = np.sqrt((x * x) + (y * y) + (z * z))
     enmo = np.maximum(vm - 1.0, 0.0) * 1000.0
     light_lux = light_raw * lux_cal / volts
+    if include_axes:
+        return enmo, vm, light_lux, np.column_stack((x, y, z))
     return enmo, vm, light_lux
 
 
@@ -641,6 +644,8 @@ def read_raw_geneactiv_bin(
     """
     requested_mapping = normalize_activity_mapping(activity_mapping)
     signal_settings = normalize_activity_signal_settings(activity_signal_settings, requested_mapping)
+    raw_config = signal_settings["raw_signal"]
+    custom_processor = RawSignalProcessor(raw_config) if raw_config["enabled"] else None
     threshold_method = signal_settings["threshold_method"]
     threshold_mg = (
         float(_adaptive_threshold_mg)
@@ -780,17 +785,24 @@ def read_raw_geneactiv_bin(
         page_ns = int(page_time.value)
         ns_per_sample = int(round(1_000_000_000 / float(freq)))
         temperature = _parse_float(page.get("temperature"))
-        enmo_values, vm_values, light_lux_values = _decode_measurement_array(page_hex, calibration)
+        decoded = _decode_measurement_array(page_hex, calibration, include_axes=custom_processor is not None)
+        enmo_values, vm_values, light_lux_values = decoded[:3]
         if enmo_values is None or vm_values is None or light_lux_values is None or len(enmo_values) == 0:
             return
         use_processed_acc = requested_mapping in {"auto", "accelerometer"}
-        dynamic_values = (
-            processed_dynamic_values(vm_values, float(freq), page_ns, ns_per_sample)
-            if use_processed_acc
-            else (np.asarray(vm_values, dtype=np.float64) - 1.0) * 1000.0
-        )
+        if custom_processor is not None:
+            dynamic_values = custom_processor.apply(decoded[3], page_ns / 1_000_000_000.0, float(freq))
+            # The selected custom scalar is the signal input to subsequent epoch aggregation.
+            enmo_values = dynamic_values if requested_mapping == "enmo" else enmo_values
+            acc_values = dynamic_values
+        else:
+            dynamic_values = (
+                processed_dynamic_values(vm_values, float(freq), page_ns, ns_per_sample)
+                if use_processed_acc
+                else (np.asarray(vm_values, dtype=np.float64) - 1.0) * 1000.0
+            )
+            acc_values = np.maximum(dynamic_values, 0.0) if use_processed_acc else enmo_values
         normalized_values = np.abs(dynamic_values)
-        acc_values = np.maximum(dynamic_values, 0.0) if use_processed_acc else enmo_values
         if pim_accumulator is not None:
             pim_accumulator.add(normalized_values, page_ns / 1_000_000_000.0, float(freq))
         if zcm_accumulator is not None:
@@ -823,7 +835,7 @@ def read_raw_geneactiv_bin(
                     bucket["temperature_sum"] += float(temperature) * int(counts[idx])
                     bucket["temperature_count"] += int(counts[idx])
                 if requested_mapping == "mad":
-                    add_mad_samples(int(bucket_ns), vm_values[inverse == idx])
+                    add_mad_samples(int(bucket_ns), (dynamic_values[inverse == idx] / 1000.0 if custom_processor is not None else vm_values[inverse == idx]))
         else:
             for sample_idx in range(n):
                 light_lux = float(light_lux_values[sample_idx])
@@ -969,6 +981,12 @@ def read_raw_geneactiv_bin(
         resolved_mapping = "accelerometer"
         activity = df["acc"].astype(float).rename("ACC_mg")
 
+    if custom_processor is not None and resolved_mapping not in {"zcm", "tat"}:
+        activity = activity * output_unit_factor(raw_config)
+        suffix = {"mg": "mg", "g": "g", "m_s2": "ms2"}[raw_config["output_unit"]]
+        prefix = "PIM" if resolved_mapping == "pim" else "MAD" if resolved_mapping == "mad" else "ENMO" if resolved_mapping == "enmo" else "ACC"
+        activity = activity.rename(f"{prefix}_{suffix}{'_s' if resolved_mapping == 'pim' else ''}")
+
     is_processed_acc = resolved_mapping == "accelerometer"
     activity_mapping_metadata = mapping_metadata(
         requested_mapping,
@@ -992,10 +1010,13 @@ def read_raw_geneactiv_bin(
         tat_definition="seconds_above_threshold_unfiltered_abs_vm_minus_1g_per_epoch" if resolved_mapping == "tat" else None,
         tat_threshold_mg=tat_accumulator.threshold_mg if tat_accumulator is not None else None,
         threshold_method=threshold_method if resolved_mapping in {"zcm", "tat"} else None,
-        input_signal="unfiltered_abs_vm_minus_1g_mg" if resolved_mapping in {"pim", "zcm", "tat"} else None,
-        filtering="none" if resolved_mapping in {"mad", "enmo", "pim", "zcm", "tat"} else "20_hz_lowpass_when_supported",
+        input_signal="custom_raw_scalar_after_filter_and_normalization" if custom_processor is not None else "unfiltered_abs_vm_minus_1g_mg" if resolved_mapping in {"pim", "zcm", "tat"} else None,
+        filtering=raw_config["filter_type"] if custom_processor is not None else "none" if resolved_mapping in {"mad", "enmo", "pim", "zcm", "tat"} else "20_hz_lowpass_when_supported",
         available_mappings=["auto", "accelerometer", "mad", "enmo", "pim", "zcm", "tat"],
+        **({"units": raw_signal_units(raw_config, resolved_mapping), "label": f"Custom-processed {resolved_mapping.upper()}", "custom_raw_processing": raw_config, "custom_filter_state_resets": custom_processor.resets} if custom_processor is not None else {}),
         note=(
+            "A user-selected raw-signal pipeline was applied to calibrated X/Y/Z samples before epoch aggregation; this custom activity variant may not match the conventional metric definition."
+            if custom_processor is not None else
             "Large GENEActiv files use chunked calibrated vector-magnitude processing with fourth-order "
             "20 Hz filtering when the sample rate permits, followed by streaming epoch aggregation for "
             "the processed ACC activity basis."

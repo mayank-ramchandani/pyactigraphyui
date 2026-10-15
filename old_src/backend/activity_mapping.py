@@ -2,7 +2,9 @@
 
 The recommended ``auto`` mode keeps a device/source activity series when the
 file already contains one, and uses an epoch-level accelerometer ``acc`` series
-for raw tri-axial inputs.  ``mad``, ``enmo``, proportional-integrating mode (PIM), and zero-crossing mode (ZCM) remain available as explicit alternatives.
+for raw tri-axial inputs. ``mad``, ``enmo``, proportional-integrating mode
+(PIM), zero-crossing mode (ZCM), and time above threshold (TAT) remain
+available as explicit alternatives.
 """
 
 from __future__ import annotations
@@ -50,7 +52,12 @@ ACTIVITY_MAPPING_OPTIONS: Dict[str, Dict[str, Any]] = {
     "zcm": {
         "label": "ZCM",
         "units": "crossings/epoch",
-        "description": "Zero-crossing mode: dead-band sign changes of dynamic vector magnitude within each epoch.",
+        "description": "Zero-crossing mode: level crossings of a positive threshold in gravity-normalized vector magnitude.",
+    },
+    "tat": {
+        "label": "TAT",
+        "units": "s/epoch",
+        "description": "Time above threshold in gravity-normalized vector magnitude within each epoch.",
     },
 }
 
@@ -79,6 +86,9 @@ _ALIASES = {
     "zero_crossing_mode": "zcm",
     "zerocrossingmode": "zcm",
     "zero_crossings": "zcm",
+    "time_above_threshold": "tat",
+    "timeabovethreshold": "tat",
+    "tat_seconds": "tat",
 }
 
 
@@ -89,6 +99,36 @@ def normalize_activity_mapping(value: Any) -> str:
         supported = ", ".join(ACTIVITY_MAPPING_OPTIONS)
         raise ValueError(f"Unsupported activity mapping '{value}'. Supported values: {supported}.")
     return text
+
+
+def normalize_activity_signal_settings(value: Any, activity_mapping: Any = "auto") -> Dict[str, Any]:
+    """Validate metric-specific raw-signal options from API or UI payloads."""
+    mapping = normalize_activity_mapping(activity_mapping)
+    payload = value if isinstance(value, dict) else {}
+    method = str(payload.get("thresholdMethod") or payload.get("threshold_method") or "adaptive").strip().lower()
+    if method == "custom":
+        method = "fixed"
+    if method not in {"adaptive", "fixed"}:
+        raise ValueError("Threshold method must be 'adaptive' or 'fixed'.")
+
+    threshold_value = payload.get("thresholdMg", payload.get("threshold_mg"))
+    threshold_mg = None
+    if threshold_value not in (None, ""):
+        try:
+            threshold_mg = float(threshold_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("The activity threshold must be a number in mg.") from exc
+        if threshold_mg < 0:
+            raise ValueError("The activity threshold must be zero or greater.")
+    if mapping in {"zcm", "tat"} and method == "fixed" and threshold_mg is None:
+        raise ValueError(f"{mapping.upper()} fixed-threshold mode requires a threshold in mg.")
+
+    return {
+        "threshold_method": method,
+        "threshold_mg": threshold_mg,
+        "input_signal": "unfiltered_abs_vm_minus_1g_mg",
+        "filtering": "none",
+    }
 
 
 def mapping_metadata(requested: Any, resolved: str | None = None, **extra: Any) -> Dict[str, Any]:

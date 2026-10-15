@@ -12,12 +12,12 @@ const DEFAULT_REPOSITORY_URL = "https://github.com/mayank-ramchandani/pyactigrap
 const DEFAULT_DOCS_URL = "https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs";
 
 const FILE_ROWS = [
-  ["GENEActiv .bin", "Raw X/Y/Z acceleration, with embedded light and temperature", "Recommended source / processed acc", "ENMO, MAD, PIM, and ZCM are available. Embedded light is used only when present."],
+  ["GENEActiv .bin", "Raw X/Y/Z acceleration, with embedded light and temperature", "Recommended source / processed acc", "ENMO, MAD, PIM, ZCM, and TAT are available. Embedded light is used only when present."],
   ["Axivity .cwa", "Raw X/Y/Z acceleration", "Processed acc", "Other activity measures are available when they are present in a converted time-series file."],
   ["ActiGraph .gt3x", "Raw X/Y/Z acceleration, with optional lux", "Recommended source / processed acc", "Activity analysis still works when the file contains no light data."],
   ["ActiGraph .agd", "Device activity counts", "Source/device activity", "Use this when the analysis should remain on the ActiGraph count scale."],
   ["Actiwatch .awd and other native pyActigraphy formats", "Device activity", "Source/device activity", "Available options depend on the information contained in the file."],
-  ["Oxford timeSeries.csv(.gz)", "Epoch-level processed acceleration", "Existing acc column", "Existing ENMO, MAD, PIM, or ZCM columns can also be selected."],
+  ["Oxford timeSeries.csv(.gz)", "Epoch-level processed acceleration", "Existing acc column", "Existing ENMO, MAD, PIM, ZCM, or TAT columns can also be selected."],
   ["Philips Actiware/RPX CSV", "Epoch activity with optional white/RGB light", "Source activity", "English, French, and German exports are supported, including Windows-1252 files."],
   ["Generic CSV/TXT", "User-defined columns", "Mapped activity column", "The app detects columns automatically; manual mapping is available when needed."],
   ["NHANES PAXHR_H", "Hourly summaries for multiple participants", "PAXMTSH after preparation", "Select one participant and create a documented participant-relative time index before upload."],
@@ -42,13 +42,13 @@ const NARRATIVE_SEARCH_TEXT = {
 const SECTIONS = [
   { id: "overview", label: "Start here" },
   { id: "workflow", label: "10-step workflow" },
-  { id: "preprocessing", label: "Pre-processing" },
+  { id: "preprocessing", label: "Initial QC" },
   { id: "files", label: "File formats" },
-  { id: "activity", label: "Choosing an activity measure" },
+  { id: "activity", label: "Choosing an activity representation" },
   { id: "cleaning", label: "Cleaning & masking" },
   { id: "sleep", label: "Sleep-wake classification" },
-  { id: "sensors", label: "Light & other sensors" },
   { id: "metrics", label: "Metrics & analysis" },
+  { id: "sensors", label: "Light & other sensors" },
   { id: "results", label: "Results & export" },
   { id: "troubleshooting", label: "Troubleshooting" },
   { id: "methods", label: "Methods & reproducibility" },
@@ -166,27 +166,27 @@ export default function DocumentationPanel({ onClose }) {
           <Table headers={["Step", "Page", "What you do"]} rows={appConfig.workflow.map((step) => [step.id, step.title, step.description])} />
         </Card>
         <Card title="Where to add supporting files">
-          Upload actigraphy recordings on Step 1. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 7. Steps 2–9 can be opened from the left workflow after at least one actigraphy file is uploaded. Export unlocks after results are generated.
+          Upload actigraphy recordings on Step 1. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 8. Steps 2–9 can be opened from the left workflow after at least one actigraphy file is uploaded. Export unlocks after results are generated.
         </Card>
       </div>
     ),
     preprocessing: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Pre-processing QC and Analysis settings">
-          <p>Step 2 is for initial recording-coverage and quality-control review. The settings below are configured later under <strong>Analysis settings</strong> on Step 8: Analysis Set-up.</p>
+        <Card title="Initial QC and Analysis settings">
+          <p>Step 2 is for initial recording-coverage and quality-control review. The settings below are configured later under <strong>Analysis settings</strong> on Step 7: Analysis Set-up.</p>
           <ul style={{ margin: 0, paddingLeft: 22 }}>
             <li><strong>Valid quality window:</strong> at least 16 analyzable hours.</li>
             <li><strong>Multi-day rhythm and SRI eligibility:</strong> at least 2 consecutive valid quality windows.</li>
             <li><strong>Sleep-window coverage:</strong> at least 80% of expected epochs remain available and scorable.</li>
           </ul>
-          <p style={{ marginBottom: 0 }}>Keep these settings for a standard analysis. Step 8 also contains the calendar-day versus recording-aligned 24-hour definition and the option to respect detected or mapped non-wear.</p>
+          <p style={{ marginBottom: 0 }}>Keep these settings for a standard analysis. Step 7 also contains the calendar-day versus recording-aligned 24-hour definition and the option to respect detected or mapped non-wear.</p>
         </Card>
         <Card title="Calendar day or recording-aligned window?">
           <p><strong>Calendar day</strong> is the recommended default. It evaluates midnight-to-midnight periods and keeps daily summaries aligned with clock dates.</p>
           <p style={{ marginBottom: 0 }}><strong>Recording-aligned 24-hour windows</strong> begin at the first retained timestamp. They can be useful for short recordings or studies organized around the device-deployment time. The selected approach is included in the results and exports.</p>
         </Card>
         <Card title="How missing and excluded data are handled">
-          Recording gaps, detected non-wear, and manual masks remain unavailable. They are not changed to zero activity. Initial quality information appears on Step 2. Final quality is recalculated during analysis using the settings selected in Step 8 after start/stop limits and masks are applied.
+          Recording gaps, detected non-wear, and manual masks remain unavailable. They are not changed to zero activity. Initial quality information appears on Step 2. Final quality is recalculated during analysis using the settings selected in Step 7 after start/stop limits and masks are applied.
         </Card>
         <Card title="Sleep-window coverage">
           Coverage compares the expected epochs inside a sleep window with the epochs still available after gaps, non-wear, start/stop limits, and masks. At the recommended threshold of <Code>0.8</Code>, at least 80% must remain. Lower-coverage windows are excluded from sleep summaries rather than filled in.
@@ -220,8 +220,11 @@ export default function DocumentationPanel({ onClose }) {
         <Card title="Why the choice matters">
           All selected rest-activity metrics use the chosen epoch-level activity series. Counts, mg, mg·s/epoch, and crossings/epoch are different scales, so thresholds must be chosen for the selected measure. The resolved measure, units, epoch duration, and settings are included with the results.
         </Card>
+        <Card title="Metric-specific raw processing">
+          ENMO and MAD use unfiltered vector magnitude. PIM integrates unfiltered <Code>|VM - 1 g|</Code>. ZCM counts crossings of a positive threshold in that normalized magnitude, and TAT reports seconds above it. ZCM/TAT can use a recording-level SD threshold or a fixed mg threshold. This explicit separation follows the reproducibility concern described by <a href="https://doi.org/10.1371/journal.pone.0261718" target="_blank" rel="noreferrer">Maczák et al. (2021)</a>: filtering order and metric definition are part of the method. The paper compared correlations in a young healthy sample, so it does not establish one universally optimal clinical pipeline.
+        </Card>
         <Card title="Joining recordings with different native sampling rates">
-          In joined participant mode, ActiLab does not directly concatenate raw 30-Hz, 100-Hz, or other differently sampled streams. Each source is processed independently at its native rate into the selected activity representation and the same analytical epoch, then the epoch-level series are joined by timestamp. Native rates remain visible in QC, previews, results, and provenance. ENMO and processed acceleration are allowed with an informational notice; MAD and PIM are allowed with a warning; ZCM receives a strong warning because it is sampling-frequency sensitive; and source/device activity or ActiGraph counts are blocked across differing native rates unless already externally harmonized/validated. A join is also blocked when processed epoch durations, resolved activity bases, or units differ.
+          In joined participant mode, ActiLab does not directly concatenate raw 30-Hz, 100-Hz, or other differently sampled streams. Each source is processed independently at its native rate into the selected activity representation and the same analytical epoch, then the epoch-level series are joined by timestamp. Native rates remain visible in QC, previews, results, and provenance. ENMO and processed acceleration are allowed with an informational notice; MAD, PIM, and TAT are allowed with a warning; ZCM receives a strong warning because it is sampling-frequency sensitive; and source/device activity or ActiGraph counts are blocked across differing native rates unless already externally harmonized/validated. Joined ZCM/TAT requires one fixed threshold across all sources. A join is also blocked when processed epoch durations, resolved activity bases, or units differ.
         </Card>
       </div>
     ),
@@ -254,7 +257,7 @@ export default function DocumentationPanel({ onClose }) {
     sensors: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Light data">
-          Step 7 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. In joined participant mode, light data are also joined by their real timestamps across the participant timeline, and periods without light remain missing rather than being treated as zero exposure.
+          Step 8 can inspect light embedded in a supported actigraphy file or use a separate light file. Review the available channels, preview the signal, and select light metrics before generating results. A recording with no usable light can still be analysed for activity; only the light outputs are skipped. In joined participant mode, light data are also joined by their real timestamps across the participant timeline, and periods without light remain missing rather than being treated as zero exposure.
         </Card>
         <Card title="RGB and multichannel light">
           When red, green, blue, white, or lux channels are available, the preview identifies them separately. Confirm the units and channel used by each selected light metric, especially when choosing thresholds.
@@ -273,7 +276,7 @@ export default function DocumentationPanel({ onClose }) {
           <Table headers={["Code", "Metric", "Category", "What it describes"]} rows={metricRows} />
         </Card>
         <Card title="Choosing Standard or Custom mode">
-          Step 8 first lets you review the Analysis settings for validity thresholds, 24-hour period definition, sleep-window coverage, and non-wear handling. Use Standard mode for common analysis groups with their recommended starting parameters. Use Custom mode when you need individual metrics or protocol-specific settings. Step 8 configures the analysis; Step 9 runs it.
+          Step 7 first lets you review the Analysis settings for validity thresholds, 24-hour period definition, sleep-window coverage, and non-wear handling. Use Standard mode for common analysis groups with their recommended starting parameters. Use Custom mode when you need individual metrics or protocol-specific settings. Step 7 configures the analysis; Step 8 handles optional sensor review; Step 9 runs the analysis.
         </Card>
       </div>
     ),

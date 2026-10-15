@@ -17,6 +17,7 @@ This directory contains the public documentation for researchers and analysts us
 | I need to… | Read… |
 |---|---|
 | Complete an analysis from upload to export | [User guide](USER_GUIDE.md) |
+| Customize raw X/Y/Z filtering, acceleration magnitude and gravity normalization | [Methods and reproducibility](PREPROCESSING_AND_PROVENANCE.md#configurable-raw-acceleration-pipeline-step-2) |
 | Decide whether to keep or change the recommended quality thresholds | [Initial QC and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) |
 | Confirm whether a recording or CSV layout is supported | [Supported file formats](FILE_FORMATS.md) |
 | Choose between processed acceleration, ENMO, MAD, PIM, ZCM, TAT, or source counts | [Choosing an activity representation](ACTIVITY_PROCESSING.md) |
@@ -52,4 +53,4 @@ After at least one actigraphy file is uploaded, Steps 2–9 can be opened direct
 - **Unavailable result:** a metric that could not be calculated because required data, valid windows, sleep windows, or supported signals were not available.
 - **Warning:** processing continued, but the result or data quality requires review.
 
-Last updated: **2026-09-11**.
+Last updated: **2026-10-15**.

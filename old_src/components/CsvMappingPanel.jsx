@@ -257,7 +257,7 @@ export default function CsvMappingPanel({
             fontWeight: 600,
           }}
         >
-          Continue to Pre-processing
+          Continue to Initial QC
         </button>
       </div>
     </div>
