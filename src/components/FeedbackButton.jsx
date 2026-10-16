@@ -114,15 +114,27 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: 20,
+            padding: "12px",
+            boxSizing: "border-box",
+            overflowY: "auto",
+            overscrollBehavior: "contain",
           }}
           onClick={() => setOpen(false)}
         >
           <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="actilab-feedback-title"
             onSubmit={submitFeedback}
             onClick={(event) => event.stopPropagation()}
             style={{
               width: "min(560px, 100%)",
+              maxHeight: "calc(100dvh - 24px)",
+              minHeight: 0,
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+              WebkitOverflowScrolling: "touch",
+              boxSizing: "border-box",
               background: "white",
               borderRadius: 20,
               padding: 20,
@@ -134,7 +146,7 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12 }}>
               <div>
                 <BrandLogo width={125} style={{ margin: "0 0 8px 0" }} />
-                <h2 style={{ margin: 0, color: "#0f172a" }}>Send feedback to ActiLab</h2>
+                <h2 id="actilab-feedback-title" style={{ margin: 0, color: "#0f172a" }}>Send feedback to ActiLab</h2>
                 <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14, lineHeight: 1.5 }}>
                   Report upload, preview, analysis, or deployment issues. Your email address is required so the Centre for Analytics team can contact you about the report. Raw files are not sent; the form includes filenames, selected settings, progress, and current errors to help diagnose the report. Feedback submissions and attached technical context are stored for a maximum of 30 days and then automatically deleted. A minimal notification email (email address, filename, workflow step, category, and feedback ID) may be sent to the project contact; your feedback message is not included in that email.
                 </p>
@@ -220,7 +232,7 @@ export default function FeedbackButton({ buildApiUrl, user = null, context = {} 
               </div>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <div style={{ position: "sticky", bottom: -20, zIndex: 1, display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 10, background: "white", padding: "12px 0", borderTop: "1px solid #e2e8f0" }}>
               <button
                 type="button"
                 onClick={() => setOpen(false)}

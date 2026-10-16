@@ -7,7 +7,7 @@ A web application for importing actigraphy recordings, reviewing data quality, s
 ## User workflow
 
 1. Importing Actigraphy Files
-2. Initial QC
+2. Preprocessing/Initial QC
 3. Estimating Activity Metric
 4. Activity Preview
 5. Cleaning and Masking

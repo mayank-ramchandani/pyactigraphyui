@@ -180,3 +180,8 @@ Before using the results:
 ## Getting help
 
 Use the feedback form when a problem cannot be resolved from the troubleshooting guide. Include the workflow step, affected filename, file format, selected activity measure, request ID, and exact visible message. Do not include participant identifiers or raw measurements in the feedback text.
+
+
+## Optional raw-signal processing (Step 2)
+
+If your input is native GT3X or GENEActiv BIN raw X/Y/Z data, Step 2 includes a switch to enable optional signal filtering, magnitude, and normalization before creating epoch-level activity values. It is **off by default**. Hover over or focus the **i** bubbles beside each control for explanations. Choose a preset or independently set Butterworth low-/high-/band-pass, order, frequency cutoffs, filter-before-/after-magnitude, normalization, gravity reference, and output units. The backend validates Nyquist limits and prevents physically incompatible gravity normalization. This feature does not apply to count-based or already-aggregated data, and arbitrary processed signals may not be valid inputs for count-based sleep scoring algorithms. Full details and citations: [Preprocessing and provenance](PREPROCESSING_AND_PROVENANCE.md).

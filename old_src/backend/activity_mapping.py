@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from .raw_signal_processing import normalize_raw_signal_settings
+
 
 ACTIVITY_MAPPING_OPTIONS: Dict[str, Dict[str, Any]] = {
     "auto": {
@@ -123,7 +125,13 @@ def normalize_activity_signal_settings(value: Any, activity_mapping: Any = "auto
     if mapping in {"zcm", "tat"} and method == "fixed" and threshold_mg is None:
         raise ValueError(f"{mapping.upper()} fixed-threshold mode requires a threshold in mg.")
 
+    raw_signal = normalize_raw_signal_settings(payload.get("rawSignal", payload.get("raw_signal")))
+    if raw_signal["enabled"] and mapping == "original":
+        raise ValueError("Custom raw-acceleration processing cannot be applied to original device activity/counts. Select a raw-derived activity representation.")
+    if raw_signal["enabled"] and mapping == "enmo" and raw_signal["normalization"] != "positive_deviation":
+        raise ValueError("ENMO requires positive (magnitude − 1 g) normalization. Select that normalization or use processed acceleration for another custom signal.")
     return {
+        "raw_signal": raw_signal,
         "threshold_method": method,
         "threshold_mg": threshold_mg,
         "input_signal": "unfiltered_abs_vm_minus_1g_mg",

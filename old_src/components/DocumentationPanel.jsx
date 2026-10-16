@@ -42,7 +42,7 @@ const NARRATIVE_SEARCH_TEXT = {
 const SECTIONS = [
   { id: "overview", label: "Start here" },
   { id: "workflow", label: "10-step workflow" },
-  { id: "preprocessing", label: "Initial QC" },
+  { id: "preprocessing", label: "Initial QC & raw signal processing" },
   { id: "files", label: "File formats" },
   { id: "activity", label: "Choosing an activity representation" },
   { id: "cleaning", label: "Cleaning & masking" },
@@ -181,6 +181,12 @@ export default function DocumentationPanel({ onClose }) {
           </ul>
           <p style={{ marginBottom: 0 }}>Keep these settings for a standard analysis. Step 7 also contains the calendar-day versus recording-aligned 24-hour definition and the option to respect detected or mapped non-wear.</p>
         </Card>
+        <Card title="Custom raw acceleration signal processing (Step 2)">
+          <p>Raw acceleration processing is optional and <strong>disabled by default</strong>. It operates on calibrated high-frequency X/Y/Z samples before the activity metric is aggregated into analysis epochs. Only native GT3X and GENEActiv BIN are supported for this optional pipeline in this release. Converted CWA files, activity-count exports, and CSV time-series already contain processed epochs, so they cannot use these raw operations.</p>
+          <p><strong>Acceleration magnitude:</strong> <Code>sqrt(X² + Y² + Z²)</Code> expresses movement as the length of the triaxial acceleration vector. <strong>Filtering:</strong> choose no filter, low-pass, high-pass or band-pass Butterworth filtering; select filter order (1–8), cutoff frequencies (Hz), and whether to filter each axis before magnitude or the scalar magnitude afterwards. This ordering matters because filtering and vector magnitude do not commute.</p>
+          <p><strong>Normalization:</strong> keep the magnitude, take its absolute amplitude, subtract a gravity reference (usually 1 g), take the absolute deviation <Code>|magnitude − 1 g|</Code>, or retain only positive deviations <Code>max(magnitude − 1 g, 0)</Code> (ENMO-type correction). A high-/band-pass filter attenuates static gravity; subtracting another 1 g afterward is therefore blocked as misleading. Choose the output unit (mg, g, or m/s²).</p>
+          <p>The filters are <strong>forward-only (causal)</strong> for memory-safe streaming, with resets at gaps and per-file Nyquist validation. They are not forward-backward zero-phase filters, and filtered/normalized acceleration is not automatically equivalent to the count scales on which some sleep classifiers were validated. Detailed methods and original paper names are in the linked preprocessing documentation: <a href="https://doi.org/10.1371/journal.pone.0261718" target="_blank" rel="noreferrer">Maczák et al. (2021)</a>.</p>
+        </Card>
         <Card title="Calendar day or recording-aligned window?">
           <p><strong>Calendar day</strong> is the recommended default. It evaluates midnight-to-midnight periods and keeps daily summaries aligned with clock dates.</p>
           <p style={{ marginBottom: 0 }}><strong>Recording-aligned 24-hour windows</strong> begin at the first retained timestamp. They can be useful for short recordings or studies organized around the device-deployment time. The selected approach is included in the results and exports.</p>
@@ -220,8 +226,11 @@ export default function DocumentationPanel({ onClose }) {
         <Card title="Why the choice matters">
           All selected rest-activity metrics use the chosen epoch-level activity series. Counts, mg, mg·s/epoch, and crossings/epoch are different scales, so thresholds must be chosen for the selected measure. The resolved measure, units, epoch duration, and settings are included with the results.
         </Card>
+        <Card title="Using a processed signal with activity metrics">
+          If Step 2 custom preprocessing is enabled, the selected Step 3 metric is computed from that transformed scalar raw signal. MAD becomes an epoch-level mean absolute deviation of the transformed signal; PIM integrates its absolute amplitude; ZCM/TAT thresholds apply to its absolute amplitude (in internal mg); acceleration-based epoch means preserve signed values if chosen. Results and exports include the specific signal settings, units, and processing order. Such results should be treated as customized variants rather than implicitly validated standard activity metrics.
+        </Card>
         <Card title="Metric-specific raw processing">
-          ENMO and MAD use unfiltered vector magnitude. PIM integrates unfiltered <Code>|VM - 1 g|</Code>. ZCM counts crossings of a positive threshold in that normalized magnitude, and TAT reports seconds above it. ZCM/TAT can use a recording-level SD threshold or a fixed mg threshold. This explicit separation follows the reproducibility concern described by <a href="https://doi.org/10.1371/journal.pone.0261718" target="_blank" rel="noreferrer">Maczák et al. (2021)</a>: filtering order and metric definition are part of the method. The paper compared correlations in a young healthy sample, so it does not establish one universally optimal clinical pipeline.
+          With custom raw preprocessing <strong>off</strong>, ENMO and MAD use unfiltered vector magnitude. PIM integrates unfiltered <Code>|VM - 1 g|</Code>. ZCM counts crossings of a positive threshold in that normalized magnitude, and TAT reports seconds above it. ZCM/TAT can use a recording-level SD threshold or a fixed mg threshold. This explicit separation follows the reproducibility concern described by <a href="https://doi.org/10.1371/journal.pone.0261718" target="_blank" rel="noreferrer">Maczák et al. (2021)</a>: filtering order and metric definition are part of the method. The paper compared correlations in a young healthy sample, so it does not establish one universally optimal clinical pipeline.
         </Card>
         <Card title="Joining recordings with different native sampling rates">
           In joined participant mode, ActiLab does not directly concatenate raw 30-Hz, 100-Hz, or other differently sampled streams. Each source is processed independently at its native rate into the selected activity representation and the same analytical epoch, then the epoch-level series are joined by timestamp. Native rates remain visible in QC, previews, results, and provenance. ENMO and processed acceleration are allowed with an informational notice; MAD, PIM, and TAT are allowed with a warning; ZCM receives a strong warning because it is sampling-frequency sensitive; and source/device activity or ActiGraph counts are blocked across differing native rates unless already externally harmonized/validated. Joined ZCM/TAT requires one fixed threshold across all sources. A join is also blocked when processed epoch durations, resolved activity bases, or units differ.

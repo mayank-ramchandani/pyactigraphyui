@@ -17,14 +17,15 @@ References:
 For each file, the analysis generally follows this order:
 
 1. identify the file format and available signals;
-2. construct or select the epoch-level activity measure;
-3. preserve timestamp gaps and missing values;
-4. apply start/stop limits;
-5. apply detected or mapped non-wear and manual masks;
-6. calculate quality-window validity;
-7. create or apply sleep windows and check their coverage;
-8. run the selected algorithms and metrics;
-9. produce quality-control messages, results, plots, and exports.
+2. optionally apply raw X/Y/Z filtering, magnitude, and gravity normalization (Step 2);
+3. construct or select the epoch-level activity measure;
+4. preserve timestamp gaps and missing values;
+5. apply start/stop limits;
+6. apply detected or mapped non-wear and manual masks;
+7. calculate quality-window validity;
+8. create or apply sleep windows and check their coverage;
+9. run the selected algorithms and metrics;
+10. produce quality-control messages, results, plots, and exports.
 
 Missing and excluded epochs remain unavailable rather than being replaced with zero activity.
 
@@ -35,7 +36,24 @@ ActiLab records these as two separate layers:
 1. **Activity signal generation:** calibrated raw X/Y/Z → metric-specific vector-magnitude/gravity handling → epoch-level ENMO, MAD, PIM, ZCM, TAT, or processed acceleration.
 2. **Actigraphy preprocessing:** epoch series → timestamp regularization → start/stop limits → non-wear/manual masks → valid-window rules → rhythm and sleep analyses.
 
-No universal band-pass filter is applied before every raw-derived metric. ENMO, MAD, PIM, ZCM, and TAT use their documented metric-specific unfiltered inputs; the processed-acceleration option retains its own named processing path. This separation follows the reproducibility concern described by [Maczák et al. (2021)](https://doi.org/10.1371/journal.pone.0261718): preprocessing order and metric definition are part of the result, not interchangeable implementation details.
+By default (with the new Step 2 optional controls disabled), no universal band-pass filter is applied before every raw-derived metric. ENMO, MAD, PIM, ZCM, and TAT use their documented metric-specific unfiltered inputs; the processed-acceleration option retains its own named processing path. This separation follows the reproducibility concern described by [Maczák et al. (2021)](https://doi.org/10.1371/journal.pone.0261718): preprocessing order and metric definition are part of the result, not interchangeable implementation details.
+
+### Configurable raw acceleration pipeline (Step 2)
+
+This optional mode is **off by default**, preserving previous analyses. It is currently implemented in the native .gt3x and GENEActiv .bin streaming loaders. It cannot run on already-aggregated CSV, counts/AGD/AWD, converted CWA or Oxford time-series uploads; native raw X/Y/Z samples are required. If selected on an unsupported input, ActiLab gives an error instead of ignoring the setting.
+
+With custom mode enabled, calibrated raw X/Y/Z samples (g) are converted into a scalar sample-level signal in this order:
+
+1. Optional Butterworth **low-pass**, **high-pass**, or **band-pass** filter, order 1–8. Specify corner frequencies in hertz. Each cutoff must fall below the individual source's Nyquist frequency (native sampling frequency / 2). Choose either **per-axis filtering before magnitude** or **filtering the magnitude after taking its norm**. The former produces a nonnegative vector norm; the latter may remain signed after high-/band-pass filtering.
+2. Acceleration magnitude is `sqrt(X² + Y² + Z²)`. Without filtering, this is always a nonnegative raw norm that includes gravity.
+3. Optional normalization: **none**; **absolute amplitude** `|signal|`; **subtract gravity reference** `signal - 1 g` (signed); **absolute gravity deviation** `|signal - 1 g|`; or **positive gravity deviation** `max(signal - 1 g, 0)` (ENMO-style). Gravity reference is adjustable (normally 1 g) but only meaningful when the static gravitational component remains in the signal. Therefore, subtract-one variants cannot be combined with high-pass or band-pass filtering. The user can select mg, g, or m/s² as the **final** epoch output acceleration unit.
+4. The chosen Step 3 activity metric reduces these transformed samples to epochs: acceleration/ENMO use epoch means (signed if chosen), MAD uses within-epoch mean absolute deviation, PIM integrates absolute signal amplitude using sample time, ZCM counts level crossings of absolute signal amplitude above an mg threshold, and TAT accumulates duration above that threshold. These customized activity variants may **not be comparable to validated conventional ENMO, MAD, PIM, ZCM or TAT**, even when the same metric name is selected.
+
+A memory-safe **causal forward-only SOS Butterworth** filter carries state across contiguous blocks and resets at timestamp gaps or sampling-rate changes. It is **not** zero-phase / forward-backward filtering; any transient/phase effects must be considered. ActiLab neither fills missing raw intervals with zeros nor applies filters across separate source files. Users should avoid assuming that sleep scoring thresholds calibrated to manufacturer counts also apply to arbitrarily transformed acceleration.
+
+The user interface deliberately uses descriptive processing names rather than paper-specific identifiers. Maczák et al. (2021) call unfiltered magnitude **UFM**, absolute gravity-normalized unfiltered magnitude **UFNM**, filtered axes **FXYZ**, filtering axes then taking magnitude **FMpre**, and taking magnitude then filtering **FMpost**. Their illustrative third-order Butterworth 0.25–2.5 Hz band-pass can be selected as a starting point, but ActiLab's causal streaming implementation need not reproduce the exact phase response used in every published comparison. Consult [Maczák et al. (2021)](https://doi.org/10.1371/journal.pone.0261718) for the full methodological comparisons.
+
+The processing configuration and units are retained with the run settings, diagnostics and Methods/provenance output so results can be reproduced. Review the signal and algorithm selection with the research protocol before interpreting downstream outcomes.
 
 ### Joined participant recordings
 

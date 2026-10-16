@@ -351,6 +351,18 @@ def load_native_file(
 ):
     requested_mapping = normalize_activity_mapping(activity_mapping)
 
+    # The exported/converted .cwa path contains epoch-level data, not a raw
+    # calibrated X/Y/Z stream available to this loader. Never silently ignore
+    # custom filtering or pretend that processed epochs are raw samples.
+    from .raw_signal_processing import normalize_raw_signal_settings
+    raw_config = normalize_raw_signal_settings((activity_signal_settings or {}).get("raw_signal", (activity_signal_settings or {}).get("rawSignal")))
+    if raw_config["enabled"] and reader_type not in {"geneactiv_bin_accelerometer", "gt3x"}:
+        raise ValueError(
+            "Custom filtering, magnitude and gravity normalization require native raw X/Y/Z samples. "
+            "At present these settings are implemented for .gt3x and GENEActiv .bin. "
+            "Disable custom raw preprocessing to use this file's available activity/epoch data."
+        )
+
     if reader_type == "raw_accelerometer_needs_conversion":
         return load_accelerometer_as_baseraw(
             file_path, epoch_period=30, activity_mapping=requested_mapping

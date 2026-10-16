@@ -23,7 +23,7 @@ For CSV or TXT files, the application attempts to detect timestamp, activity, li
 
 After upload, confirm that each file appears in the list and that duplicate filenames can be distinguished by their file ID.
 
-## 2. Initial QC
+## 2. Preprocessing/Initial QC
 
 Review the initial recording-coverage table for each uploaded recording. This page is intended for early quality-control review before activity estimation, cleaning, sleep-wake classification, and final analysis.
 
@@ -183,5 +183,7 @@ Use the feedback form when a problem cannot be resolved from the troubleshooting
 
 
 ## Optional raw-signal processing (Step 2)
+
+With custom raw processing enabled, the **Step 3 activity measure** is the single basis for both the **Step 4 preview** and subsequent metric calculations; the Step 4 preview selector is replaced with a reminder to change the measure in Step 3. Previews must be reloaded after modifying processing choices. The raw X/Y/Z diagnostic samples and light/temperature analyses are unaffected. Non-wear handling and masking are performed downstream on the selected epoch-level activity series. Customized signals are not automatically validated for device-count-based sleep scoring.
 
 If your input is native GT3X or GENEActiv BIN raw X/Y/Z data, Step 2 includes a switch to enable optional signal filtering, magnitude, and normalization before creating epoch-level activity values. It is **off by default**. Hover over or focus the **i** bubbles beside each control for explanations. Choose a preset or independently set Butterworth low-/high-/band-pass, order, frequency cutoffs, filter-before-/after-magnitude, normalization, gravity reference, and output units. The backend validates Nyquist limits and prevents physically incompatible gravity normalization. This feature does not apply to count-based or already-aggregated data, and arbitrary processed signals may not be valid inputs for count-based sleep scoring algorithms. Full details and citations: [Preprocessing and provenance](PREPROCESSING_AND_PROVENANCE.md).

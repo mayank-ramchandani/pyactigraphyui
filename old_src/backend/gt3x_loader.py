@@ -43,6 +43,7 @@ from .activity_metrics import (
     EpochZCMAccumulator,
     StreamingMoments,
 )
+from .raw_signal_processing import RawSignalProcessor, output_unit_factor, raw_signal_units
 from .geneactiv_bin import SimpleLightRecording
 
 try:
@@ -717,6 +718,8 @@ def _stream_gt3x_activity(
         timezone_offset = int(metadata["timezone_offset_seconds"])
         requested_mapping = normalize_activity_mapping(activity_mapping)
         signal_settings = normalize_activity_signal_settings(activity_signal_settings, requested_mapping)
+        raw_config = signal_settings["raw_signal"]
+        custom_processor = RawSignalProcessor(raw_config) if raw_config["enabled"] else None
         threshold_method = signal_settings["threshold_method"]
         threshold_mg = (
             float(_adaptive_threshold_mg)
@@ -726,6 +729,8 @@ def _stream_gt3x_activity(
         mode, resolved_mapping, fallback_reason = _resolve_mode(
             requested_mapping, activity_mode, sample_rate
         )
+        if custom_processor is not None and mode == "counts":
+            raise GT3XProcessingError("Custom raw acceleration processing cannot be applied to device counts; choose processed acceleration instead.")
         calibration = _read_optional_json(zip_file, "calibration.json")
         calibrator = _Calibrator(info, calibration, api["CalibrationV2Service"])
 
@@ -822,14 +827,19 @@ def _stream_gt3x_activity(
                 counts_accumulator.add(calibrated, local_start)
                 return
 
-            vm = np.sqrt(np.einsum("ij,ij->i", calibrated, calibrated))
+            vm = (custom_processor.apply(calibrated, local_start, sample_rate) / 1000.0
+                  if custom_processor is not None else np.sqrt(np.einsum("ij,ij->i", calibrated, calibrated)))
             if mad_accumulator is not None and mode == "mad":
                 mad_accumulator.add(vm, local_start, sample_rate)
                 return
-            if mode == "accelerometer":
-                vm = vm_filter.apply(vm, local_start)
-            dynamic_mg = (vm - 1.0) * 1000.0
-            normalized_mg = np.abs(dynamic_mg)
+            if custom_processor is not None:
+                dynamic_mg = vm * 1000.0
+                normalized_mg = np.abs(dynamic_mg)
+            else:
+                if mode == "accelerometer":
+                    vm = vm_filter.apply(vm, local_start)
+                dynamic_mg = (vm - 1.0) * 1000.0
+                normalized_mg = np.abs(dynamic_mg)
             if threshold_moments is not None:
                 threshold_moments.add(normalized_mg)
             if mode == "pim":
@@ -844,7 +854,7 @@ def _stream_gt3x_activity(
                 if tat_accumulator is not None:
                     tat_accumulator.add(normalized_mg, local_start, sample_rate)
                 return
-            values = np.maximum(dynamic_mg, 0.0)
+            values = (dynamic_mg if custom_processor is not None else np.maximum(dynamic_mg, 0.0))
             assert mean_accumulator is not None
             mean_accumulator.add(values, local_start, sample_rate)
 
@@ -1091,6 +1101,18 @@ def _stream_gt3x_activity(
             "_raw_resampled_to_100_hz": False,
         }
 
+    if custom_processor is not None:
+        if mode not in {"zcm", "tat"}:
+            activity = activity * output_unit_factor(raw_config)
+            suffix = {"mg": "mg", "g": "g", "m_s2": "ms2"}[raw_config["output_unit"]]
+            prefix = "PIM" if mode == "pim" else "MAD" if mode == "mad" else "ENMO" if mode == "enmo" else "ACC"
+            activity = activity.rename(f"{prefix}_{suffix}{'_s' if mode == 'pim' else ''}")
+        mode_meta["_activity_units"] = raw_signal_units(raw_config, resolved_mapping)
+        mode_meta["_activity_input_signal"] = "custom_raw_scalar_after_filter_and_normalization"
+        mode_meta["_activity_filtering"] = raw_config["filter_type"]
+        mode_meta["_custom_raw_processing"] = raw_config
+        mode_meta["_custom_filter_state_resets"] = custom_processor.resets
+
     activity = activity.astype(float).sort_index()
     if int(activity.notna().sum()) < 2:
         raise GT3XProcessingError("The GT3X conversion produced fewer than two valid activity epochs.")
@@ -1103,7 +1125,8 @@ def _stream_gt3x_activity(
         calibrated_axes=True,
         available_mappings=["auto", "accelerometer", "original", "mad", "enmo", "pim", "zcm", "tat"],
         original_mode=activity_mode,
-        signal_processing=mode_meta,
+        signal_processing={**mode_meta, **({"raw_signal": raw_config, "custom_filter_state_resets": custom_processor.resets} if custom_processor is not None else {})},
+        **({"units": raw_signal_units(raw_config, resolved_mapping), "label": f"Custom-processed {resolved_mapping.upper()}", "custom_raw_processing": raw_config} if custom_processor is not None else {}),
     )
     metadata.update(mode_meta)
     metadata.update(

@@ -42,7 +42,7 @@ const NARRATIVE_SEARCH_TEXT = {
 const SECTIONS = [
   { id: "overview", label: "Start here" },
   { id: "workflow", label: "10-step workflow" },
-  { id: "preprocessing", label: "Initial QC & raw signal processing" },
+  { id: "preprocessing", label: "Preprocessing/Initial QC" },
   { id: "files", label: "File formats" },
   { id: "activity", label: "Choosing an activity representation" },
   { id: "cleaning", label: "Cleaning & masking" },
@@ -172,7 +172,7 @@ export default function DocumentationPanel({ onClose }) {
     ),
     preprocessing: (
       <div style={{ display: "grid", gap: 14 }}>
-        <Card title="Initial QC and Analysis settings">
+        <Card title="Preprocessing/Initial QC and Analysis settings">
           <p>Step 2 is for initial recording-coverage and quality-control review. The settings below are configured later under <strong>Analysis settings</strong> on Step 7: Analysis Set-up.</p>
           <ul style={{ margin: 0, paddingLeft: 22 }}>
             <li><strong>Valid quality window:</strong> at least 16 analyzable hours.</li>
@@ -185,6 +185,7 @@ export default function DocumentationPanel({ onClose }) {
           <p>Raw acceleration processing is optional and <strong>disabled by default</strong>. It operates on calibrated high-frequency X/Y/Z samples before the activity metric is aggregated into analysis epochs. Only native GT3X and GENEActiv BIN are supported for this optional pipeline in this release. Converted CWA files, activity-count exports, and CSV time-series already contain processed epochs, so they cannot use these raw operations.</p>
           <p><strong>Acceleration magnitude:</strong> <Code>sqrt(X² + Y² + Z²)</Code> expresses movement as the length of the triaxial acceleration vector. <strong>Filtering:</strong> choose no filter, low-pass, high-pass or band-pass Butterworth filtering; select filter order (1–8), cutoff frequencies (Hz), and whether to filter each axis before magnitude or the scalar magnitude afterwards. This ordering matters because filtering and vector magnitude do not commute.</p>
           <p><strong>Normalization:</strong> keep the magnitude, take its absolute amplitude, subtract a gravity reference (usually 1 g), take the absolute deviation <Code>|magnitude − 1 g|</Code>, or retain only positive deviations <Code>max(magnitude − 1 g, 0)</Code> (ENMO-type correction). A high-/band-pass filter attenuates static gravity; subtracting another 1 g afterward is therefore blocked as misleading. Choose the output unit (mg, g, or m/s²).</p>
+          <p><strong>What happens to previews and downstream analyses?</strong> With custom raw processing enabled, the processed activity signal from Step 2 is aggregated using the activity metric selected in Step 3. The Step 4 activity plot uses that same metric and the actual processed units; its separate metric selector is hidden to avoid comparing the wrong signal. Initial QC and downstream masking, rest/activity, and sleep workflows use the processed epoch-level series. Raw X/Y/Z diagnostic samples and independent light/temperature measures remain unfiltered. Previously generated plots/results are cleared after changing the settings; reload the preview and rerun the analysis.</p>
           <p>The filters are <strong>forward-only (causal)</strong> for memory-safe streaming, with resets at gaps and per-file Nyquist validation. They are not forward-backward zero-phase filters, and filtered/normalized acceleration is not automatically equivalent to the count scales on which some sleep classifiers were validated. Detailed methods and original paper names are in the linked preprocessing documentation: <a href="https://doi.org/10.1371/journal.pone.0261718" target="_blank" rel="noreferrer">Maczák et al. (2021)</a>.</p>
         </Card>
         <Card title="Calendar day or recording-aligned window?">

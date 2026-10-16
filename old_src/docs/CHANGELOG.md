@@ -1,3 +1,11 @@
+## 2026-10-15 — Optional raw acceleration preprocessing
+
+- Added a Step 2 **Raw acceleration signal processing** panel (disabled by default) with explanatory hover/focus **i** bubbles.
+- Added customizable Butterworth low-, high- and band-pass filtering (order 1–8 and cutoff frequencies), per-axis-before-magnitude or magnitude-before-filter operation order, adjustable 1 g reference, normalization and output units (mg, g, m/s²).
+- Added scientifically descriptive presets including unfiltered magnitude, positive/absolute gravity deviation, and an illustrative third-order 0.25–2.5 Hz band-pass; paper-specific abbreviations appear only in supporting documentation.
+- Connected the settings to the native GT3X and GENEActiv BIN bounded-memory decoders, including continuity-aware filter state, per-file Nyquist validation, metadata, Methods text and explicit raw-data compatibility errors.
+- Preserved previous metric defaults with the custom processing switch off, added tests, and documented the limitations of applying altered activity scales to existing sleep algorithms.
+
 ## 2026-10-07 — Metric-specific raw processing and provenance
 
 - Added TAT (seconds above threshold per epoch) for raw GENEActiv/GT3X and compatible preprocessed columns.

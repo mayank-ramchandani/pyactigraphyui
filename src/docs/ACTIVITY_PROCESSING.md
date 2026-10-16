@@ -1,6 +1,6 @@
 # Choosing an activity representation
 
-An optional **raw-signal preprocessing** panel is available in **Step 2: Initial QC** (off by default), followed by the activity measure selected on **Step 3: Estimating Activity Metric**. It becomes the epoch-level signal used by the selected rest-activity analyses.
+An optional **raw-signal preprocessing** panel is available in **Step 2: Preprocessing/Initial QC** (off by default), followed by the activity measure selected on **Step 3: Estimating Activity Metric**. It becomes the epoch-level signal used by the selected rest-activity analyses.
 
 ## Recommended choice
 
