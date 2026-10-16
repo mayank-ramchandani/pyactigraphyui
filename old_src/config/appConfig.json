@@ -61,7 +61,7 @@
     {
       "id": "2",
       "key": "preprocessing",
-      "title": "Initial QC",
+      "title": "Preprocessing/Initial QC",
       "description": "Review initial data quality and optionally customize native raw X/Y/Z filtering, magnitude calculation, normalization, and units before activity estimation."
     },
     {
@@ -120,7 +120,7 @@
     },
     "preprocessing": {
       "enabled": true,
-      "title": "2. Initial QC"
+      "title": "2. Preprocessing/Initial QC"
     },
     "activityMapping": {
       "enabled": true,

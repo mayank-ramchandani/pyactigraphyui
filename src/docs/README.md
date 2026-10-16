@@ -23,6 +23,7 @@ This directory contains the public documentation for researchers and analysts us
 | Choose between processed acceleration, ENMO, MAD, PIM, ZCM, TAT, or source counts | [Choosing an activity representation](ACTIVITY_PROCESSING.md) |
 | Join recordings collected at different native sampling rates | [Choosing an activity representation](ACTIVITY_PROCESSING.md#joining-recordings-with-different-native-sampling-rates) |
 | Understand RA, IS, IV, SRI, sleep metrics, fragmentation, or Cosinor | [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) |
+| Download epoch-level preprocessed activity values, masks and settings | [User guide — Data export](USER_GUIDE.md#download-the-preprocessed-activity-time-series) |
 | Understand how preprocessing choices are recorded | [Methods and reproducibility](PREPROCESSING_AND_PROVENANCE.md) |
 | Resolve warnings, unavailable metrics, upload errors, or missing sleep windows | [Troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) |
 | Review privacy, data handling, and acceptable use | [Terms of use](TERMS_OF_USE.md) |

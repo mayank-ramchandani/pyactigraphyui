@@ -1,3 +1,10 @@
+## 2026-10-15 — Workflow and feedback fixes
+
+- Renamed workflow Step 2 and its panel to **Preprocessing/Initial QC**.
+- Fixed the feedback modal on smaller/shorter screens: constrained the scrollable form height to the viewport and kept Submit/Cancel actions visible while scrolling.
+- When advanced raw-signal processing is enabled, the activity preview now uses the **same Step 3 activity measure** as the analysis instead of its independent preview selection; the preview shows the processed signal's label and actual units.
+- Raw preprocessing changes invalidate cached previews and result displays; raw X/Y/Z diagnostics and light/temperature processing remain unaffected. Results display the actual custom-signal labels and units.
+
 ## 2026-10-15 — Optional raw acceleration preprocessing
 
 - Added a Step 2 **Raw acceleration signal processing** panel (disabled by default) with explanatory hover/focus **i** bubbles.

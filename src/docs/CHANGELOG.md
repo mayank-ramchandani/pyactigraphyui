@@ -1,3 +1,16 @@
+## 2026-10-16 — Raw preprocessing file-type eligibility
+
+- Custom raw acceleration preprocessing in Step 2 is only selectable when every uploaded actigraphy recording is a native `.gt3x` or `.bin` candidate (GENEActiv BIN content is verified by the backend).
+- Other formats show a disabled toggle and an accessible **i** information bubble explaining why original high-frequency X/Y/Z samples are required. Mixed eligible/unsupported uploads remain unavailable; standard analysis is unaffected.
+- Replacing recordings with unsupported file types automatically switches off previously enabled custom preprocessing, avoiding stale analysis/preview settings. Added eligibility regression checks and updated user documentation.
+
+## 2026-10-15 — Preprocessed activity export
+
+- Added **Download Preprocessed Activity Data** on Generate Results (Step 9) and Export Outputs (Step 10) for each successfully analyzed recording or joined participant.
+- The ZIP includes a complete epoch-level activity CSV (before and after quality-control/selected-interval exclusions), mask and non-wear flags, timestamps and actual activity units, plus a machine-readable settings/provenance JSON and short README.
+- A bounded background export reprocesses the source uploads using the exact settings captured when results were generated; large raw streams are not embedded in the main JSON analysis response.
+- Updated documentation on export scope, eligible/missing epochs, temporary availability, and research reproducibility.
+
 ## 2026-10-15 — Workflow and feedback fixes
 
 - Renamed workflow Step 2 and its panel to **Preprocessing/Initial QC**.

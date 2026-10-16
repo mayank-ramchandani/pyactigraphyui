@@ -155,6 +155,9 @@ export default function Dashboard() {
   const [visitedSteps, setVisitedSteps] = useState(["1"]);
   const workflowContentRef = useRef(null);
   const previousStepRef = useRef("1");
+  // Prevent a preview requested with obsolete filtering/mapping settings from
+  // repainting the chart after the user has changed those settings.
+  const activityPreviewRequestVersionRef = useRef(0);
 
   const [uploadedFiles, setUploadedFiles] = useState({
     actigraphy: [],
@@ -288,6 +291,11 @@ export default function Dashboard() {
     thresholdMethod: "adaptive",
     thresholdMg: 4,
   });
+  // A custom raw-signal pipeline has one scientific activity basis for both
+  // preview plots and downstream analysis; the independent preview selector is
+  // retained only for standard (non-custom) processing.
+  const customRawProcessingEnabled = Boolean(activitySignalSettings.rawSignal?.enabled);
+  const effectivePreviewActivityMapping = customRawProcessingEnabled ? activityMapping : previewActivityMapping;
   const [activityTransform, setActivityTransform] = useState("none");
   const [lightTransform, setLightTransform] = useState("none");
 
@@ -755,6 +763,8 @@ export default function Dashboard() {
   };
 
   const resetPreviewAndResults = () => {
+    activityPreviewRequestVersionRef.current += 1;
+    setPreviewLoading(false);
     setPreviewLoaded(false);
     setPreviewData(null);
     setActivityPreviewByFile({});
@@ -780,6 +790,8 @@ export default function Dashboard() {
   };
 
   const handlePreviewActivityMappingChange = (nextMapping) => {
+    activityPreviewRequestVersionRef.current += 1;
+    setPreviewLoading(false);
     setPreviewActivityMapping(nextMapping);
     setPreviewLoaded(false);
     setPreviewData(null);
@@ -788,6 +800,8 @@ export default function Dashboard() {
   };
 
   const handlePreviewFileSelectionChange = (nextSelection) => {
+    activityPreviewRequestVersionRef.current += 1;
+    setPreviewLoading(false);
     setSelectedPreviewFile(nextSelection);
     const entry = resolveFileSelection(actigraphyFiles, nextSelection);
     const cached =
@@ -810,6 +824,8 @@ export default function Dashboard() {
   };
 
   const handleActivityMappingChange = (nextMapping) => {
+    activityPreviewRequestVersionRef.current += 1;
+    setPreviewLoading(false);
     setActivityMapping(nextMapping);
     setPreviewActivityMapping(nextMapping);
     if (nextMapping === "zcm") {
@@ -892,6 +908,7 @@ export default function Dashboard() {
     const filesForPreview = joining ? actigraphyFiles : (targetEntry?.file ? [targetEntry.file] : []);
     const targetFile = filesForPreview[0] || null;
     if (!targetFile) return null;
+    const requestVersion = ++activityPreviewRequestVersionRef.current;
 
     try {
       setPreviewLoading(true);
@@ -901,7 +918,7 @@ export default function Dashboard() {
       formData.append("file", targetFile);
       filesForPreview.slice(1).forEach((file) => formData.append("additionalFiles", file));
       formData.append("activityChannel", activityChannel);
-      formData.append("activityMapping", previewActivityMapping);
+      formData.append("activityMapping", effectivePreviewActivityMapping);
       formData.append("activitySignalSettings", JSON.stringify(activitySignalSettings));
       formData.append("resampleFreq", "1min");
       formData.append("csvMapping", JSON.stringify(showManualMapping ? csvMapping : {}));
@@ -915,6 +932,7 @@ export default function Dashboard() {
         formData,
         jobId: previewJobId,
       });
+      if (requestVersion !== activityPreviewRequestVersionRef.current) return null;
 
       const previewKey = joining ? JOINED_PARTICIPANT_KEY : targetEntry.key;
       const previewName = joining ? joinedParticipantLabel : targetFile.name;
@@ -936,11 +954,12 @@ export default function Dashboard() {
       unlockStep("4");
       return labeledData;
     } catch (err) {
+      if (requestVersion !== activityPreviewRequestVersionRef.current) return null;
       setPreviewError(err.message || "Failed to load activity preview.");
       setPreviewLoaded(false);
       throw err;
     } finally {
-      setPreviewLoading(false);
+      if (requestVersion === activityPreviewRequestVersionRef.current) setPreviewLoading(false);
     }
   };
 
@@ -1619,11 +1638,17 @@ export default function Dashboard() {
         rawSignalSettings={activitySignalSettings.rawSignal}
         activityMapping={activityMapping}
         onRawSignalSettingsChange={(rawSignal) => {
+          activityPreviewRequestVersionRef.current += 1;
+          setPreviewLoading(false);
           setActivitySignalSettings((previous) => ({ ...previous, rawSignal }));
           setPreviewLoaded(false);
           setPreviewData(null);
           setActivityPreviewByFile({});
           setResultsGenerated(false);
+          setSummaryResults({});
+          setMultiFileResults([]);
+          setQcWarnings([]);
+          setAnalysisError("");
           setInitialQcByFile({});
           initialQcRequestedRef.current = new Set();
         }}
@@ -1644,11 +1669,17 @@ export default function Dashboard() {
         onChange={handleActivityMappingChange}
         signalSettings={activitySignalSettings}
         onSignalSettingsChange={(nextSettings) => {
+          activityPreviewRequestVersionRef.current += 1;
+          setPreviewLoading(false);
           setActivitySignalSettings(nextSettings);
           setPreviewLoaded(false);
           setPreviewData(null);
           setActivityPreviewByFile({});
           setResultsGenerated(false);
+          setSummaryResults({});
+          setMultiFileResults([]);
+          setQcWarnings([]);
+          setAnalysisError("");
           setInitialQcByFile({});
           initialQcRequestedRef.current = new Set();
         }}
@@ -1671,7 +1702,8 @@ export default function Dashboard() {
         lightFiles={lightFiles}
         selectedLightPreviewFile={selectedLightPreviewFile}
         setSelectedLightPreviewFile={handleLightPreviewFileSelectionChange}
-        activityMapping={previewActivityMapping}
+        activityMapping={effectivePreviewActivityMapping}
+        customRawProcessingEnabled={customRawProcessingEnabled}
         setActivityMapping={handlePreviewActivityMappingChange}
         onPreview={onActivityPreview}
       />

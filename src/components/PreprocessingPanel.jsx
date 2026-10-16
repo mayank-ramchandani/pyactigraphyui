@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { buildFileEntries, fileEntryLabel, formatFileSize } from "../services/fileIdentityUtils";
 import SamplingHarmonizationNotice from "./SamplingHarmonizationNotice";
 import RawSignalProcessingPanel from "./RawSignalProcessingPanel";
+import { getRawSignalFileEligibility } from "../services/rawSignalEligibility";
 
 function formatHours(value) {
   const number = Number(value);
@@ -115,6 +116,7 @@ export default function PreprocessingPanel({
   joinedParticipantKey = "__joined_participant__",
   joinedParticipantLabel = "Joined participant",
 }) {
+  const rawSignalEligibility = useMemo(() => getRawSignalFileEligibility(actigraphyFiles), [actigraphyFiles]);
   const resolved = {
     customizeDataQualityThresholds: false,
     validDayWindowMode: "calendar_day",
@@ -165,7 +167,14 @@ export default function PreprocessingPanel({
           {entries.length === 0 && <div style={{ color: "#64748b" }}>Upload an actigraphy file in Step 1 to run initial QC.</div>}
         </div>
       </div>
-      <RawSignalProcessingPanel settings={rawSignalSettings} onChange={onRawSignalSettingsChange} activityMapping={activityMapping} />
+      <RawSignalProcessingPanel
+        settings={rawSignalSettings}
+        onChange={onRawSignalSettingsChange}
+        activityMapping={activityMapping}
+        available={rawSignalEligibility.eligible}
+        availabilityMessage={rawSignalEligibility.reason}
+        unsupportedNames={rawSignalEligibility.unsupportedNames}
+      />
     </div>
   );
 }

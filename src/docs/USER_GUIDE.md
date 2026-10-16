@@ -151,6 +151,22 @@ Review:
 
 A warning means processing continued but something requires review. A failed status means the affected stage could not produce a usable result. Other successful outputs may still be available.
 
+### Download the preprocessed activity time series
+
+Once **Generate Results** has completed, Step 9 includes **Download Preprocessed Activity Data** (also available on Step 10: Export Outputs). Click the download button for each successfully analyzed file. If you selected **join participant recordings**, the button exports the complete joined epoch timeline, including real gaps. Exporting individual recordings creates separate ZIP files.
+
+This export reprocesses the original uploaded recording(s) using a snapshot of the *same preprocessing and analysis settings used when those results were generated*, including raw acceleration filtering, magnitude/normalization, selected activity metric, uploaded/manual masks, non-wear handling and quality-window thresholds. The new file is created by a background job, which allows large recordings to finish without a long-running download request. Keep the page open until the archive download begins. The original uploaded files must still be present in the browser session; saved historical run summaries do not contain those raw files.
+
+Each ZIP contains:
+
+- `preprocessed_activity.csv` — complete epoch-level timestamps and processed activity values before QC (`processed_activity_pre_qc`) and after exclusions (`activity_used_for_analysis`); the recorded/non-wear/manual-mask/invalid-quality-window flags, exclusion reasons, and interval membership are also included. A blank value is **missing/excluded**, not zero activity.
+- `processing_manifest.json` — source names, the activity unit, epoch length, selected filter/magnitude/normalization settings, chosen activity metric, analysis/QC settings, participant concatenation metadata, processing provenance, and interpretation notes.
+- `README.txt` — column meanings and analysis-scope guidance.
+
+In **selected-interval-only** mode, activity is blank outside the selected windows; in **whole-file plus intervals** mode, the eligible value column corresponds to the full-recording branch, and `within_selected_interval` marks the interval branch. Metrics such as RA, Cosinor and sleep estimates are *not* themselves contained in this CSV; continue using the normal summary CSV/JSON for those results. The processed activity series represents an **epoch-level derivative**, not the original high-frequency X/Y/Z signal. Timestamp timezones are not inferred.
+
+You should download the ZIP when the run finishes. Background export files expire with temporary jobs and are not a permanent cloud storage service.
+
 ## 10. Export Outputs
 
 Download the outputs needed for analysis and reporting. Keep the exported configuration and quality-control information with the result tables.
@@ -186,4 +202,4 @@ Use the feedback form when a problem cannot be resolved from the troubleshooting
 
 With custom raw processing enabled, the **Step 3 activity measure** is the single basis for both the **Step 4 preview** and subsequent metric calculations; the Step 4 preview selector is replaced with a reminder to change the measure in Step 3. Previews must be reloaded after modifying processing choices. The raw X/Y/Z diagnostic samples and light/temperature analyses are unaffected. Non-wear handling and masking are performed downstream on the selected epoch-level activity series. Customized signals are not automatically validated for device-count-based sleep scoring.
 
-If your input is native GT3X or GENEActiv BIN raw X/Y/Z data, Step 2 includes a switch to enable optional signal filtering, magnitude, and normalization before creating epoch-level activity values. It is **off by default**. Hover over or focus the **i** bubbles beside each control for explanations. Choose a preset or independently set Butterworth low-/high-/band-pass, order, frequency cutoffs, filter-before-/after-magnitude, normalization, gravity reference, and output units. The backend validates Nyquist limits and prevents physically incompatible gravity normalization. This feature does not apply to count-based or already-aggregated data, and arbitrary processed signals may not be valid inputs for count-based sleep scoring algorithms. Full details and citations: [Preprocessing and provenance](PREPROCESSING_AND_PROVENANCE.md).
+If your input is native GT3X or GENEActiv BIN raw X/Y/Z data, Step 2 includes a switch to enable optional signal filtering, magnitude, and normalization before creating epoch-level activity values. It is **off by default**. For other formats the switch is **disabled**, with an **i** bubble explaining that raw X/Y/Z samples are required. With multiple uploaded actigraphy files, all files must be eligible; an incompatible replacement automatically switches previously enabled custom processing off. Only GENEActiv `.bin` content is accepted (other `.bin` variants are checked and rejected by the server). Hover over or focus the **i** bubbles beside each control for explanations. Choose a preset or independently set Butterworth low-/high-/band-pass, order, frequency cutoffs, filter-before-/after-magnitude, normalization, gravity reference, and output units. The backend validates Nyquist limits and prevents physically incompatible gravity normalization. This feature does not apply to count-based or already-aggregated data, and arbitrary processed signals may not be valid inputs for count-based sleep scoring algorithms. Full details and citations: [Preprocessing and provenance](PREPROCESSING_AND_PROVENANCE.md).

@@ -175,6 +175,7 @@ export default function PreviewPanel({
   lightSourceAvailable = null,
   lightSourceMessage = "",
   activityMapping = "auto",
+  customRawProcessingEnabled = false,
   setActivityMapping = () => {},
   onPreview,
 }) {
@@ -204,7 +205,9 @@ export default function PreviewPanel({
   const samplingHarmonization = previewData?.participant_join?.sampling_harmonization || null;
   const displayedJoinedSegments = mode === "light" ? joinedLightSegments : joinedSegments;
   const activityAxisLabel = mode === "activity"
-    ? activityMappingLabel(mappingFromResponse.resolved || activityMapping)
+    ? (mappingFromResponse.custom_raw_processing
+      ? `${mappingFromResponse.label || "Custom-processed activity"} (${mappingFromResponse.units || "units not supplied"})`
+      : activityMappingLabel(mappingFromResponse.resolved || activityMapping))
     : "Activity";
   const yAxisLabel = mode === "light" ? lightAxisLabel : activityAxisLabel;
   const yValueLabel = mode === "light" ? lightAxisLabel : activityAxisLabel;
@@ -333,14 +336,18 @@ export default function PreviewPanel({
           </>
         )}
 
-        {mode === "activity" && (
+        {mode === "activity" && (customRawProcessingEnabled ? (
+          <div style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 12, padding: 12, color: "#1e3a8a", fontSize: 13, lineHeight: 1.5 }}>
+            <strong>Preview uses your processed activity signal.</strong> The filter, magnitude, normalization, and unit settings from Step 2 are applied to raw samples; the activity metric selected in Step 3 is used for both this preview and downstream analysis. Change it in Step 3 to update both. Load the preview again after changing settings.
+          </div>
+        ) : (
           <ActivityMappingPanel
             value={activityMapping}
             onChange={setActivityMapping}
             compact
             context="preview"
           />
-        )}
+        ))}
 
         <div>
           <button

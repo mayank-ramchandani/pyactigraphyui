@@ -1,6 +1,7 @@
 import React from "react";
 import { downloadBlob, downloadJson, rowsToCsv, summaryResultsToRows } from "../services/exportUtils";
 import { getAlgorithmLabel, getMetricLabel } from "../services/configUtils";
+import ProcessedActivityDownload from "./ProcessedActivityDownload";
 
 export default function ExportPanel({
   title,
@@ -16,6 +17,9 @@ export default function ExportPanel({
   supportFileSummary,
   dataQuality,
   lightResults = {},
+  multiFileResults = [],
+  onDownloadProcessedActivity = () => {},
+  processedActivityDownloadState = {},
 }) {
   const enabledExports = (exportRegistry?.exports ?? []).filter((item) => item.enabled);
   const selectedAlgorithmLabel = getAlgorithmLabel(algorithmRegistry, selectedAlgorithm);
@@ -85,6 +89,8 @@ export default function ExportPanel({
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16 }}>
         Export the generated results as CSV or JSON. Both exports include the sleep-analysis algorithm used, support-file metadata, QC warnings, and analysis settings.
       </p>
+
+      <ProcessedActivityDownload batchResults={multiFileResults} onDownload={onDownloadProcessedActivity} downloadState={processedActivityDownloadState} />
 
       <div
         style={{

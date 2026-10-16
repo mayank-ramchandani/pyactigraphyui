@@ -48,7 +48,7 @@ export default function RawSignalProcessingPanel({ settings = {}, onChange = () 
     <section className="raw-signal-panel">
       <div className="raw-signal-heading"><div>
         <h3>Raw acceleration signal processing <InfoBubble text="Optional preprocessing on calibrated high-frequency X/Y/Z recordings, before epoch aggregation and before sleep/circadian analysis. These settings do not apply to count-based or already-aggregated data." /></h3>
-        <p>Choose how raw acceleration becomes the signal used to calculate activity. Existing ActiLab processing is preserved unless custom processing is enabled.</p>
+        <p>Choose how raw acceleration becomes the signal used to calculate activity. When enabled, the transformed epoch-level activity is used in Initial QC, activity previews and plots, masking, rhythm metrics, and downstream activity/sleep analysis. Existing ActiLab processing is preserved unless custom processing is enabled. <InfoBubble text="The chosen raw settings are applied before aggregation to the Step 3 activity measure. Plots and rest/activity analyses use that epoch series rather than the unprocessed samples. Original X/Y/Z diagnostics and independently recorded light/temperature remain unchanged. Count-based sleep scoring is not validated automatically for modified acceleration inputs." /></p>
       </div></div>
       <label className="raw-signal-enable">
         <input type="checkbox" checked={Boolean(current.enabled)} onChange={(event) => patch({ enabled: event.target.checked })} />

@@ -673,7 +673,7 @@ export default function ResultsPanel({
                         {isCompletedStatus(item.status) ? statusLabel(item.status) : item.error || "Failed"}
                       </td>
                       <td style={{ padding: 8, borderTop: "1px solid #e2e8f0", fontSize: 13, overflowWrap: "anywhere" }}>
-                        {activityMappingLabel(item.activityMapping?.resolved || item.activityMapping?.requested || activityMapping)}
+                        {(item.activityMapping?.custom_raw_processing ? `${item.activityMapping.label || "Custom-processed activity"} (${item.activityMapping.units || "units unavailable"})` : activityMappingLabel(item.activityMapping?.resolved || item.activityMapping?.requested || activityMapping))}
                       </td>
                       {displayBatchMetricKeys.map((key) => (
                         <td key={`${item.fileName}-${key}`} style={{ padding: 8, borderTop: "1px solid #e2e8f0", textAlign: "right", fontSize: 13, overflowWrap: "anywhere" }}>
@@ -709,7 +709,7 @@ export default function ResultsPanel({
                   ) : (
                     <div style={{ marginTop: 14 }}>
                       <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1e3a8a", fontSize: 13 }}>
-                        Activity mapping used: <strong>{activityMappingLabel(item.activityMapping?.resolved || item.activityMapping?.requested || activityMapping)}</strong>
+                        Activity mapping used: <strong>{(item.activityMapping?.custom_raw_processing ? `${item.activityMapping.label || "Custom-processed activity"} (${item.activityMapping.units || "units unavailable"})` : activityMappingLabel(item.activityMapping?.resolved || item.activityMapping?.requested || activityMapping))}</strong>
                         {item.activityMapping?.source ? ` · Source: ${item.activityMapping.source}` : ""}
                       </div>
                       <ProcessingProvenanceCard provenance={item.processingProvenance} />

@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional, List
 from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.datastructures import Headers
 import asyncio
@@ -74,6 +74,7 @@ from .job_manager import (
     create_job_record,
     get_job,
     get_job_result,
+    get_job_artifact_path,
     job_runtime_info,
     submit_job,
     update_job,
@@ -3576,6 +3577,142 @@ def start_background_light_analysis(
         requested_job_id=resolved_job_id,
     )
 
+
+
+
+def _background_processed_activity_export_worker(primary_spec, additional_specs, support_specs, options, artifact_path, job_id):
+    """Recreate the analysis input with the completed run's frozen options."""
+    from .processed_activity_export import write_processed_activity_archive
+
+    primary_uploads, primary_opened = _uploads_from_job_specs([primary_spec])
+    additional_uploads, additional_opened = _uploads_from_job_specs(additional_specs)
+    masking_uploads, masking_opened = _uploads_from_job_specs(support_specs.get("masking"))
+    diary_uploads, diary_opened = _uploads_from_job_specs(support_specs.get("sleep_diary"))
+    start_stop_uploads, start_stop_opened = _uploads_from_job_specs(support_specs.get("start_stop"))
+    opened = primary_opened + additional_opened + masking_opened + diary_opened + start_stop_opened
+    try:
+        requested_mapping = normalize_activity_mapping(options.get("activityMapping", "auto"))
+        signal_settings = _clean_activity_signal_settings(options.get("activitySignalSettings", "{}"), requested_mapping)
+        analysis_config = json.loads(options.get("analysisConfig", "{}") or "{}")
+        parsed_csv_mapping = _clean_csv_mapping(options.get("csvMapping", "{}"))
+        _validate_joined_threshold_settings(1 + len(additional_uploads), requested_mapping, signal_settings)
+        names = [primary_uploads[0].filename]
+        reader_types = []
+        raw_items = []
+        for upload in primary_uploads + additional_uploads:
+            raw, reader_type = _load_native_supported_file(
+                upload.file.name,
+                activity_mapping=requested_mapping,
+                activity_signal_settings=signal_settings,
+                csv_mapping=parsed_csv_mapping,
+                csv_separator=options.get("csvSeparator", ","),
+            )
+            raw_items.append(raw)
+            reader_types.append(reader_type)
+            if upload is not primary_uploads[0]:
+                names.append(upload.filename)
+        if len(set(reader_types)) > 1:
+            raise ValueError("Joined participant export requires all files to use the same detected input type.")
+        raw = raw_items[0]
+        participant_join = {"joined": False, "source_files": names}
+        if len(raw_items) > 1:
+            raw, participant_join = _concatenate_raw_recordings(raw_items, names)
+        source_name = options.get("sourceFileName") or (names[0] if len(names) == 1 else f"Joined participant ({' + '.join(names)})")
+        mapping_details = raw_mapping_metadata(raw)
+        support_summary = _apply_support_file_logic(
+            raw,
+            masking_paths=[upload.file.name for upload in masking_uploads],
+            diary_paths=[upload.file.name for upload in diary_uploads],
+            start_stop_paths=[upload.file.name for upload in start_stop_uploads],
+            support_settings=analysis_config.get("supportFileSettings", {}),
+            source_filename=source_name,
+        )
+        cleaned, quality = apply_data_quality_control(raw, support_settings=analysis_config.get("supportFileSettings", {}))
+        provenance = _build_processing_provenance(
+            mapping_details=mapping_details, signal_settings=signal_settings,
+            participant_join=participant_join, data_quality=quality,
+        )
+        archive = write_processed_activity_archive(
+            artifact_path, raw, cleaned, source_names=names,
+            mapping_details=mapping_details, signal_settings=signal_settings,
+            analysis_config=analysis_config, data_quality=quality,
+            support_summary=support_summary, processing_provenance=provenance,
+            participant_join=participant_join, analysis_source_name=source_name,
+            csv_mapping=parsed_csv_mapping, csv_separator=options.get("csvSeparator", ","),
+        )
+        return {"http_status": 200, "content": {
+            "download_url": f"/api/jobs/{job_id}/download",
+            "file_name": "ActiLab_preprocessed_activity.zip", **archive,
+        }}
+    except ValueError as exc:
+        return {"http_status": 400, "content": {"detail": str(exc)}}
+    finally:
+        for handle in opened:
+            with contextlib.suppress(Exception):
+                handle.close()
+
+
+@app.post("/api/jobs/export/processed-activity")
+def start_processed_activity_export(
+    file: UploadFile = File(...),
+    additionalFiles: Optional[List[UploadFile]] = File(None),
+    activityMapping: str = Form("auto"),
+    activitySignalSettings: str = Form("{}"),
+    analysisConfig: str = Form("{}"),
+    csvMapping: str = Form("{}"),
+    csvSeparator: str = Form(","),
+    maskingFiles: Optional[List[UploadFile]] = File(None),
+    sleepDiaryFiles: Optional[List[UploadFile]] = File(None),
+    startStopFiles: Optional[List[UploadFile]] = File(None),
+    sourceFileName: Optional[str] = Form(None),
+    requestId: Optional[str] = Form(None),
+    jobId: Optional[str] = Form(None),
+):
+    """Run a bounded background export so large native recordings avoid HTTP timeouts."""
+    created_job_id = None
+    try:
+        created_job_id, directory = create_job_record(
+            "processed_activity_export", requested_job_id=jobId or requestId,
+            request_id=requestId or jobId, source_file_name=sourceFileName or file.filename,
+        )
+        primary = _write_upload_to_job(file, directory, "export-primary")
+        additional = [_write_upload_to_job(f, directory, f"export-participant-{i}") for i, f in enumerate(_upload_file_list(additionalFiles))]
+        support = {"masking": [], "sleep_diary": [], "start_stop": []}
+        for key, uploads in (("masking", maskingFiles), ("sleep_diary", sleepDiaryFiles), ("start_stop", startStopFiles)):
+            support[key] = [_write_upload_to_job(f, directory, f"export-{key}-{i}") for i, f in enumerate(uploads or [])]
+        options = {
+            "activityMapping": activityMapping,
+            "activitySignalSettings": activitySignalSettings,
+            "analysisConfig": analysisConfig,
+            "csvMapping": csvMapping,
+            "csvSeparator": csvSeparator,
+            "sourceFileName": sourceFileName or file.filename,
+        }
+        artifact_path = directory / "processed_activity.zip"
+        submit_job(created_job_id, lambda: _background_processed_activity_export_worker(primary, additional, support, options, artifact_path, created_job_id))
+        return JSONResponse(status_code=202, content={
+            "ok": True, "job_id": created_job_id, "status": "queued",
+            "status_url": f"/api/jobs/{created_job_id}", "runtime": job_runtime_info(),
+        })
+    except Exception as exc:
+        if created_job_id:
+            with contextlib.suppress(Exception):
+                update_job(created_job_id, status="failed", message=str(exc)[:400], finished_at=datetime.now(timezone.utc).isoformat())
+        return JSONResponse(status_code=500, content={"detail": f"Could not start processed activity export: {exc}"})
+
+
+@app.get("/api/jobs/{job_id}/download")
+def download_processed_activity_export(job_id: str):
+    record = get_job(job_id)
+    if not record or record.get("job_type") != "processed_activity_export" or record.get("status") != "completed":
+        raise HTTPException(status_code=404, detail="Completed export is unavailable or expired.")
+    path = get_job_artifact_path(job_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Export file was not found or has expired.")
+    return FileResponse(
+        path, media_type="application/zip", filename="ActiLab_preprocessed_activity.zip",
+        headers={"Cache-Control": "no-store"},
+    )
 
 @app.post("/api/jobs/analyze/basic")
 def start_background_analyze_basic(

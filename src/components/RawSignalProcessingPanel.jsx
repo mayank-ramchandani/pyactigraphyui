@@ -34,9 +34,14 @@ function Field({ label, help, children }) {
 
 const SELECT_STYLE = { width: "100%", minWidth: 0, padding: "9px 10px", borderRadius: 9, background: "white", color: "#0f172a", border: "1px solid #cbd5e1", boxSizing: "border-box" };
 
-export default function RawSignalProcessingPanel({ settings = {}, onChange = () => {}, activityMapping = "auto" }) {
+export default function RawSignalProcessingPanel({
+  settings = {}, onChange = () => {}, activityMapping = "auto",
+  available = false, availabilityMessage = "", unsupportedNames = [],
+}) {
   const current = { ...DEFAULT_RAW_SIGNAL, ...settings };
-  const patch = (values) => onChange({ ...current, ...values });
+  // A disabled control must not send custom settings downstream.
+  const patch = (values) => { if (available) onChange({ ...current, ...values }); };
+  const enabled = available && Boolean(current.enabled);
   const filtered = current.filter_type !== "none";
   const removesGravity = ["highpass", "bandpass"].includes(current.filter_type);
   const incompatibleGravity = removesGravity && ["subtract_one", "absolute_deviation", "positive_deviation"].includes(current.normalization);
@@ -50,12 +55,17 @@ export default function RawSignalProcessingPanel({ settings = {}, onChange = () 
         <h3>Raw acceleration signal processing <InfoBubble text="Optional preprocessing on calibrated high-frequency X/Y/Z recordings, before epoch aggregation and before sleep/circadian analysis. These settings do not apply to count-based or already-aggregated data." /></h3>
         <p>Choose how raw acceleration becomes the signal used to calculate activity. When enabled, the transformed epoch-level activity is used in Initial QC, activity previews and plots, masking, rhythm metrics, and downstream activity/sleep analysis. Existing ActiLab processing is preserved unless custom processing is enabled. <InfoBubble text="The chosen raw settings are applied before aggregation to the Step 3 activity measure. Plots and rest/activity analyses use that epoch series rather than the unprocessed samples. Original X/Y/Z diagnostics and independently recorded light/temperature remain unchanged. Count-based sleep scoring is not validated automatically for modified acceleration inputs." /></p>
       </div></div>
-      <label className="raw-signal-enable">
-        <input type="checkbox" checked={Boolean(current.enabled)} onChange={(event) => patch({ enabled: event.target.checked })} />
+      <label className={`raw-signal-enable${available ? "" : " raw-signal-disabled"}`}>
+        <input type="checkbox" disabled={!available} checked={enabled} onChange={(event) => patch({ enabled: event.target.checked })} />
         <span>Enable custom raw acceleration preprocessing</span>
-        <InfoBubble text="Default (off) leaves each ActiLab activity metric's existing signal definition untouched. Enabling this changes the scientific input signal and may affect downstream results." />
+        <InfoBubble text="Only original high-frequency X/Y/Z acceleration recordings are eligible: native ActiGraph .gt3x or GENEActiv .bin. This option is unavailable for CSV, CWA, device counts, spreadsheets or other preprocessed/epoch-level files. A .bin must contain GENEActiv data; the server checks its content. With the setting off, existing ActiLab processing is unchanged." />
       </label>
-      {current.enabled && <>
+      {!available && <p className="raw-signal-unavailable" role="status">
+        {availabilityMessage || "Only raw .gt3x and GENEActiv .bin recordings support custom preprocessing."}
+        {unsupportedNames.length > 0 && <span className="raw-signal-unsupported-files"> Unsupported: {unsupportedNames.join(", ")}</span>}
+        <InfoBubble text="Filtering, vector magnitude and gravity normalization require the original high-frequency X/Y/Z samples, not values already aggregated into activity epochs. This feature is only implemented for native .gt3x and GENEActiv .bin files. Existing activity analysis remains available without custom processing." />
+      </p>}
+      {enabled && <>
         <div className="raw-signal-grid">
           <Field label="Starting configuration" help="Presets are optional starting points. You can change any compatible setting below.">
             <select style={SELECT_STYLE} value="" onChange={(e) => { if (PRESETS[e.target.value]) patch(PRESETS[e.target.value]); }}>
@@ -107,7 +117,7 @@ export default function RawSignalProcessingPanel({ settings = {}, onChange = () 
         {incompatibleOriginal && <p className="raw-signal-warning">Custom raw processing cannot be combined with device counts/source activity. Change the Step 3 activity metric to a raw-derived metric.</p>}
         <p className="raw-signal-footnote">Filtering uses a forward-only, stateful Butterworth filter that resets at recording gaps; it does not interpolate missing time. Filter parameters are validated against each file’s native sampling rate. Filtering, especially after magnitude calculation, may change signal sign and downstream metric interpretations. This is an exploratory processing option, not a validation of sleep-algorithm inputs. See <a href={PAPER_URL} target="_blank" rel="noreferrer">Maczák et al. (2021)</a>.</p>
       </>}
-      {!current.enabled && <p className="raw-signal-footnote">Optional advanced controls are off. Choose a metric in Step 3 to use its established processing path. Custom filtering requires native raw X/Y/Z files (currently supported: GT3X and GENEActiv BIN).</p>}
+      {available && !enabled && <p className="raw-signal-footnote">Optional advanced controls are off. Choose a metric in Step 3 to use its established processing path. Custom filtering requires native raw X/Y/Z files (currently supported: GT3X and GENEActiv BIN).</p>}
     </section>
   );
 }

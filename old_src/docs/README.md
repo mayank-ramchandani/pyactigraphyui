@@ -31,7 +31,7 @@ This directory contains the public documentation for researchers and analysts us
 ## Workflow
 
 1. Importing Actigraphy Files
-2. Initial QC
+2. Preprocessing/Initial QC
 3. Estimating Activity Metric
 4. Activity Preview
 5. Cleaning and Masking

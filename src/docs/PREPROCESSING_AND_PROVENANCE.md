@@ -40,7 +40,7 @@ By default (with the new Step 2 optional controls disabled), no universal band-p
 
 ### Configurable raw acceleration pipeline (Step 2)
 
-This optional mode is **off by default**, preserving previous analyses. It is currently implemented in the native .gt3x and GENEActiv .bin streaming loaders. It cannot run on already-aggregated CSV, counts/AGD/AWD, converted CWA or Oxford time-series uploads; native raw X/Y/Z samples are required. If selected on an unsupported input, ActiLab gives an error instead of ignoring the setting.
+This optional mode is **off by default**, preserving previous analyses. It is currently implemented in the native .gt3x and GENEActiv .bin streaming loaders. It cannot run on already-aggregated CSV, counts/AGD/AWD, converted CWA or Oxford time-series uploads; native raw X/Y/Z samples are required. **Step 2 disables its custom-processing checkbox** until at least one eligible native file is uploaded. For multiple recordings (including joined participants), **every actigraphy file must be eligible** or the option remains unavailable, with an explanation in the adjacent **i** bubble. Replacing raw recordings with an unsupported type automatically switches off previously enabled custom settings; regular activity analyses remain available. File extension is only a first check: the server verifies actual GENEActiv `.bin` content and rejects unsupported inputs instead of ignoring custom settings.
 
 With custom mode enabled, calibrated raw X/Y/Z samples (g) are converted into a scalar sample-level signal in this order:
 
@@ -86,6 +86,14 @@ Results and exports can retain:
 - application version and build information.
 
 The Results page includes a copyable Methods paragraph assembled from these fields. It is a reporting aid and should be reviewed alongside the study protocol before publication.
+
+## Exporting the exact preprocessed activity series
+
+Step 9 (Generate Results) and Step 10 (Export Outputs) provide a **Download Preprocessed Activity Data** button for each completed analysis. The archive contains `preprocessed_activity.csv`, `processing_manifest.json`, and `README.txt`. The download uses the same source recordings and frozen processing configuration as that completed run, recomputing the epoch-level signal in a bounded background job rather than adding a large time series to the normal result JSON. It is available only while the original uploaded files are still accessible in the current browser session.
+
+The CSV contains a timestamp, pre-QC processed activity, and activity eligible for downstream analysis, all in the exact chosen activity units. It also records missing/gap epochs, non-wear detection, whether non-wear was excluded, manual masks, invalid 24-hour quality windows, selected-interval membership, analysis inclusion, and an exclusion reason. **Missing and excluded data are blank, never forced to zero.**
+
+The manifest records filter type/order/cutoffs, operation order, magnitude normalization and units when custom processing is used, as well as activity metric, epoch duration, mask and QC settings, analysis intervals, joined-file provenance, and methods text. These are the settings needed to reproduce the activity input from the source recordings. The CSV is *not* the native high-frequency waveform, nor does it encode sleep-scoring predictions or aggregate rhythm/sleep metrics. For combined whole-recording-and-interval analyses, the activity-used column represents the whole-file branch and a dedicated flag identifies selected-interval rows. Exports are temporary; researchers must retain downloaded files for long-term reproducibility.
 
 ## Reproducible analysis checklist
 
