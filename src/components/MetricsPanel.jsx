@@ -486,7 +486,17 @@ export default function MetricsPanel({
       {showSleepSections && (
         <>
       <div style={{ marginTop: 8, marginBottom: 24 }}>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>Sleep / rest-detection algorithms</div>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>Sleep / rest-detection algorithms <span tabIndex={0} role="img" title="The most suitable algorithm depends on signal representation, epoch duration, device placement, population and validation. GGIR HDCZA/SIB is NOT implemented by the existing ActiLab scorer. See Methods documentation." aria-label="About sleep algorithm compatibility" style={{ color: "#2563eb", cursor: "help" }}>ⓘ</span></div>
+        {(["gt3x", "geneactiv_bin_accelerometer", "raw_accelerometer_needs_conversion", "tabular_raw_xyz"].includes(resolvedInputType)) && (
+          <div role="status" style={{ background: "#fff7ed", border: "1px solid #fdba74", padding: 12, borderRadius: 12, color: "#92400e", fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
+            <strong>Raw acceleration compatibility:</strong> ActiLab currently provides pyActigraphy sleep/rest algorithms, not GGIR HDCZA with sustained inactivity bouts. The default Cole–Kripke and alternative Sadeh/Oakley count-based methods have signal-scale and population validation assumptions; they must not be interpreted as validated ENMO sleep estimates without a suitable calibration/validation study. Crespo/Roenneberg can estimate rest windows but are not GGIR replacements. Supply a sleep diary or compatible rest windows and review warnings.
+          </div>
+        )}
+        {(["tabular", "tabular_mapped", "agd", "atr", "awd", "rpx"].includes(resolvedInputType)) && (
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", padding: 12, borderRadius: 12, color: "#1e3a8a", fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
+            <strong>Count/epoch signal:</strong> Compare the scoring algorithm's expected count units, 30/60-second binning, population and wake threshold with your source data. An arbitrary CSV activity column is not automatically compatible with Cole–Kripke or Sadeh.
+          </div>
+        )}
         <div
           style={{
             border: "1px solid #e2e8f0",

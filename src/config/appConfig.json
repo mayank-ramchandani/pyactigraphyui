@@ -68,7 +68,7 @@
       "id": "3",
       "key": "activityMapping",
       "title": "Estimating Activity Metric",
-      "description": "Choose how raw acceleration or device activity is converted into the epoch-level activity series used for analysis."
+      "description": "Choose auto or a defined activity metric and set the 5–60-second epoch used when processing raw acceleration. Device counts retain their native sampling."
     },
     {
       "id": "4",
@@ -110,7 +110,7 @@
       "id": "10",
       "key": "export",
       "title": "Export Outputs",
-      "description": "Download tables, plots, configuration, quality-control information, and diagnostic outputs."
+      "description": "Choose daily quality-window CSV or aggregated recording CSV, and download complete settings metadata, plots, and diagnostics."
     }
   ],
   "panels": {

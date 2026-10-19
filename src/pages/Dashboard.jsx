@@ -292,6 +292,7 @@ export default function Dashboard() {
   const [activitySignalSettings, setActivitySignalSettings] = useState({
     thresholdMethod: "adaptive",
     thresholdMg: 4,
+    epochSeconds: 30,
   });
   // A custom raw-signal pipeline has one scientific activity basis for both
   // preview plots and downstream analysis; the independent preview selector is
@@ -305,6 +306,7 @@ export default function Dashboard() {
   const [csvMapping, setCsvMapping] = useState({
     timestamp_col: "",
     time_col: "",
+    x_col: "", y_col: "", z_col: "", acceleration_unit: "",
     activity_col: "",
     light_col: "",
     temperature_col: "",
@@ -900,6 +902,7 @@ export default function Dashboard() {
     setCsvMapping({
       timestamp_col: "",
       time_col: "",
+      x_col: "", y_col: "", z_col: "", acceleration_unit: "",
       activity_col: "",
       light_col: "",
       temperature_col: "",
@@ -1398,6 +1401,8 @@ export default function Dashboard() {
             diagnostics: data.diagnostics || null,
             participantJoin: data.participant_join || null,
             processingProvenance: data.processing_provenance || null,
+            releaseTables: data.release_tables || null,
+            effectiveMethods: data.effective_methods || null,
             lightResults: generatedLightResults,
             lightDiagnostics: generatedLightDiagnostics,
           };
@@ -1565,13 +1570,13 @@ export default function Dashboard() {
 
     switch (currentStep) {
       case "1": {
-        const mappingValid = !showManualMapping || Boolean(csvMapping.timestamp_col && csvMapping.activity_col);
+        const mappingValid = !showManualMapping || Boolean(csvMapping.timestamp_col && (csvMapping.activity_col || (csvMapping.x_col && csvMapping.y_col && csvMapping.z_col && csvMapping.acceleration_unit)));
         return {
           valid: actigraphyFiles.length > 0 && mappingValid,
           message: !actigraphyFiles.length
             ? "Upload at least one actigraphy file."
             : !mappingValid
-            ? "Select timestamp and activity columns for the manually mapped CSV."
+            ? "Map timestamp and activity, or timestamp and X/Y/Z with explicit acceleration units."
             : "",
         };
       }

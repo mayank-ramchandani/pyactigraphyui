@@ -866,6 +866,18 @@ def _load_native_supported_file(
         requested_mapping = normalize_activity_mapping(activity_mapping)
         mapping = _clean_csv_mapping(csv_mapping)
         require_activity = str(purpose or "activity").strip().lower() != "light"
+        if not mapping.get("timestamp_col"):
+            dataframe_header = read_tabular_file(file_path, sep=csv_separator or ",")
+            mapping = detect_csv_mapping(dataframe_header)
+        if all(mapping.get(field) for field in ("x_col", "y_col", "z_col")) and not mapping.get("activity_col"):
+            from .tabular_xyz import load_xyz_as_baseraw
+            frame = read_tabular_file(file_path, sep=csv_separator or ",")
+            raw = load_xyz_as_baseraw(
+                frame, mapping, name=Path(file_path).name,
+                epoch_seconds=int((activity_signal_settings or {}).get("epoch_seconds", 30)),
+                activity_mapping=requested_mapping, signal_settings=activity_signal_settings,
+            )
+            return raw, "tabular_raw_xyz"
         if mapping.get("timestamp_col"):
             dataframe = load_custom_tabular(
                 file_path=file_path,
@@ -3043,6 +3055,12 @@ def analyze_basic(
                     "Report filter order/cutoffs, magnitude/filter ordering, gravity normalization, native sampling rate, and output units."
                 )
 
+            if reader_type in {"gt3x", "geneactiv_bin_accelerometer", "raw_accelerometer_needs_conversion", "tabular_raw_xyz"} and (algorithm_request or {}).get("id") in {"cole_kripke", "sadeh", "oakley", "scripps"}:
+                warnings.append(
+                    "The selected classic activity-count sleep scorer is not automatically validated for raw-derived acceleration in mg. "
+                    "ActiLab does not currently implement GGIR HDCZA/SIB equivalence. Interpret sleep results cautiously, "
+                    "consider validated input transformation or compatible diary windows, and report device/epoch/units."
+                )
             if requested_mapping != "original" and (algorithm_request or {}).get("id"):
                 warnings.append(
                     f"{requested_mapping.upper()} was used as the activity mapping. "
@@ -3069,7 +3087,24 @@ def analyze_basic(
             data_quality=data_quality,
         )
 
+        # Generate export levels in the same request as analysis. The rows are
+        # derived from the *resolved* final quality mask, not a second guess in JS.
+        from .release_exports import build_release_tables, effective_methods_manifest
+        release_tables = build_release_tables(
+            raw, results, data_quality, source_name=support_source_filename,
+            analysis_config=analysis_config,
+        )
+        release_methods = effective_methods_manifest(
+            file_names=joined_source_names,
+            reader_type=reader_type, activity_mapping=mapping_details,
+            settings=signal_settings, analysis_config=analysis_config,
+            data_quality=data_quality, provenance=processing_provenance,
+            participant_join=participant_join, csv_mapping=parsed_csv_mapping,
+            csv_separator=csvSeparator, results=results,
+        )
         response_content = {
+            "release_tables": release_tables,
+            "effective_methods": release_methods,
             "results": results,
             "qcWarnings": warnings,
             "supportFileSummary": support_file_summary,

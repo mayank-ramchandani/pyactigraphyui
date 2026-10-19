@@ -72,6 +72,10 @@ export default function CsvMappingPanel({
           timestamp_col: prev.timestamp_col || mapping.timestamp_col || "",
           time_col: prev.time_col || mapping.time_col || "",
           activity_col: prev.activity_col || mapping.activity_col || "",
+          x_col: prev.x_col || mapping.x_col || "",
+          y_col: prev.y_col || mapping.y_col || "",
+          z_col: prev.z_col || mapping.z_col || "",
+          acceleration_unit: prev.acceleration_unit || mapping.acceleration_unit || "",
           light_col: prev.light_col || mapping.light_col || "",
           temperature_col: prev.temperature_col || mapping.temperature_col || "",
           nonwear_col: prev.nonwear_col || mapping.nonwear_col || "",
@@ -104,7 +108,8 @@ export default function CsvMappingPanel({
     }));
   };
 
-  const isReady = Boolean(csvMapping.timestamp_col && csvMapping.activity_col);
+  const xyzMapped = Boolean(csvMapping.x_col && csvMapping.y_col && csvMapping.z_col && csvMapping.acceleration_unit);
+  const isReady = Boolean(csvMapping.timestamp_col && (csvMapping.activity_col || xyzMapped));
 
   return (
     <div
@@ -118,7 +123,7 @@ export default function CsvMappingPanel({
     >
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
       <p style={{ color: "#64748b", marginTop: 0, marginBottom: 16, lineHeight: 1.6 }}>
-        Manual mapping is optional. The backend inspects the uploaded file and suggests the most likely timestamp, activity, and light columns.
+        Manual mapping is optional. ActiLab identifies timestamps, activity/counts, optional sensor columns, and unambiguous raw X/Y/Z acceleration columns. Select all three axes and their units for a raw XYZ file; never treat X-axis acceleration as an activity-count column.
       </p>
 
       <div
@@ -132,6 +137,11 @@ export default function CsvMappingPanel({
       >
         <div style={{ fontWeight: 700, marginBottom: 8 }}>Current file</div>
         <div style={{ color: "#475569", fontSize: 14 }}>{csvFile?.name || "No file selected"}</div>
+        {(detectedMapping.x_col && detectedMapping.y_col && detectedMapping.z_col) && (
+          <div style={{ color: "#1d4ed8", fontSize: 13, marginTop: 6 }}>
+            Raw XYZ detected: {detectedMapping.x_col}, {detectedMapping.y_col}, {detectedMapping.z_col}. {detectedMapping.acceleration_unit ? `Unit suggested: ${detectedMapping.acceleration_unit}.` : "Select acceleration units explicitly."}
+          </div>
+        )}
         {detectedInputType && (
           <div style={{ color: "#64748b", fontSize: 13, marginTop: 6 }}>
             Detected type: {detectedInputType}
@@ -208,7 +218,10 @@ export default function CsvMappingPanel({
         {[
           ["timestamp_col", "Timestamp column *"],
           ["time_col", "Optional time column"],
-          ["activity_col", "Activity column *"],
+          ["activity_col", "Activity or count column (OR use all 3 raw axes)"],
+          ["x_col", "Raw X acceleration column"],
+          ["y_col", "Raw Y acceleration column"],
+          ["z_col", "Raw Z acceleration column"],
           ["light_col", "Light column"],
           ["temperature_col", "Temperature column"],
           ["nonwear_col", "Non-wear / mask column"],
@@ -236,6 +249,14 @@ export default function CsvMappingPanel({
         ))}
       </div>
 
+      <div style={{ padding: 13, border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 12, marginTop: 15 }}>
+        <label htmlFor="acceleration-unit" style={{ fontWeight: 700 }}>Raw X/Y/Z units <span role="img" tabIndex={0} aria-label="Units required for unambiguous acceleration interpretation" title="Only select this for raw X/Y/Z data. g, mg and m/s² cannot be safely inferred from unnamed columns. ActiLab computes epoch metrics without full static/temperature auto-calibration or GGIR HDCZA sleep detection." style={{ color: "#2563eb", cursor: "help" }}>ⓘ</span></label>
+        <select id="acceleration-unit" value={csvMapping.acceleration_unit || ""} onChange={(e) => updateField("acceleration_unit", e.target.value)} style={{ marginTop: 8, display: "block", padding: "9px 12px", border: "1px solid #93c5fd", borderRadius: 9, width: "100%" }}>
+          <option value="">Not specified (required for XYZ conversion)</option>
+          <option value="g">g — gravitational units</option><option value="mg">mg — milligravity</option><option value="m_s2">m/s² — SI acceleration</option>
+        </select>
+        <p style={{ color: "#475569", fontSize: 12, lineHeight: 1.5, marginBottom: 0 }}>For count/activity CSVs, leave X/Y/Z empty. For raw XYZ, select X, Y, Z, and units; ActiLab uses the selected Step 3 metric and epoch length. No automatic gravity/temperature calibration is claimed.</p>
+      </div>
       <div
         style={{
           marginTop: 20,

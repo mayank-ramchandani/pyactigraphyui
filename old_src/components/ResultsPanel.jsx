@@ -10,6 +10,7 @@ import { LIGHT_METRIC_DEFINITIONS } from "./LightMetricsPanel";
 import DiagnosticPanel, { downloadDiagnostics } from "./DiagnosticPanel";
 import { activityMappingLabel } from "./ActivityMappingPanel";
 import SamplingHarmonizationNotice from "./SamplingHarmonizationNotice";
+import ProcessedActivityDownload from "./ProcessedActivityDownload";
 
 
 const RESULT_INFO_OVERRIDES = {
@@ -416,6 +417,8 @@ export default function ResultsPanel({
   selectedLightMetrics = [],
   lightMetricSettings = {},
   lightAnalysisError = "",
+  onDownloadProcessedActivity = () => {},
+  processedActivityDownloadState = {},
 }) {
   const lightResultKeys = Object.keys(lightResults || {});
   const selectedAnalysisNameSet = new Set(selectedAnalysisFileNames || []);
@@ -619,6 +622,8 @@ export default function ResultsPanel({
           Light analysis warning: {lightAnalysisError}
         </div>
       )}
+
+      {resultsGenerated && <ProcessedActivityDownload batchResults={completedBatchResults} onDownload={onDownloadProcessedActivity} downloadState={processedActivityDownloadState} />}
 
       {hasBatchResults && (
         <>

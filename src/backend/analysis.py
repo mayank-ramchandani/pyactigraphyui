@@ -1431,6 +1431,33 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
                 {key: _json_ready_metric_value(value) for key, value in item.items() if key != "score"}
                 for item in sleep_window_quality
             ]
+            # Actual night-level scoring from the existing chosen pyActigraphy
+            # method. Do not substitute a GGIR method or invent sleep for
+            # windows with inadequate coverage. Kept separate from QC days.
+            nightly = []
+            for window in sleep_window_quality:
+                scored = window.get("score")
+                eligible = bool(window.get("eligible") and scored is not None and len(scored))
+                epoch_minutes = _epoch_minutes(scored.index) if eligible else None
+                asleep = (scored > 0) if eligible else None
+                tst = float(asleep.sum()) * epoch_minutes if eligible else None
+                waso = None
+                if eligible and bool(asleep.any()):
+                    pos = asleep.to_numpy().nonzero()[0][0]
+                    waso = float((~asleep.iloc[pos:]).sum()) * epoch_minutes
+                observed = window.get("observed_minutes") or 0
+                nightly.append({
+                    "sleep_night_start_date": str(window.get("start") or "")[:10],
+                    "sleep_window_start": window.get("start"),
+                    "sleep_window_stop": window.get("stop"),
+                    "sleep_window_valid": bool(eligible),
+                    "sleep_window_coverage": window.get("coverage_fraction"),
+                    "sleep_observed_minutes": round(float(observed), 4),
+                    "sleep_tst_minutes": round(tst, 4) if tst is not None else None,
+                    "sleep_waso_minutes": round(waso, 4) if waso is not None else None,
+                    "sleep_efficiency_percent": round((tst / observed * 100), 4) if tst is not None and observed > 0 else None,
+                })
+            results["sleep_window_nights"] = nightly
         results["sleep_window_estimated"] = bool(window_metadata.get("estimated"))
         details = window_metadata.get("details") or _sleep_window_detail_payload(sleep_windows, window_metadata)
         if details:

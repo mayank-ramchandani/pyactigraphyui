@@ -1,6 +1,24 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "exports": [
+    {
+      "id": "csv_daily",
+      "label": "Daily QC/activity CSV",
+      "type": "table",
+      "enabled": true
+    },
+    {
+      "id": "csv_aggregated",
+      "label": "Aggregated recording CSV",
+      "type": "table",
+      "enabled": true
+    },
+    {
+      "id": "json_metadata",
+      "label": "Complete methods metadata",
+      "type": "json",
+      "enabled": true
+    },
     {
       "id": "csv_summary",
       "label": "Export CSV",

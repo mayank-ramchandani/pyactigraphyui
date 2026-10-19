@@ -350,6 +350,7 @@ def load_native_file(
     activity_signal_settings: Optional[Dict[str, Any]] = None,
 ):
     requested_mapping = normalize_activity_mapping(activity_mapping)
+    epoch_seconds = int((activity_signal_settings or {}).get("epoch_seconds", 30))
 
     # The exported/converted .cwa path contains epoch-level data, not a raw
     # calibrated X/Y/Z stream available to this loader. Never silently ignore
@@ -365,28 +366,28 @@ def load_native_file(
 
     if reader_type == "raw_accelerometer_needs_conversion":
         return load_accelerometer_as_baseraw(
-            file_path, epoch_period=30, activity_mapping=requested_mapping
+            file_path, epoch_period=epoch_seconds, activity_mapping=requested_mapping
         )
 
     if reader_type == "geneactiv_bin_accelerometer":
         return read_raw_geneactiv_bin(
             file_path,
-            resample_freq="30s",
+            resample_freq=f"{epoch_seconds}s",
             activity_mapping=requested_mapping,
             activity_signal_settings=activity_signal_settings,
         )
 
     if reader_type == "accelerometer_timeseries_csv":
         return load_accelerometer_csv_as_baseraw(
-            file_path, epoch_period=30, activity_mapping=requested_mapping
+            file_path, epoch_period=epoch_seconds, activity_mapping=requested_mapping
         )
 
     if reader_type == "gt3x":
         if str(purpose or "activity").strip().lower() == "light":
-            return load_gt3x_light_as_raw(file_path, epoch_period=30)
+            return load_gt3x_light_as_raw(file_path, epoch_period=epoch_seconds)
         return load_gt3x_as_baseraw(
             file_path,
-            epoch_period=30,
+            epoch_period=epoch_seconds,
             activity_mapping=requested_mapping,
             activity_signal_settings=activity_signal_settings,
         )
@@ -805,6 +806,10 @@ def detect_csv_mapping(df: pd.DataFrame) -> Dict[str, Any]:
         "light_columns": _detect_light_column_map(cols),
     }
 
+    # Raw XYZ CSVs may not have a pre-computed activity column. Infer only
+    # unambiguous X/Y/Z column identities; never invent acceleration units.
+    from .tabular_xyz import detect_xyz_mapping
+    mapping.update(detect_xyz_mapping(cols))
     return mapping
 
 

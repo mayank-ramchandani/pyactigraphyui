@@ -6,16 +6,20 @@ This directory contains the public documentation for researchers and analysts us
 
 ## Start here
 
-1. Read the [User guide](USER_GUIDE.md) for the complete ten-step workflow.
-2. Review [Initial QC and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) before changing the recommended Analysis settings in Step 7.
-3. Check [Supported file formats](FILE_FORMATS.md) and [Choosing an activity representation](ACTIVITY_PROCESSING.md) when preparing data.
-4. Use [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) to understand the available analyses.
-5. Use [Troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) when a result is missing or a run fails.
+1. Read the [Plug-and-play release guide](PLUG_AND_PLAY_RELEASE.md) for automatic device identification, raw XYZ CSV, epoch lengths, scoring limitations, daily/aggregated outputs and complete metadata.
+2. Read the [User guide](USER_GUIDE.md) for the complete ten-step workflow.
+3. Review [Initial QC and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) before changing the recommended Analysis settings in Step 7.
+4. Check [Supported file formats](FILE_FORMATS.md) and [Choosing an activity representation](ACTIVITY_PROCESSING.md) when preparing data.
+5. Use [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) to understand the available analyses.
+6. Use [Troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) when a result is missing or a run fails.
 
 ## Documentation by task
 
 | I need to… | Read… |
 |---|---|
+| Configure plug-and-play raw processing, CSV XYZ import, epochs and reproducible summary exports | [Plug-and-play release guide](PLUG_AND_PLAY_RELEASE.md) |
+| Compare matched results against GGIR | [GGIR validation protocol](GGIR_COMPARISON_PROTOCOL.md) |
+| Browse candidate metrics from GGIR and pyActigraphy (not all implemented) | [Candidate metric catalogue](METRIC_CATALOG_CANDIDATES.csv) |
 | Complete an analysis from upload to export | [User guide](USER_GUIDE.md) |
 | Customize raw X/Y/Z filtering, acceleration magnitude and gravity normalization | [Methods and reproducibility](PREPROCESSING_AND_PROVENANCE.md#configurable-raw-acceleration-pipeline-step-2) |
 | Decide whether to keep or change the recommended quality thresholds | [Initial QC and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) |
@@ -54,4 +58,4 @@ After at least one actigraphy file is uploaded, Steps 2–9 can be opened direct
 - **Unavailable result:** a metric that could not be calculated because required data, valid windows, sleep windows, or supported signals were not available.
 - **Warning:** processing continued, but the result or data quality requires review.
 
-Last updated: **2026-10-15**.
+Last updated: **2026-10-19**.

@@ -125,12 +125,20 @@ def normalize_activity_signal_settings(value: Any, activity_mapping: Any = "auto
     if mapping in {"zcm", "tat"} and method == "fixed" and threshold_mg is None:
         raise ValueError(f"{mapping.upper()} fixed-threshold mode requires a threshold in mg.")
 
+    epoch_requested = payload.get("epochSeconds", payload.get("epoch_seconds", 30))
+    try:
+        epoch_seconds = int(epoch_requested)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise ValueError("Raw activity epoch length must be 5, 10, 15, 30 or 60 seconds.") from exc
+    if epoch_seconds not in (5, 10, 15, 30, 60):
+        raise ValueError("Raw activity epoch length must be 5, 10, 15, 30 or 60 seconds.")
     raw_signal = normalize_raw_signal_settings(payload.get("rawSignal", payload.get("raw_signal")))
     if raw_signal["enabled"] and mapping == "original":
         raise ValueError("Custom raw-acceleration processing cannot be applied to original device activity/counts. Select a raw-derived activity representation.")
     if raw_signal["enabled"] and mapping == "enmo" and raw_signal["normalization"] != "positive_deviation":
         raise ValueError("ENMO requires positive (magnitude − 1 g) normalization. Select that normalization or use processed acceleration for another custom signal.")
     return {
+        "epoch_seconds": epoch_seconds,
         "raw_signal": raw_signal,
         "threshold_method": method,
         "threshold_mg": threshold_mg,

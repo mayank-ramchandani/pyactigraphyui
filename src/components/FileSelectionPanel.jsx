@@ -188,7 +188,7 @@ export default function FileSelectionPanel({
             <span>
               <strong>Manually map CSV columns</strong>
               <span style={{ display: "block", color: "#475569", fontSize: 14, lineHeight: 1.5, marginTop: 4 }}>
-                Use this only when automatic detection does not correctly identify timestamp, activity, light, temperature, or non-wear columns. The mapping form remains on this importing page.
+                Use this when automatic detection misses timestamps, activity/counts, raw X/Y/Z acceleration, units, light, temperature or non-wear columns. Raw XYZ requires explicit units if they cannot be inferred safely. The mapping form remains on this importing page.
               </span>
             </span>
           </label>

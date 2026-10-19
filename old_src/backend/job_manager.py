@@ -253,3 +253,20 @@ def _run_job(job_id: str, worker: Callable[[], Dict[str, Any]]) -> None:
 def submit_job(job_id: str, worker: Callable[[], Dict[str, Any]]) -> None:
     """Submit a previously-created job to the bounded executor."""
     _EXECUTOR.submit(_run_job, job_id, worker)
+
+
+def get_job_artifact_path(job_id: str, filename: str = "processed_activity.zip") -> Optional[Path]:
+    """Return a known export artifact, never an arbitrary caller-provided path."""
+    if filename != "processed_activity.zip":
+        return None
+    try:
+        directory = _job_dir(job_id).resolve()
+        root = _jobs_root().resolve()
+        if directory.parent != root:
+            return None
+        artifact = (directory / filename).resolve()
+        if artifact.parent != directory or not artifact.is_file():
+            return None
+        return artifact
+    except (ValueError, OSError):
+        return None

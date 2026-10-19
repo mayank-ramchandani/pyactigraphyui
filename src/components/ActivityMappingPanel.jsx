@@ -5,7 +5,7 @@ export const ACTIVITY_MAPPING_OPTIONS = [
     id: "auto",
     label: "Recommended source / processed `acc`",
     units: "",
-    description: "Uses source/device activity when the file already contains it. Raw .bin, .cwa, and .gt3x files use the epoch-level accelerometer `acc` activity basis.",
+    description: "Keeps device counts when available. For raw BIN/CWA/GT3X, uses the available processed-acceleration (`acc`) path. Select ENMO explicitly for GGIR-style acceleration units; results are not automatically GGIR-equivalent.",
   },
   {
     id: "accelerometer",
@@ -17,13 +17,13 @@ export const ACTIVITY_MAPPING_OPTIONS = [
     id: "mad",
     label: "MAD",
     units: "mg",
-    description: "Mean amplitude deviation of vector magnitude within each 30-second epoch. Available only when raw X/Y/Z samples or a MAD column are available.",
+    description: "Mean amplitude deviation of vector magnitude within each selected raw-data epoch. Available only when raw X/Y/Z samples or a MAD column are available.",
   },
   {
     id: "enmo",
     label: "ENMO",
     units: "mg",
-    description: "Uses the epoch mean of positive Euclidean Norm Minus One from calibrated vector magnitude.",
+    description: "Uses the epoch mean of positive Euclidean Norm Minus One in mg. Native device pipelines may calibrate acceleration; mapped XYZ CSVs use the explicitly provided units without claiming GGIR calibration.",
   },
   {
     id: "pim",
@@ -102,6 +102,17 @@ export default function ActivityMappingPanel({
       {!isPreview && signalSettings?.rawSignal?.enabled && (
         <div style={{ fontSize: 12, background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 9, padding: 10, marginTop: 12, lineHeight: 1.6, color: "#9a3412" }}>
           Custom raw preprocessing is enabled in Step 2. Your chosen activity metric will be computed from that processed signal, so its values and validation assumptions may differ from the standard metric definition. Source counts and pre-aggregated files cannot use this setting.
+        </div>
+      )}
+      {!isPreview && (
+        <div style={{ marginTop: 14, padding: 12, border: "1px solid #bfdbfe", background: "#f8fafc", borderRadius: 12 }}>
+          <label htmlFor="activity-epoch-length" style={{ fontWeight: 700, fontSize: 13 }}>
+            Raw activity epoch length <span role="img" aria-label="Epoch duration information" title="Applies during processing of high-frequency acceleration, not to existing activity epochs or vendor counts. The existing ActiLab default is 30 seconds; GGIR commonly uses a 5-second base epoch. This does not make ActiLab's preprocessing identical to GGIR." style={{ cursor: "help", color: "#2563eb" }}>ⓘ</span>
+          </label>
+          <select id="activity-epoch-length" value={signalSettings?.epochSeconds ?? 30} onChange={(e) => onSignalSettingsChange({ ...signalSettings, epochSeconds: Number(e.target.value) })} style={{ display: "block", marginTop: 6, padding: "9px 10px", borderRadius: 9, border: "1px solid #93c5fd", width: "100%" }}>
+            {[5, 10, 15, 30, 60].map((n) => <option key={n} value={n}>{n} seconds{n === 30 ? " (ActiLab default)" : n === 5 ? " (GGIR reference base epoch)" : ""}</option>)}
+          </select>
+          <small style={{ color: "#475569", display: "block", marginTop: 6 }}>Raw BIN, GT3X, and supported CWA conversion only. Existing epoch files retain native resolution. Return to Step 2 to refresh Initial QC and re-run preview/analysis after changing this.</small>
         </div>
       )}
       {["zcm", "tat"].includes(value) && !isPreview && (

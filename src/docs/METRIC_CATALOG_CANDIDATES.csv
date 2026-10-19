@@ -1,0 +1,131 @@
+source,metric,domain,level,release_recommendation,eligibility,person_aggregation,notes
+pyActigraphy,ADAT,activity,recording/period,extended,epoch activity series,mean of valid daily values as defined,
+pyActigraphy,ADATp,activity,recording/period,extended,epoch activity series,mean of valid daily values as defined,
+pyActigraphy,average_daily_activity,activity,recording/period,extended,epoch activity series,mean of valid daily values as defined,
+pyActigraphy,IS,rest-activity,recording/period,core,multi-day eligible activity,recompute full series,"pyActigraphy binary threshold defaults can differ from GGIR, compare carefully"
+pyActigraphy,ISm,rest-activity,recording/period,core,multi-day eligible activity,recompute full series,"pyActigraphy binary threshold defaults can differ from GGIR, compare carefully"
+pyActigraphy,ISp,rest-activity,recording/period,core,multi-day eligible activity,recompute full series,"pyActigraphy binary threshold defaults can differ from GGIR, compare carefully"
+pyActigraphy,IV,rest-activity,recording/period,core,multi-day eligible activity,recompute full series,"pyActigraphy binary threshold defaults can differ from GGIR, compare carefully"
+pyActigraphy,IVm,rest-activity,recording/period,core,multi-day eligible activity,recompute full series,"pyActigraphy binary threshold defaults can differ from GGIR, compare carefully"
+pyActigraphy,IVp,rest-activity,recording/period,core,multi-day eligible activity,recompute full series,"pyActigraphy binary threshold defaults can differ from GGIR, compare carefully"
+pyActigraphy,L5,rest-activity,recording/day,core,valid activity epochs,definition-specific; RA is not mean of daily RAs,
+pyActigraphy,L5p,rest-activity,recording/day,core,valid activity epochs,definition-specific; RA is not mean of daily RAs,
+pyActigraphy,M10,rest-activity,recording/day,core,valid activity epochs,definition-specific; RA is not mean of daily RAs,
+pyActigraphy,M10p,rest-activity,recording/day,core,valid activity epochs,definition-specific; RA is not mean of daily RAs,
+pyActigraphy,RA,rest-activity,recording/day,core,valid activity epochs,definition-specific; RA is not mean of daily RAs,
+pyActigraphy,RAp,rest-activity,recording/day,core,valid activity epochs,definition-specific; RA is not mean of daily RAs,
+pyActigraphy,pRA,fragmentation,recording,extended,epoch series with valid masks,recompute full series,
+pyActigraphy,pAR,fragmentation,recording,extended,epoch series with valid masks,recompute full series,
+pyActigraphy,kRA,fragmentation,recording,extended,epoch series with valid masks,recompute full series,
+pyActigraphy,kAR,fragmentation,recording,extended,epoch series with valid masks,recompute full series,
+pyActigraphy,AonT,activity onset/offset,period,extended,suitable valid series,circular/conditional,
+pyActigraphy,AoffT,activity onset/offset,period,extended,suitable valid series,circular/conditional,
+pyActigraphy,Crespo_AoT,activity onset/offset,period,extended,suitable valid series,circular/conditional,
+pyActigraphy,Roenneberg_AoT,activity onset/offset,period,extended,suitable valid series,circular/conditional,
+pyActigraphy,SleepRegularityIndex,sleep/rest-activity,recording/day-pair,core,validated rest/sleep series; >=2 suitable days for SRI,recompute full series,
+pyActigraphy,SleepMidPoint,sleep/rest-activity,recording/day-pair,core,validated rest/sleep series; >=2 suitable days for SRI,recompute full series,
+pyActigraphy,SleepProfile,sleep/rest-activity,recording/day-pair,core,validated rest/sleep series; >=2 suitable days for SRI,recompute full series,
+pyActigraphy,SoD,sleep/rest-activity,recording/day-pair,core,validated rest/sleep series; >=2 suitable days for SRI,recompute full series,
+pyActigraphy,fSoD,sleep/rest-activity,recording/day-pair,core,validated rest/sleep series; >=2 suitable days for SRI,recompute full series,
+pyActigraphy,CK,sleep scoring algorithms,epoch series,extended,algorithm-compatible counts or activity,not a summary metric,"These are algorithm selections, not outcome column names"
+pyActigraphy,Sadeh,sleep scoring algorithms,epoch series,extended,algorithm-compatible counts or activity,not a summary metric,"These are algorithm selections, not outcome column names"
+pyActigraphy,Oakley,sleep scoring algorithms,epoch series,extended,algorithm-compatible counts or activity,not a summary metric,"These are algorithm selections, not outcome column names"
+pyActigraphy,Scripps,sleep scoring algorithms,epoch series,extended,algorithm-compatible counts or activity,not a summary metric,"These are algorithm selections, not outcome column names"
+pyActigraphy,Crespo,sleep scoring algorithms,epoch series,extended,algorithm-compatible counts or activity,not a summary metric,"These are algorithm selections, not outcome column names"
+pyActigraphy,Roenneberg,sleep scoring algorithms,epoch series,extended,algorithm-compatible counts or activity,not a summary metric,"These are algorithm selections, not outcome column names"
+pyActigraphy,Cosinor_MESOR,cosinor,recording,core,sufficient rest-activity profile,fit full eligible series,"Output names proposed for ActiLab, pyActigraphy Cosinor fit parameters"
+pyActigraphy,Cosinor_amplitude,cosinor,recording,core,sufficient rest-activity profile,fit full eligible series,"Output names proposed for ActiLab, pyActigraphy Cosinor fit parameters"
+pyActigraphy,Cosinor_acrophase,cosinor,recording,core,sufficient rest-activity profile,fit full eligible series,"Output names proposed for ActiLab, pyActigraphy Cosinor fit parameters"
+pyActigraphy,Cosinor_period,cosinor,recording,core,sufficient rest-activity profile,fit full eligible series,"Output names proposed for ActiLab, pyActigraphy Cosinor fit parameters"
+pyActigraphy,Cosinor_fit_quality,cosinor,recording,core,sufficient rest-activity profile,fit full eligible series,"Output names proposed for ActiLab, pyActigraphy Cosinor fit parameters"
+pyActigraphy,DFA,advanced analysis,recording,optional,specialized scientific use,method specific,"Classes / analysis families, not single scalar columns"
+pyActigraphy,FLM,advanced analysis,recording,optional,specialized scientific use,method specific,"Classes / analysis families, not single scalar columns"
+pyActigraphy,LIDS,advanced analysis,recording,optional,specialized scientific use,method specific,"Classes / analysis families, not single scalar columns"
+pyActigraphy,SSA,advanced analysis,recording,optional,specialized scientific use,method specific,"Classes / analysis families, not single scalar columns"
+pyActigraphy,light_exposure_level,light,day/recording,extended,calibrated light channel,metric-specific,
+pyActigraphy,summary_statistics_per_time_bin,light,day/recording,extended,calibrated light channel,metric-specific,
+pyActigraphy,TAT,light,day/recording,extended,calibrated light channel,metric-specific,
+pyActigraphy,MLit,light,day/recording,extended,calibrated light channel,metric-specific,
+pyActigraphy,light_L5,light,day/recording,extended,calibrated light channel,metric-specific,
+pyActigraphy,light_M10,light,day/recording,extended,calibrated light channel,metric-specific,
+pyActigraphy,light_IS,light,day/recording,extended,calibrated light channel,metric-specific,
+pyActigraphy,light_IV,light,day/recording,extended,calibrated light channel,metric-specific,
+GGIR,calib_err,QC,recording,core,raw and/or valid metadata,no aggregation,GGIR part2 report concepts; field availability device-dependent
+GGIR,calib_status,QC,recording,core,raw and/or valid metadata,no aggregation,GGIR part2 report concepts; field availability device-dependent
+GGIR,clipping_score,QC,recording,core,raw and/or valid metadata,no aggregation,GGIR part2 report concepts; field availability device-dependent
+GGIR,samplefreq,QC,recording,core,raw and/or valid metadata,no aggregation,GGIR part2 report concepts; field availability device-dependent
+GGIR,wear_dur_def_proto_day,QC,recording,core,raw and/or valid metadata,no aggregation,GGIR part2 report concepts; field availability device-dependent
+GGIR,meas_dur_dys,QC,recording,core,raw and/or valid metadata,no aggregation,GGIR part2 report concepts; field availability device-dependent
+GGIR,complete_24hcycle,QC,recording,core,raw and/or valid metadata,no aggregation,GGIR part2 report concepts; field availability device-dependent
+GGIR,cal.error.start,QC,file/day,core,device-dependent QC,coverage summary / descriptive,
+GGIR,cal.error.end,QC,file/day,core,device-dependent QC,coverage summary / descriptive,
+GGIR,use.temperature,QC,file/day,core,device-dependent QC,coverage summary / descriptive,
+GGIR,NFilePagesSkipped,QC,file/day,core,device-dependent QC,coverage summary / descriptive,
+GGIR,filehealth_totimp_min,QC,file/day,core,device-dependent QC,coverage summary / descriptive,
+GGIR,N valid hours,QC,file/day,core,device-dependent QC,coverage summary / descriptive,
+GGIR,nonwear_perc_day,QC,file/day,core,device-dependent QC,coverage summary / descriptive,
+GGIR,nonwear_perc_spt,QC,file/day,core,device-dependent QC,coverage summary / descriptive,
+GGIR,nonwear_perc_day_spt,QC,file/day,core,device-dependent QC,coverage summary / descriptive,
+GGIR,ENMO_fullRecordingMean,acceleration,epoch/recording,core,raw XYZ and metric-appropriate preprocessing,mean based on eligible seconds,Metric availability/configuration dependent; identifiers may vary from GGIR export columns
+GGIR,ENMO,acceleration,epoch/recording,core,raw XYZ and metric-appropriate preprocessing,mean based on eligible seconds,Metric availability/configuration dependent; identifiers may vary from GGIR export columns
+GGIR,MAD,acceleration,epoch/recording,core,raw XYZ and metric-appropriate preprocessing,mean based on eligible seconds,Metric availability/configuration dependent; identifiers may vary from GGIR export columns
+GGIR,BFEN,acceleration,epoch/recording,core,raw XYZ and metric-appropriate preprocessing,mean based on eligible seconds,Metric availability/configuration dependent; identifiers may vary from GGIR export columns
+GGIR,HFEN,acceleration,epoch/recording,core,raw XYZ and metric-appropriate preprocessing,mean based on eligible seconds,Metric availability/configuration dependent; identifiers may vary from GGIR export columns
+GGIR,LFENMO,acceleration,epoch/recording,core,raw XYZ and metric-appropriate preprocessing,mean based on eligible seconds,Metric availability/configuration dependent; identifiers may vary from GGIR export columns
+GGIR,EN,acceleration,epoch/recording,core,raw XYZ and metric-appropriate preprocessing,mean based on eligible seconds,Metric availability/configuration dependent; identifiers may vary from GGIR export columns
+GGIR,Neishabouri_counts,acceleration,epoch/recording,core,raw XYZ and metric-appropriate preprocessing,mean based on eligible seconds,Metric availability/configuration dependent; identifiers may vary from GGIR export columns
+GGIR,L5VALUE,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,L5TIME_num,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,M5VALUE,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,M5TIME_num,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,M10VALUE,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,M10TIME_num,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,IS,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,IV,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,phi,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,SSP,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,ABI,circadian rhythms,day/recording,core,"multi-day eligibility for IS/IV, validated epochs",recompute full series,
+GGIR,cosinor_mes,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinor_amp,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinor_acrophase,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinor_acrotime,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinor_R2,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinorExt_minimum,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinorExt_amp,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinorExt_alpha,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinorExt_beta,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinorExt_UpMesor,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,cosinorExt_DownMesor,cosinor,recording,extended,configured fit of multi-day epochs,refit eligible recording,
+GGIR,sleeponset,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,wakeup,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,SptDuration,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,SleepDurationInSpt,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,WASO,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,sleepefficiency,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,sleeplatency,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,SleepRegularityIndex1,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,SriFractionValid,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,duration_sib_wakinghours,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,number_sib_sleepperiod,sleep,night/day-pair,core,qualified raw wrist/compatible sleep source; efficiency/latency require denominator,night-wise or recompute full series,Some metrics require an in-bed guider or diary; units and definitions must be stored
+GGIR,dur_day_total_IN_min,activity intensity,day/person,core,validated metric-specific cutpoints,"plain mean over eligible days, explicit thresholds","Representative GGIR-style field patterns, not guaranteed literal names in all GGIR versions"
+GGIR,dur_day_total_LIG_min,activity intensity,day/person,core,validated metric-specific cutpoints,"plain mean over eligible days, explicit thresholds","Representative GGIR-style field patterns, not guaranteed literal names in all GGIR versions"
+GGIR,dur_day_total_MOD_min,activity intensity,day/person,core,validated metric-specific cutpoints,"plain mean over eligible days, explicit thresholds","Representative GGIR-style field patterns, not guaranteed literal names in all GGIR versions"
+GGIR,dur_day_total_VIG_min,activity intensity,day/person,core,validated metric-specific cutpoints,"plain mean over eligible days, explicit thresholds","Representative GGIR-style field patterns, not guaranteed literal names in all GGIR versions"
+GGIR,dur_day_total_MVPA_min,activity intensity,day/person,core,validated metric-specific cutpoints,"plain mean over eligible days, explicit thresholds","Representative GGIR-style field patterns, not guaranteed literal names in all GGIR versions"
+GGIR,ACC_day_mg,activity intensity,day/person,core,validated metric-specific cutpoints,"plain mean over eligible days, explicit thresholds","Representative GGIR-style field patterns, not guaranteed literal names in all GGIR versions"
+GGIR,ig_gradient_ENMO,activity intensity,day/person,core,validated metric-specific cutpoints,"plain mean over eligible days, explicit thresholds","Representative GGIR-style field patterns, not guaranteed literal names in all GGIR versions"
+GGIR,ig_intercept_ENMO,activity intensity,day/person,core,validated metric-specific cutpoints,"plain mean over eligible days, explicit thresholds","Representative GGIR-style field patterns, not guaranteed literal names in all GGIR versions"
+GGIR,ig_rsquared_ENMO,activity intensity,day/person,core,validated metric-specific cutpoints,"plain mean over eligible days, explicit thresholds","Representative GGIR-style field patterns, not guaranteed literal names in all GGIR versions"
+GGIR,dur_day_LIG_bts_1_5_min,bouts/fragmentation,day/person,extended,sufficient valid epochs; exact parameters,method-dependent,Representative patterns: generated names vary by configured thresholds
+GGIR,dur_day_MOD_bts_10_min,bouts/fragmentation,day/person,extended,sufficient valid epochs; exact parameters,method-dependent,Representative patterns: generated names vary by configured thresholds
+GGIR,FRAG_Nfrag_PA_day,bouts/fragmentation,day/person,extended,sufficient valid epochs; exact parameters,method-dependent,Representative patterns: generated names vary by configured thresholds
+GGIR,FRAG_TP_PA2IN,bouts/fragmentation,day/person,extended,sufficient valid epochs; exact parameters,method-dependent,Representative patterns: generated names vary by configured thresholds
+GGIR,FRAG_TP_IN2PA,bouts/fragmentation,day/person,extended,sufficient valid epochs; exact parameters,method-dependent,Representative patterns: generated names vary by configured thresholds
+GGIR,FRAG_mean_dur,bouts/fragmentation,day/person,extended,sufficient valid epochs; exact parameters,method-dependent,Representative patterns: generated names vary by configured thresholds
+GGIR,FRAG_Gini_dur,bouts/fragmentation,day/person,extended,sufficient valid epochs; exact parameters,method-dependent,Representative patterns: generated names vary by configured thresholds
+GGIR,FRAG_CoV_dur,bouts/fragmentation,day/person,extended,sufficient valid epochs; exact parameters,method-dependent,Representative patterns: generated names vary by configured thresholds
+GGIR,Nvaliddays,aggregation/QC,person,core,qualified daily windows,metadata/counts; suffix-style,
+GGIR,Nvaliddays_WD,aggregation/QC,person,core,qualified daily windows,metadata/counts; suffix-style,
+GGIR,Nvaliddays_WE,aggregation/QC,person,core,qualified daily windows,metadata/counts; suffix-style,
+GGIR,_pla,aggregation/QC,person,core,qualified daily windows,metadata/counts; suffix-style,
+GGIR,_wei,aggregation/QC,person,core,qualified daily windows,metadata/counts; suffix-style,

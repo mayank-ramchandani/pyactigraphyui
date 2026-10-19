@@ -34,6 +34,8 @@ import {
 import { buildAnalysisPayload } from "../services/analysisConfigUtils";
 import { supabase, supabaseConfigured } from "../services/supabaseClient";
 import { buildFileEntries, fileSelectionKey, resolveFileSelection } from "../services/fileIdentityUtils";
+import { downloadBlob, makeSafeFilename } from "../services/exportUtils";
+import { getRawSignalFileEligibility } from "../services/rawSignalEligibility";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/";
 const ENABLE_AUTH_RUNS = import.meta.env.VITE_ENABLE_AUTH_RUNS === "true";
@@ -294,7 +296,8 @@ export default function Dashboard() {
   // A custom raw-signal pipeline has one scientific activity basis for both
   // preview plots and downstream analysis; the independent preview selector is
   // retained only for standard (non-custom) processing.
-  const customRawProcessingEnabled = Boolean(activitySignalSettings.rawSignal?.enabled);
+  const customRawProcessingEnabled = getRawSignalFileEligibility(uploadedFiles.actigraphy).eligible
+    && Boolean(activitySignalSettings.rawSignal?.enabled);
   const effectivePreviewActivityMapping = customRawProcessingEnabled ? activityMapping : previewActivityMapping;
   const [activityTransform, setActivityTransform] = useState("none");
   const [lightTransform, setLightTransform] = useState("none");
@@ -317,6 +320,7 @@ export default function Dashboard() {
   const [supportFileSummary, setSupportFileSummary] = useState(null);
   const [dataQuality, setDataQuality] = useState(null);
   const [multiFileResults, setMultiFileResults] = useState([]);
+  const [processedActivityDownloadState, setProcessedActivityDownloadState] = useState({ status: "idle" });
   const [currentUser, setCurrentUser] = useState(null);
   const [runSaveStatus, setRunSaveStatus] = useState("");
   const [runHistoryRefresh, setRunHistoryRefresh] = useState(0);
@@ -774,6 +778,7 @@ export default function Dashboard() {
     setResultsGenerated(false);
     setSummaryResults({});
     setMultiFileResults([]);
+    setProcessedActivityDownloadState({ status: "idle" });
     setQcWarnings([]);
     setAnalysisError("");
     setLightAnalysisError("");
@@ -874,6 +879,13 @@ export default function Dashboard() {
   };
 
   const handleActigraphyFilesChange = (files) => {
+    // Never carry previously enabled raw preprocessing into an unsupported
+    // upload, including when the user replaces a raw recording with CSV/counts.
+    if (!getRawSignalFileEligibility(files).eligible) {
+      setActivitySignalSettings((previous) => previous.rawSignal?.enabled
+        ? { ...previous, rawSignal: { ...previous.rawSignal, enabled: false } }
+        : previous);
+    }
     setUploadedFiles((prev) => ({ ...prev, actigraphy: files }));
     setSelectedPreviewFile(participantFileMode === "join" && (files?.length || 0) > 1 ? JOINED_PARTICIPANT_KEY : (files?.[0] ? fileSelectionKey(files[0], 0) : ""));
     setSelectedLightPreviewFile("");
@@ -1149,6 +1161,53 @@ export default function Dashboard() {
     }
   };
 
+  const handleDownloadProcessedActivity = async (item, index) => {
+    const snapshot = item?.exportContext;
+    if (!snapshot?.files?.length) {
+      setProcessedActivityDownloadState({ status: "error", index, message: "The original files are no longer available. Re-upload the recording and regenerate results to export it." });
+      return;
+    }
+    setProcessedActivityDownloadState({ status: "running", index, message: "Uploading files and recreating the processed epoch-level signal…" });
+    try {
+      const formData = new FormData();
+      formData.append("file", snapshot.files[0]);
+      snapshot.files.slice(1).forEach((file) => formData.append("additionalFiles", file));
+      Object.entries(snapshot.settings || {}).forEach(([key, value]) => formData.append(key, value));
+      (snapshot.supportFiles?.masking || []).forEach((file) => formData.append("maskingFiles", file));
+      (snapshot.supportFiles?.sleepDiary || []).forEach((file) => formData.append("sleepDiaryFiles", file));
+      (snapshot.supportFiles?.startStop || []).forEach((file) => formData.append("startStopFiles", file));
+      const exportId = createRequestId();
+      formData.append("requestId", exportId);
+      formData.append("jobId", exportId);
+      const completed = await runBackgroundFormJob({
+        path: "api/jobs/export/processed-activity",
+        formData,
+        jobId: exportId,
+        onUpdate: (jobData) => {
+          setProcessedActivityDownloadState({
+            status: "running", index,
+            message: jobData?.status === "queued" ? "Export queued…" : "Regenerating processed epochs, masks, and methods manifest…",
+          });
+        },
+      });
+      if (!completed?.download_url || !/^\/api\/jobs\/[A-Za-z0-9_-]+\/download$/.test(completed.download_url)) {
+        throw new Error("The export completed without a valid download URL.");
+      }
+      setProcessedActivityDownloadState({ status: "running", index, message: "Downloading activity ZIP…" });
+      const response = await fetch(buildApiUrl(completed.download_url), { credentials: "include", cache: "no-store" });
+      if (!response.ok) {
+        const details = await response.text();
+        throw new Error(`Could not download the processed activity archive (${response.status}): ${details.slice(0, 200)}`);
+      }
+      const archive = await response.blob();
+      const label = makeSafeFilename(item.fileName || `file_${index + 1}`).slice(0, 70);
+      downloadBlob(archive, `ActiLab_${label}_preprocessed_activity.zip`, "application/zip");
+      setProcessedActivityDownloadState({ status: "complete", index });
+    } catch (error) {
+      setProcessedActivityDownloadState({ status: "error", index, message: error.message || "Could not export processed activity." });
+    }
+  };
+
   const handleGenerateResults = async () => {
     const selectedFilesForRun = selectedAnalysisFiles;
     if (!selectedFilesForRun.length) {
@@ -1173,6 +1232,7 @@ export default function Dashboard() {
       setLightResults({});
       setResultsGenerated(false);
       setMultiFileResults([]);
+      setProcessedActivityDownloadState({ status: "idle" });
       setProgressStage(joinParticipantFiles ? `Preparing ${selectedFilesForRun.length} files as one participant timeline` : `Preparing ${filesToAnalyze.length} file(s) for analysis`, 0, totalSteps);
 
       for (let fileIndex = 0; fileIndex < filesToAnalyze.length; fileIndex += 1) {
@@ -1308,7 +1368,24 @@ export default function Dashboard() {
             ? "completed_with_warnings"
             : activityStatus;
 
+          const exportContext = {
+            files: joinParticipantFiles ? [...selectedFilesForRun] : [sourceFile],
+            supportFiles: {
+              masking: [...(uploadedFiles.masking || [])],
+              sleepDiary: [...(uploadedFiles.sleepDiary || [])],
+              startStop: [...(uploadedFiles.startStop || [])],
+            },
+            settings: {
+              sourceFileName: joinParticipantFiles ? joinedFileLabel : sourceFile.name,
+              activityMapping,
+              activitySignalSettings: JSON.stringify(activitySignalSettings),
+              analysisConfig: JSON.stringify(resolvedAnalysisConfig),
+              csvMapping: JSON.stringify(showManualMapping ? csvMapping : {}),
+              csvSeparator,
+            },
+          };
           const row = {
+            exportContext,
             fileName: joinParticipantFiles ? joinedFileLabel : sourceFile.name,
             fileSizeMb: Number(((joinParticipantFiles ? selectedFilesForRun.reduce((sum, file) => sum + file.size, 0) : sourceFile.size) / (1024 * 1024)).toFixed(3)),
             status: combinedStatus,
@@ -1858,6 +1935,8 @@ export default function Dashboard() {
         participantFileMode={participantFileMode}
         setParticipantFileMode={handleParticipantFileModeChange}
         multiFileResults={multiFileResults}
+        onDownloadProcessedActivity={handleDownloadProcessedActivity}
+        processedActivityDownloadState={processedActivityDownloadState}
         resultsGenerated={resultsGenerated}
         onGenerate={handleGenerateResults}
         selectedResultMetric={selectedResultMetric}
@@ -1887,6 +1966,9 @@ export default function Dashboard() {
       <ExportPanel
         title={appConfig.panels.export.title}
         exportRegistry={exportRegistry}
+        multiFileResults={multiFileResults}
+        onDownloadProcessedActivity={handleDownloadProcessedActivity}
+        processedActivityDownloadState={processedActivityDownloadState}
         resultsGenerated={resultsGenerated}
         summaryResults={summaryResults}
         qcWarnings={qcWarnings}

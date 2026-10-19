@@ -1,3 +1,12 @@
+## 2026-10-19 — Plug-and-play import, selectable epochs and research summary outputs
+
+- Added selectable raw activity epochs (5, 10, 15, 30 or 60 seconds); preserved existing 30-second default and explained GGIR's five-second reference base epoch. Raw measurements are reduced at the selected duration; pre-aggregated count/CSV files retain their native epoch.
+- Added CSV mapping for raw X/Y/Z and explicit gravity unit declaration, safe unit inference from headers, optional light/temperature/non-wear parsing, and ENMO/MAD/PIM/ZCM/TAT reduction where supported. This path does not perform automatic GGIR calibration or HDCZA sleep detection.
+- Added daily QC/activity-window summaries, aggregated recording/participant CSV summaries, and a separate complete metadata JSON export, including untouched defaults and software/provenance details. Multi-file results are kept separated by filename; warnings continue to identify failures.
+- Added inline information bubbles in activity epoch, CSV mapping, sleep-scoring compatibility and export choices; an in-app plug-and-play documentation section and extended public method/validation guides.
+- Added a GGIR comparison CLI/protocol and a 130-entry candidate metric catalogue; **numerical validation has not been claimed**.
+- Added automated regression tests for raw XYZ mappings, epoch validation, QC/aggregate semantics and default metadata retention.
+
 ## 2026-10-16 — Raw preprocessing file-type eligibility
 
 - Custom raw acceleration preprocessing in Step 2 is only selectable when every uploaded actigraphy recording is a native `.gt3x` or `.bin` candidate (GENEActiv BIN content is verified by the backend).

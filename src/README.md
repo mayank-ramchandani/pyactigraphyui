@@ -66,3 +66,7 @@ With custom processing disabled, raw-derived activity metrics use explicit metri
 ### Download preprocessed activity data
 
 After generating analysis results, Step 9 and Step 10 offer an epoch-level activity export for each completed file or joined participant. The ZIP includes a processed activity CSV (pre-QC and usable-for-analysis columns, missingness and masking flags), JSON methods/settings/provenance, and README. Its background job regenerates the activity signal from the current uploaded source files using the settings captured at analysis time. Export files are temporary, not persisted in user run history. See `docs/USER_GUIDE.md`.
+
+## October 2026: plug-and-play research outputs
+
+This source revision adds configurable 5/10/15/30/60-second epoch reduction for supported raw accelerometry; raw-X/Y/Z CSV mapping with required acceleration units; daily QC/activity and recording-level aggregated CSV exports; and complete effective-configuration metadata. See [user documentation](docs/PLUG_AND_PLAY_RELEASE.md), [GGIR comparison protocol](docs/GGIR_COMPARISON_PROTOCOL.md) and [metric catalogue](docs/METRIC_CATALOG_CANDIDATES.csv). GGIR HDCZA/SIB is **not** implemented as an equivalent sleep-scoring pipeline and has not been benchmarked. Current count-based sleep scoring should not be assumed validated for raw ENMO without additional calibration/validation.

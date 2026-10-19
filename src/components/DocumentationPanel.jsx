@@ -25,6 +25,7 @@ const FILE_ROWS = [
 
 const NARRATIVE_SEARCH_TEXT = {
   overview: "start here user guide upload de-identified data recommended settings preview analysis results export research educational privacy feedback",
+  plugplay: "plug and play raw xyz csv timestamp acceleration unit enmo epoch length 5 10 15 30 60 GGIR HDCZA SIB not implemented daily aggregated metadata reproducibility comparison benchmark",
   workflow: appConfig.workflow.map((step) => `${step.id} ${step.title} ${step.description}`).join(" "),
   preprocessing: "pre-processing recommended settings 16 analyzable hours calendar day recording aligned 24 hour consecutive valid windows sleep coverage 80 percent gaps non-wear masks missing data",
   files: `${FILE_ROWS.flat().join(" ")} encoding utf-8 windows-1252 localized actiware french german generic csv manual mapping nhanes paxhr`,
@@ -41,6 +42,7 @@ const NARRATIVE_SEARCH_TEXT = {
 
 const SECTIONS = [
   { id: "overview", label: "Start here" },
+  { id: "plugplay", label: "Plug-and-play & outputs" },
   { id: "workflow", label: "10-step workflow" },
   { id: "preprocessing", label: "Preprocessing/Initial QC" },
   { id: "files", label: "File formats" },
@@ -200,13 +202,38 @@ export default function DocumentationPanel({ onClose }) {
         </Card>
       </div>
     ),
+    plugplay: (
+      <div style={{ display: "grid", gap: 14 }}>
+        <Card title="What plug-and-play currently means">
+          ActiLab identifies file structure, chooses the appropriate reader, selects source activity or processed acceleration, applies its documented gap/non-wear/valid-day processing and runs the chosen pyActigraphy analyses. An automatic file reader does not by itself validate a sleep algorithm for every device. Counts and ENMO (mg) are fundamentally different scales. For a GGIR-style raw acceleration measure, choose ENMO explicitly in Step 3 rather than assuming the auto processed-acceleration metric is identical.
+        </Card>
+        <Card title="Choosing a raw activity epoch">
+          Step 3 provides 5, 10, 15, 30 or 60 seconds; 30 seconds is the legacy ActiLab default, while GGIR commonly uses a five-second base epoch. This setting applies when loading eligible raw acceleration, not when the file already contains count or acceleration epochs. Choosing the length before plotting/Initial QC avoids inconsistencies. Changes to the epoch alter metric scale and some scorer compatibility.
+        </Card>
+        <Card title="XYZ CSV, activity CSV and units">
+          For CSV containing only timestamp and existing activity, map those two fields. For XYZ acceleration, use X, Y and Z and specify g, mg or m/s². ActiLab can infer units only when column names explicitly contain matching unit suffixes (for example x_g/y_g/z_g). Raw XYZ is reduced to the chosen ENMO/MAD/PIM/ZCM/TAT with a documented epoch; it does not perform GGIR-equivalent auto-calibration or Z-axis angle-based sleep detection. Optional light, temperature and non-wear columns are accepted when provided. Confirm the result plots, wear, timestamps and units before use.
+        </Card>
+        <Card title="Sleep selection: not all signals are validated">
+          The current implemented scorer uses the pyActigraphy algorithms exposed in Step 6, including classic count-scoring methods and Crespo/Roenneberg rest-window detection. GGIR's <strong>HDCZA guider plus sustained inactivity bouts (SIB)</strong> is NOT implemented as an interchangeable auto sleep option. Cole–Kripke, Sadeh or Oakley applied to raw-derived mg acceleration require input-scale and population validation. Use a suitable diary or independent reference method where appropriate. No unsupported sleep outputs are silently invented.
+        </Card>
+        <Card title="Daily CSV, aggregated CSV, complete metadata">
+          Export offers two independent CSV selections. <strong>Daily</strong> contains one QC quality-window row per day (or recording-aligned 24h window), valid wear/coverage and valid-epoch activity summary. <strong>Aggregated</strong> contains one row per recording or joined participant, including scalar multi-day metrics from ActiLab itself. These are GGIR-inspired output <em>levels</em>, not matching GGIR Parts 4/5 column-for-column. <strong>Metadata</strong> is downloadable in every successful run, including default and overridden options, source mapping, effective quality settings, epoch, algorithm/metric parameters, provenance, QC and software versions.
+        </Card>
+        <Card title="What is validated and what remains outstanding?">
+          A comparison utility is provided in <Code>validation/compare_outputs.py</Code> and a protocol in <Code>docs/GGIR_COMPARISON_PROTOCOL.md</Code>. It compares matched numerical columns only. GGIR parity needs paired raw recordings with aligned calibration, non-wear, epochs, sleep methods and statistical tolerances. The candidate catalogue of pyActigraphy/GGIR metrics is in <Code>docs/METRIC_CATALOG_CANDIDATES.csv</Code> and is not a list of implemented measures. Review the source documentation before an official research release.
+        </Card>
+        <Card title="Scientific references">
+          <a href="https://wadpac.github.io/GGIR/articles/chapter4_AccMetrics.html" target="_blank" rel="noreferrer">GGIR raw acceleration and metrics</a>; <a href="https://wadpac.github.io/GGIR/articles/GGIRParameters.html" target="_blank" rel="noreferrer">GGIR parameters and HDCZA</a>; <a href="https://ghammad.github.io/pyActigraphy/MetricsMixin.html" target="_blank" rel="noreferrer">pyActigraphy metrics</a>; <a href="https://doi.org/10.1371/journal.pone.0261718" target="_blank" rel="noreferrer">Maczák et al. (2021)</a>. Each source informs a distinct step; no one source validates all file types automatically.
+        </Card>
+      </div>
+    ),
     files: (
       <div style={{ display: "grid", gap: 14 }}>
         <Card title="Supported file patterns">
           <Table headers={["Format", "Typical content", "Recommended activity basis", "What to know"]} rows={FILE_ROWS} />
         </Card>
         <Card title="CSV and text files">
-          The application first tries to identify timestamp, activity, light, temperature, and non-wear columns automatically. Turn on manual CSV mapping only when the detected columns are incorrect. Confirm the preview before continuing.
+          The application first tries to identify timestamp, existing activity/counts, raw X/Y/Z axes, light, temperature, and non-wear columns automatically. Turn on manual CSV mapping only when the detected columns are incorrect. Confirm the preview before continuing.
         </Card>
         <Card title="Localized Actiware/RPX files">
           English, French, and German Actiware exports are supported. The importer can read common UTF-8 and Windows-1252 encodings and can retain white, red, green, and blue light channels when they are present.
@@ -299,7 +326,7 @@ export default function DocumentationPanel({ onClose }) {
           A warning means processing continued but something needs review, such as an excluded low-coverage day, an unavailable metric, or missing light data. A failed status means that the affected stage could not produce a usable result. Other successful outputs may still be valid.
         </Card>
         <Card title="Export outputs">
-          Step 10 downloads the selected tables and supporting information, including result summaries, CSV-ready tables, analysis settings, quality-control information, and diagnostics. Keep the exported configuration with the result tables so the analysis can be reproduced later.
+          Step 10 offers independent daily QC/activity CSV and aggregated recording-level CSV choices, a comprehensive metadata JSON with all effective defaults, plus full results JSON and the processed-activity ZIP. These output levels are GGIR-inspired but are not identical to GGIR Parts 4 and 5. The daily file does not fabricate nightly sleep metrics. Supporting information includes analysis settings, quality-control details and diagnostics. Keep the exported configuration with the result tables so the analysis can be reproduced later.
         </Card>
       </div>
     ),
