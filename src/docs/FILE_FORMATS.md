@@ -2,7 +2,7 @@
 
 Upload actigraphy recordings on **Step 1**. Add start/stop files and masks on Step 5, sleep diaries on Step 6, and separate light or other sensor files on Step 8.
 
-Support depends on both the file extension and the signals or columns actually contained in the file.
+Support depends on both the file extension and the signals or columns actually contained in the file. **For the exact library/reader and automatic processing applied to each format, see [Automatic pipelines by file type](AUTOMATIC_PIPELINES_BY_FORMAT.md).**
 
 | Format | Typical content | Recommended activity basis | User notes |
 |---|---|---|---|

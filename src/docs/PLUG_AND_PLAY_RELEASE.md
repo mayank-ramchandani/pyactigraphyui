@@ -1,6 +1,8 @@
 # ActiLab plug-and-play workflow: implemented capabilities and scientific limits
 
-**Updated 19 October 2026.** Applies to this source revision, not an independently validated GGIR replacement. *Recommended* means a practical ActiLab default, not a universally validated sleep or activity pipeline.
+**Updated 5 November 2026.** Applies to this source revision, not an independently validated GGIR replacement. *Recommended* means a practical ActiLab default, not a universally validated sleep or activity pipeline.
+
+**A complete, code-traced, per-format pipeline table is available in [Automatic pipelines by file type](AUTOMATIC_PIPELINES_BY_FORMAT.md).** This includes which steps come from pyActigraphy, Oxford accelerometer, pygt3x/agcounts, or ActiLab's own implementations.
 
 ## 1. Format identification and available input signals
 
@@ -46,7 +48,11 @@ The existing ActiLab sleep module offers the pyActigraphy algorithms surfaced in
 
 For GGIR-style sleep parity, future implementation must add verified angle-series handling, HDCZA guider, sustained inactivity bout detection, and matching missingness/non-wear/diary logic, and **then** benchmark against GGIR. The report should include the exact version of both pipelines, differences and limitations. Do not label comparisons as validated until tests have actually passed.
 
-## 4. Exports — exact meaning of the two CSV files
+## 4. QC-only download before full analysis
+
+**Step 2 now offers an independent initial QC CSV download** — for the selected file or all successfully inspected files. It contains one row per quality window, with the file identity, reader/epoch, recording spans, recorded/gap hours, detected non-wear when available, threshold and selected validity result. It requires no Step 9 analysis. These values are *pre-mask, pre-start/stop, and pre-final-QC* and are separate from the final quality-controlled results.
+
+## 5. Exports — exact meaning of the two CSV files
 
 Step 10 offers checkboxes for `actilab_daily.csv` and `actilab_aggregated.csv`, an always available `actilab_meta.json`, full results JSON, long-form metric CSV and the existing separately generated processed-activity ZIP. The same results for multiple analyzed files are concatenated into a common table, with `source_file` identifying each successful recording/participant; failed recordings appear in warnings but not in the numeric rows.
 
@@ -56,7 +62,7 @@ Step 10 offers checkboxes for `actilab_daily.csv` and `actilab_aggregated.csv`, 
 
 A bundled results export is a reproducible **research summary**, not a claim that its column names exactly match `GGIR` Part 2/4/5/6. The GGIR outputs include additional night-level and non-wear/calibration measures not all currently available from ActiLab. The candidate catalogue `METRIC_CATALOG_CANDIDATES.csv` distinguishes proposed/core/extended output metrics from implemented output columns and is **not** an implementation claim.
 
-## 5. Verification against GGIR
+## 6. Verification against GGIR
 
 See [GGIR comparison protocol](GGIR_COMPARISON_PROTOCOL.md), including matched-parameter constraints, a practical CLI comparator and requirements for verifying raw calibration, ENMO, wear, thresholds, sleep guidence and multi-day rhythm values. A name match is insufficient: align units, epoch, timezone, valid-day rules and algorithm definitions first.
 

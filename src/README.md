@@ -70,3 +70,11 @@ After generating analysis results, Step 9 and Step 10 offer an epoch-level activ
 ## October 2026: plug-and-play research outputs
 
 This source revision adds configurable 5/10/15/30/60-second epoch reduction for supported raw accelerometry; raw-X/Y/Z CSV mapping with required acceleration units; daily QC/activity and recording-level aggregated CSV exports; and complete effective-configuration metadata. See [user documentation](docs/PLUG_AND_PLAY_RELEASE.md), [GGIR comparison protocol](docs/GGIR_COMPARISON_PROTOCOL.md) and [metric catalogue](docs/METRIC_CATALOG_CANDIDATES.csv). GGIR HDCZA/SIB is **not** implemented as an equivalent sleep-scoring pipeline and has not been benchmarked. Current count-based sleep scoring should not be assumed validated for raw ENMO without additional calibration/validation.
+
+## Added November 2026: early QC export and reproducible benchmarking
+
+- **Step 2 → Initial QC → Export initial QC CSV:** download per-recording or combined pre-analysis QC. This requires no full analysis; files still queued or failed are not included.
+- **Exact plug-and-play method sources:** [`docs/AUTOMATIC_PIPELINES_BY_FORMAT.md`](docs/AUTOMATIC_PIPELINES_BY_FORMAT.md) lists the reader, package, transform, source mapping and limitations for every supported format.
+- **GGIR speed/quality benchmarking:** `validation/benchmark_ggir.py` (ActiLab HTTP, JSON/CSV and timers) plus `validation/run_ggir_benchmark.R` (GGIR Part 1/2 timings). See [`docs/GGIR_COMPARISON_PROTOCOL.md`](docs/GGIR_COMPARISON_PROTOCOL.md) for prerequisites and reproducible commands.
+
+The ZIP supplied for this revision includes the `src/` tree only. Merge this with your existing root-level Vite/package setup and backend deployment configuration.

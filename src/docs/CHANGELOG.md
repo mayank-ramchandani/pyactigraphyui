@@ -1,3 +1,9 @@
+## 2026-11-05 — Initial QC-only export and GGIR benchmark tooling
+
+- Added Step 2 per-file and combined QC CSV export; includes current validity settings and flags absent non-wear information as unavailable.
+- Added automated ActiLab and optional GGIR Part-by-Part timing / QA scripts in `validation/`.
+- Documented automatic input readers, sources, transformations and limitations for every supported format.
+
 ## 2026-10-19 — Plug-and-play import, selectable epochs and research summary outputs
 
 - Added selectable raw activity epochs (5, 10, 15, 30 or 60 seconds); preserved existing 30-second default and explained GGIR's five-second reference base epoch. Raw measurements are reduced at the selected duration; pre-aggregated count/CSV files retain their native epoch.

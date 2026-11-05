@@ -29,6 +29,10 @@ Review the initial recording-coverage table for each uploaded recording. This pa
 
 The table summarizes recorded time, gaps, detected or mapped non-wear, and the current validity assessment. Final analysis settings—including the quality-window definition, thresholds, and whether detected or mapped non-wear should be respected—are configured in **Step 7: Analysis Set-up**.
 
+**QC-only download:** Once the initial inspection finishes, choose **Download this QC CSV** inside a file card or **Export initial QC CSV** above the cards for a combined report. The combined file includes every file whose initial QC has succeeded; files still loading or in error are omitted (the on-screen counter shows how many are ready). No sleep scoring, final metrics, or Steps 9–10 are required. Each row includes file name, window bounds, recorded hours, timestamp gaps, detected non-wear *when available*, analyzable hours, validity threshold, valid/invalid assessment, input reader and epoch. The export reflects the **currently displayed** window mode, non-wear choice, and validity threshold.
+
+**Interpretation:** Step 2 QC uses the post-import activity epochs and is **before** start/stop, uploaded/manual masking, and final analytical exclusions. Incomplete first/last calendar days can have large “gap hours” solely because the reporting window is 24 hours. An unavailable non-wear detector is not evidence of zero non-wear. See [Automatic pipelines by file type](AUTOMATIC_PIPELINES_BY_FORMAT.md#what-step-2-quick-qc-does-and-does-not-tell-you).
+
 ## 3. Estimating Activity Metric
 
 For most analyses, choose **Recommended source / processed acc**. It uses the file’s existing activity series when available and produces processed epoch-level acceleration for supported raw accelerometer files.

@@ -3,6 +3,8 @@ import { buildFileEntries, fileEntryLabel, formatFileSize } from "../services/fi
 import SamplingHarmonizationNotice from "./SamplingHarmonizationNotice";
 import RawSignalProcessingPanel from "./RawSignalProcessingPanel";
 import { getRawSignalFileEligibility } from "../services/rawSignalEligibility";
+import { buildInitialQcCsv } from "../services/initialQcExport";
+import { downloadBlob, makeSafeFilename } from "../services/exportUtils";
 
 function formatHours(value) {
   const number = Number(value);
@@ -10,7 +12,7 @@ function formatHours(value) {
   return `${Number(number.toFixed(2))} h`;
 }
 
-function InitialQcCard({ entry, payload, loading, error, settings }) {
+function InitialQcCard({ entry, payload, loading, error, settings, onDownload }) {
   const mode = settings.validDayWindowMode || "calendar_day";
   const modePayload = payload?.modes?.[mode] || {};
   const windows = modePayload.windows || [];
@@ -55,6 +57,11 @@ function InitialQcCard({ entry, payload, loading, error, settings }) {
         {!error && loading && <div style={{ color: "#475569", fontSize: 13 }}>Loading the file and calculating initial per-day coverage. Large raw recordings may take longer to inspect.</div>}
         {!error && payload && (
           <>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+              <button type="button" onClick={onDownload} style={{ cursor: "pointer", border: "1px solid #93c5fd", borderRadius: 8, background: "white", color: "#1d4ed8", padding: "8px 12px", fontWeight: 750 }}>
+                Download this QC CSV
+              </button>
+            </div>
             <SamplingHarmonizationNotice harmonization={payload?.participant_join?.sampling_harmonization} compact />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
               <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10 }}><strong>Recorded</strong><br />{formatHours(payload.recorded_hours)}</div>
@@ -139,6 +146,13 @@ export default function PreprocessingPanel({
     return buildFileEntries(actigraphyFiles);
   }, [actigraphyFiles, participantFileMode, joinedParticipantKey, joinedParticipantLabel]);
 
+  const successfulEntries = entries.filter((entry) => Boolean(initialQcByFile[entry.key]?.modes));
+  const downloadQc = (selectedEntries, name) => {
+    const csv = buildInitialQcCsv(selectedEntries, initialQcByFile, resolved);
+    if (!csv) return;
+    downloadBlob(csv, makeSafeFilename(name), "text/csv;charset=utf-8");
+  };
+
   return (
     <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20 }}>
       <h2 style={{ marginTop: 0, marginBottom: 8 }}>{title}</h2>
@@ -153,6 +167,16 @@ export default function PreprocessingPanel({
             ? "The joined participant timeline is inspected as one longitudinal recording, with real timestamp gaps retained as missing data. Expand it for the full table."
             : "Each uploaded recording is inspected before final preprocessing so you can see how much data is present in each candidate quality window. Expand a file for the full table."}
         </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ color: "#475569", fontSize: 12 }}>
+            {successfulEntries.length} of {entries.length} recording(s) ready to export. Only completed QC results are included.
+          </div>
+          <button type="button" disabled={!successfulEntries.length}
+            onClick={() => downloadQc(successfulEntries, "ActiLab_initial_QC_all_files.csv")}
+            style={{ cursor: successfulEntries.length ? "pointer" : "not-allowed", opacity: successfulEntries.length ? 1 : 0.55, border: "1px solid #2563eb", borderRadius: 9, background: "#1d4ed8", color: "white", padding: "9px 14px", fontWeight: 750 }}>
+            Export initial QC CSV {successfulEntries.length > 1 ? `(${successfulEntries.length} files)` : ""}
+          </button>
+        </div>
         <div style={{ display: "grid", gap: 10 }}>
           {entries.map((entry) => (
             <InitialQcCard
@@ -162,6 +186,7 @@ export default function PreprocessingPanel({
               loading={Boolean(initialQcLoadingByFile[entry.key])}
               error={initialQcErrorByFile[entry.key]}
               settings={resolved}
+              onDownload={() => downloadQc([entry], `ActiLab_initial_QC_${entry.file?.name || "recording"}.csv`)}
             />
           ))}
           {entries.length === 0 && <div style={{ color: "#64748b" }}>Upload an actigraphy file in Step 1 to run initial QC.</div>}
