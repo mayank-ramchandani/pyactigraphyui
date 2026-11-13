@@ -1,3 +1,13 @@
+## 12 November 2026 — local CLI, high-priority catalog, raw non-wear QC, three-way agreement
+
+- Added a Linux/macOS/WSL local staged processing CLI, with per-file QC, masked epoch exports, rhythm/sleep/light analysis, daily/aggregate files and provenance.
+- Added a streaming triaxial 60-minute / 15-minute GGIR-inspired non-wear screening for supported raw GENEActiv, GT3X and mapped XYZ. This is **not** Crespo/Roenneberg and **not** a GGIR-equivalent reproduction.
+- Exposed native sample frequency, valid hours, daily detected non-wear and valid-day counts to QC and initial QC exports.
+- Added high-priority pyActigraphy rhythm/profile/period and SleepMidPoint entries in the metrics UI / backend; placed the high-priority rest/activity entries first.
+- Added native pyActigraphy reference script and pairwise + all-three statistic scripts (kappa, CCC, ICC, Bland–Altman).
+- Added all-row catalog implementation-status audit. GGIR standard / extended cosinor and SPT-specific non-wear remain explicitly pending.
+- Added full [CLI documentation](CLI_AND_VALIDATION.md).
+
 ## 2026-11-05 — Initial QC-only export and GGIR benchmark tooling
 
 - Added Step 2 per-file and combined QC CSV export; includes current validity settings and flags absent non-wear information as unavailable.

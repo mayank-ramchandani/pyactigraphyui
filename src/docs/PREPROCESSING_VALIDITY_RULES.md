@@ -9,7 +9,7 @@ Unless customization is enabled, the application uses:
 - at least **16 analyzable hours** for a quality window to be valid;
 - at least **2 consecutive valid quality windows** for multi-day rhythm metrics and SRI eligibility;
 - at least **80% available and scorable coverage** for a sleep window to be included in sleep summaries;
-- detected or mapped non-wear when it is available from the file or selected mapping.
+- detected or mapped non-wear when it is available from the file or selected mapping. For supported native .bin/.gt3x and mapped XYZ, the first-pass detector is GGIR-*inspired* triaxial SD/range screening rather than GGIR-identical. It does not use Crespo/Roenneberg as non-wear detectors.
 
 These values are starting points. A study protocol may require different criteria.
 
@@ -77,6 +77,8 @@ Retain and report:
 - start/stop and mask rules;
 - total valid windows and longest consecutive run;
 - excluded sleep windows and reasons.
+
+See the [local CLI and QC validation guide](CLI_AND_VALIDATION.md) for thresholds, implementation status, the `nonwear_perc_day` definition and comparison scripts.
 
 ## Related documentation
 

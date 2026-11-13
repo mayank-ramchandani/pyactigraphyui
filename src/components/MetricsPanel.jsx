@@ -167,7 +167,8 @@ export default function MetricsPanel({
     { id: 6, label: "Sun" },
   ];
 
-  const allMetrics = useMemo(() => metricRegistry.metrics || [], [metricRegistry]);
+  const allMetrics = useMemo(() => [...(metricRegistry.metrics || [])].sort((a, b) =>
+    Number(b.catalogPriority === "High") - Number(a.catalogPriority === "High")), [metricRegistry]);
   const allAlgorithms = useMemo(() => algorithmRegistry.algorithms || [], [algorithmRegistry]);
   const allFamilies = useMemo(() => analysisFamilyRegistry.families || [], [analysisFamilyRegistry]);
 

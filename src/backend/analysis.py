@@ -418,10 +418,10 @@ ALGO_TO_SRI_KEY = {
 }
 
 IMPLEMENTED_FAMILY_METRICS = {
-    "amplitude": ["ra", "rap"],
+    "amplitude": ["l5", "m10", "l5p", "m10p", "ra", "rap"],
     "rhythm": ["is", "iv", "ism", "ivm", "isp", "ivp"],
     "sleep": ["sri", "tst", "waso", "sleep_efficiency"],
-    "fragmentation": ["kra", "kar"],
+    "fragmentation": ["pra", "par", "kra", "kar"],
 }
 
 ADVANCED_FAMILY_IDS = {"flm", "mfdfa", "ssa", "clustering"}
@@ -1247,9 +1247,31 @@ def _compute_waso_and_efficiency(score, windows, window_quality=None, minimum_co
 def compute_metric(raw, metric_id, params=None):
     params = params or {}
 
-    if metric_id in {"is", "iv", "ism", "ivm", "isp", "ivp", "rap"}:
+    if metric_id in {"is", "iv", "ism", "ivm", "isp", "ivp", "rap", "l5p", "m10p"}:
         if _consecutive_valid_day_count(raw) < _minimum_valid_days_for_rhythm(raw):
             return None
+
+    if metric_id == "average_daily_activity":
+        method = getattr(raw, "average_daily_activity", None)
+        if not callable(method):
+            return None
+        return _safe_call(method, freq=params.get("freq", "5min"), cyclic=bool(params.get("cyclic", False)),
+                          binarize=bool(params.get("binarize", False)), threshold=params.get("threshold", 4),
+                          time_origin=params.get("time_origin"), whs=params.get("whs", "1h"))
+
+    if metric_id in {"l5", "m10"}:
+        method = getattr(raw, metric_id.upper(), None)
+        return _safe_call(method, binarize=params.get("binarize", False), threshold=params.get("threshold", 4)) if callable(method) else None
+
+    if metric_id in {"l5p", "m10p"}:
+        method = getattr(raw, metric_id.upper(), None)
+        return _safe_call(method, period=params.get("period", "7D"), binarize=params.get("binarize", False),
+                          threshold=params.get("threshold", 4), verbose=False) if callable(method) else None
+
+    if metric_id in {"pra", "par"}:
+        method = getattr(raw, "pRA" if metric_id == "pra" else "pAR", None)
+        return _safe_call(method, threshold=params.get("threshold", 4),
+                          start=params.get("start") or None, period=params.get("period") or None) if callable(method) else None
 
     if metric_id == "ra":
         return _safe_call(raw.RA, binarize=params.get("binarize", True), threshold=params.get("threshold", 4))
@@ -1380,6 +1402,19 @@ def compute_sleep_metrics(raw, selected_metrics=None, algorithm_request=None, sl
                         )
         except Exception:
             results["sri"] = None
+
+    if "sleep_midpoint" in selected_metrics:
+        method = getattr(raw, "SleepMidPoint", None)
+        algo_key = ALGO_TO_SRI_KEY.get(algorithm)
+        if callable(method) and scorer is not None and _consecutive_valid_day_count(raw) >= _minimum_valid_days_for_rhythm(raw):
+            # pyActigraphy returns a time-of-day or timedelta-like result depending on version/options.
+            midpoint = _safe_call(method, freq="5min", bin_threshold=4, to_td=True, algo=algo_key)
+            if isinstance(midpoint, pd.Timedelta):
+                results["sleep_midpoint"] = float(midpoint.total_seconds() / 60.0)
+            else:
+                results["sleep_midpoint"] = _json_ready_metric_value(midpoint)
+        else:
+            results["sleep_midpoint"] = None
 
     if "tst" in selected_metrics:
         try:
@@ -1597,8 +1632,8 @@ def _run_basic_pyactigraphy_analysis_single(raw, metric_requests=None, family_re
             elif family_id in ADVANCED_FAMILY_IDS:
                 results[family_id] = _run_advanced_family_placeholder(family_id)
 
-    rest_and_fragmentation_ids = {"ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap", "kra", "kar"}
-    sleep_ids = {"sri", "tst", "waso", "sleep_efficiency"}
+    rest_and_fragmentation_ids = {"average_daily_activity", "l5", "m10", "l5p", "m10p", "ra", "is", "iv", "ism", "ivm", "isp", "ivp", "rap", "pra", "par", "kra", "kar"}
+    sleep_ids = {"sri", "sleep_midpoint", "tst", "waso", "sleep_efficiency"}
 
     selected_metric_ids = [item.get("id") for item in metric_requests if item.get("id")]
 

@@ -31,6 +31,7 @@ try:
 except Exception:  # pragma: no cover - deployment dependency
     butter = lfilter = lfilter_zi = sosfilt = sosfilt_zi = None
 
+from .nonwear import TriaxialNonwear
 from .activity_mapping import (
     attach_mapping_metadata,
     mapping_metadata,
@@ -734,6 +735,7 @@ def _stream_gt3x_activity(
         calibration = _read_optional_json(zip_file, "calibration.json")
         calibrator = _Calibrator(info, calibration, api["CalibrationV2Service"])
 
+        nonwear_screen = TriaxialNonwear()
         counts_accumulator = None
         mean_accumulator = None
         mad_accumulator = None
@@ -802,6 +804,8 @@ def _stream_gt3x_activity(
             raw_rows += int(len(calibrated))
             largest_chunk_samples = max(largest_chunk_samples, int(len(calibrated)))
             local_start = float(unix_start) + timezone_offset
+            if not idle_sleep:  # synthetic idle-fill is not native sample evidence
+                nonwear_screen.add(calibrated, local_start, sample_rate)
 
             if validation_count < 100_000:
                 take = min(len(calibrated), 100_000 - validation_count)
@@ -1128,6 +1132,7 @@ def _stream_gt3x_activity(
         signal_processing={**mode_meta, **({"raw_signal": raw_config, "custom_filter_state_resets": custom_processor.resets} if custom_processor is not None else {})},
         **({"units": raw_signal_units(raw_config, resolved_mapping), "label": f"Custom-processed {resolved_mapping.upper()}", "custom_raw_processing": raw_config} if custom_processor is not None else {}),
     )
+    metadata["_ui_nonwear_summary"] = nonwear_screen.finish()
     metadata.update(mode_meta)
     metadata.update(
         {
@@ -1231,6 +1236,8 @@ def load_gt3x_as_baseraw(
         light=None,
     )
     raw._ui_gt3x_summary = metadata
+    raw._ui_nonwear_summary = metadata.get("_ui_nonwear_summary")
+    raw._ui_nonwear_intervals = (raw._ui_nonwear_summary or {}).get("nonwear_intervals", [])
     raw._ui_source_format = "gt3x_pygt3x_streaming"
     return attach_mapping_metadata(raw, metadata.get("_activity_mapping") or mapping_metadata(activity_mapping))
 

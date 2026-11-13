@@ -46,7 +46,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": true,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -78,13 +88,18 @@
       "resultSchema": {
         "type": "number",
         "unit": null,
-        "expectedRange": [0, 1]
+        "expectedRange": [
+          0,
+          1
+        ]
       },
       "previewOverlaySupport": {
         "fullRecording": false,
         "dailyProfile": false,
         "algorithmOverlay": false
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "is",
@@ -104,7 +119,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -117,7 +142,30 @@
           "label": "Resampling frequency",
           "type": "select",
           "default": "1H",
-          "options": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
+          "options": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
           "backendArgName": "freq",
           "sharedParamId": "analysis_resample_freq",
           "description": "Resampling frequency used before computing IS."
@@ -147,7 +195,9 @@
         "type": "number",
         "unit": null,
         "expectedRange": null
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "iv",
@@ -167,7 +217,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -180,7 +240,30 @@
           "label": "Resampling frequency",
           "type": "select",
           "default": "1H",
-          "options": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
+          "options": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
           "backendArgName": "freq",
           "sharedParamId": "analysis_resample_freq",
           "description": "Resampling frequency used before computing IV."
@@ -210,7 +293,9 @@
         "type": "number",
         "unit": null,
         "expectedRange": null
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "ism",
@@ -230,7 +315,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -242,8 +337,54 @@
           "name": "freqs",
           "label": "Resampling frequencies",
           "type": "multiselect",
-          "default": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
-          "options": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
+          "default": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
+          "options": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
           "backendArgName": "freqs",
           "description": "Set of allowed resampling frequencies across which IS is averaged."
         },
@@ -272,7 +413,9 @@
         "type": "number",
         "unit": null,
         "expectedRange": null
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "ivm",
@@ -292,7 +435,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -304,8 +457,54 @@
           "name": "freqs",
           "label": "Resampling frequencies",
           "type": "multiselect",
-          "default": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
-          "options": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
+          "default": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
+          "options": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
           "backendArgName": "freqs",
           "description": "Set of allowed resampling frequencies across which IV is averaged."
         },
@@ -334,7 +533,9 @@
         "type": "number",
         "unit": null,
         "expectedRange": null
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "isp",
@@ -353,7 +554,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -375,7 +586,30 @@
           "label": "Resampling frequency",
           "type": "select",
           "default": "1H",
-          "options": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
+          "options": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
           "backendArgName": "freq",
           "sharedParamId": "analysis_resample_freq",
           "description": "Resampling frequency used before computing ISp."
@@ -413,7 +647,9 @@
         "type": "list<number>",
         "unit": null,
         "expectedRange": null
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "ivp",
@@ -432,7 +668,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -454,7 +700,30 @@
           "label": "Resampling frequency",
           "type": "select",
           "default": "1H",
-          "options": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
+          "options": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
           "backendArgName": "freq",
           "sharedParamId": "analysis_resample_freq",
           "description": "Resampling frequency used before computing IVp."
@@ -492,7 +761,9 @@
         "type": "list<number>",
         "unit": null,
         "expectedRange": null
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "rap",
@@ -511,7 +782,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -561,7 +842,9 @@
         "type": "list<number>",
         "unit": null,
         "expectedRange": null
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "kra",
@@ -581,7 +864,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -605,7 +898,30 @@
           "label": "Resampling frequency",
           "type": "select",
           "default": "1min",
-          "options": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
+          "options": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
           "backendArgName": "freq",
           "sharedParamId": "analysis_resample_freq",
           "description": "Resampling frequency used for fragmentation analysis."
@@ -660,7 +976,9 @@
         "type": "number",
         "unit": null,
         "expectedRange": null
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "kar",
@@ -680,7 +998,17 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -704,7 +1032,30 @@
           "label": "Resampling frequency",
           "type": "select",
           "default": "1min",
-          "options": ["1min","2min","3min","4min","5min","6min","8min","9min","10min","12min","15min","16min","18min","20min","24min","30min","32min","36min","40min","45min","48min","60min"],
+          "options": [
+            "1min",
+            "2min",
+            "3min",
+            "4min",
+            "5min",
+            "6min",
+            "8min",
+            "9min",
+            "10min",
+            "12min",
+            "15min",
+            "16min",
+            "18min",
+            "20min",
+            "24min",
+            "30min",
+            "32min",
+            "36min",
+            "40min",
+            "45min",
+            "48min",
+            "60min"
+          ],
           "backendArgName": "freq",
           "sharedParamId": "analysis_resample_freq",
           "description": "Resampling frequency used for fragmentation analysis."
@@ -759,7 +1110,9 @@
         "type": "number",
         "unit": null,
         "expectedRange": null
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "sri",
@@ -779,8 +1132,25 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": true,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
-      "supportedAlgorithms": ["cole_kripke", "sadeh", "oakley", "scripps", "crespo", "roenneberg"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
+      "supportedAlgorithms": [
+        "cole_kripke",
+        "sadeh",
+        "oakley",
+        "scripps",
+        "crespo",
+        "roenneberg"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -791,13 +1161,18 @@
       "resultSchema": {
         "type": "number",
         "unit": null,
-        "expectedRange": [-100, 100]
+        "expectedRange": [
+          -100,
+          100
+        ]
       },
       "previewOverlaySupport": {
         "fullRecording": true,
         "dailyProfile": false,
         "algorithmOverlay": true
-      }
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     },
     {
       "id": "tst",
@@ -816,8 +1191,25 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
-      "supportedAlgorithms": ["cole_kripke", "sadeh", "oakley", "scripps", "crespo", "roenneberg"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
+      "supportedAlgorithms": [
+        "cole_kripke",
+        "sadeh",
+        "oakley",
+        "scripps",
+        "crespo",
+        "roenneberg"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -853,8 +1245,25 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
-      "supportedAlgorithms": ["cole_kripke", "sadeh", "oakley", "scripps", "crespo", "roenneberg"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
+      "supportedAlgorithms": [
+        "cole_kripke",
+        "sadeh",
+        "oakley",
+        "scripps",
+        "crespo",
+        "roenneberg"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -890,8 +1299,25 @@
       "requiresDiary": false,
       "requiresMaskingOption": false,
       "defaultSelected": false,
-      "supportedInputTypes": ["agd", "atr", "awd", "bba", "dqt", "mesa", "mtn", "rpx", "tal"],
-      "supportedAlgorithms": ["cole_kripke", "sadeh", "oakley", "scripps", "crespo", "roenneberg"],
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal"
+      ],
+      "supportedAlgorithms": [
+        "cole_kripke",
+        "sadeh",
+        "oakley",
+        "scripps",
+        "crespo",
+        "roenneberg"
+      ],
       "uiExposure": {
         "showInMetricPicker": true,
         "showInResults": true,
@@ -902,13 +1328,511 @@
       "resultSchema": {
         "type": "number",
         "unit": "%",
-        "expectedRange": [0, 100]
+        "expectedRange": [
+          0,
+          100
+        ]
       },
       "previewOverlaySupport": {
         "fullRecording": true,
         "dailyProfile": false,
         "algorithmOverlay": true
       }
+    },
+    {
+      "id": "average_daily_activity",
+      "backendMethod": "average_daily_activity",
+      "backendKey": "average_daily_activity",
+      "label": "Average Daily Activity Profile",
+      "shortLabel": "average_daily_activity",
+      "category": "rest_activity",
+      "subcategory": "high_priority_catalog",
+      "summary": "Average Daily Activity Profile computed using pyActigraphy when available.",
+      "description": "Average Daily Activity Profile (high-priority catalog); output depends on file type and sufficient valid data.",
+      "references": [
+        "https://ghammad.github.io/pyActigraphy/MetricsMixin.html"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal",
+        "bin",
+        "gt3x",
+        "tabular"
+      ],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "freq",
+          "label": "Profile bin size",
+          "type": "select",
+          "default": "5min",
+          "options": [
+            "1min",
+            "5min",
+            "10min",
+            "15min",
+            "30min",
+            "60min"
+          ],
+          "backendArgName": "freq"
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity",
+          "type": "boolean",
+          "default": false,
+          "backendArgName": "binarize"
+        },
+        {
+          "name": "threshold",
+          "label": "Activity threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "backendArgName": "threshold"
+        }
+      ],
+      "resultSchema": {
+        "type": "series",
+        "unit": null,
+        "expectedRange": null
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
+    },
+    {
+      "id": "l5",
+      "backendMethod": "L5",
+      "backendKey": "l5",
+      "label": "Least Active Five Hours (L5)",
+      "shortLabel": "L5",
+      "category": "rest_activity",
+      "subcategory": "high_priority_catalog",
+      "summary": "Least Active Five Hours (L5) computed using pyActigraphy when available.",
+      "description": "Least Active Five Hours (L5) (high-priority catalog); output depends on file type and sufficient valid data.",
+      "references": [
+        "https://ghammad.github.io/pyActigraphy/MetricsMixin.html"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal",
+        "bin",
+        "gt3x",
+        "tabular"
+      ],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "binarize",
+          "label": "Binarize activity",
+          "type": "boolean",
+          "default": false,
+          "backendArgName": "binarize"
+        },
+        {
+          "name": "threshold",
+          "label": "Activity threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "backendArgName": "threshold"
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
+    },
+    {
+      "id": "l5p",
+      "backendMethod": "L5p",
+      "backendKey": "l5p",
+      "label": "L5 per Period",
+      "shortLabel": "L5p",
+      "category": "rest_activity",
+      "subcategory": "high_priority_catalog",
+      "summary": "L5 per Period computed using pyActigraphy when available.",
+      "description": "L5 per Period (high-priority catalog); output depends on file type and sufficient valid data.",
+      "references": [
+        "https://ghammad.github.io/pyActigraphy/MetricsMixin.html"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal",
+        "bin",
+        "gt3x",
+        "tabular"
+      ],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": "7D",
+          "backendArgName": "period"
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity",
+          "type": "boolean",
+          "default": false,
+          "backendArgName": "binarize"
+        },
+        {
+          "name": "threshold",
+          "label": "Activity threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "backendArgName": "threshold"
+        }
+      ],
+      "resultSchema": {
+        "type": "series",
+        "unit": null,
+        "expectedRange": null
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
+    },
+    {
+      "id": "m10",
+      "backendMethod": "M10",
+      "backendKey": "m10",
+      "label": "Most Active Ten Hours (M10)",
+      "shortLabel": "M10",
+      "category": "rest_activity",
+      "subcategory": "high_priority_catalog",
+      "summary": "Most Active Ten Hours (M10) computed using pyActigraphy when available.",
+      "description": "Most Active Ten Hours (M10) (high-priority catalog); output depends on file type and sufficient valid data.",
+      "references": [
+        "https://ghammad.github.io/pyActigraphy/MetricsMixin.html"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal",
+        "bin",
+        "gt3x",
+        "tabular"
+      ],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "binarize",
+          "label": "Binarize activity",
+          "type": "boolean",
+          "default": false,
+          "backendArgName": "binarize"
+        },
+        {
+          "name": "threshold",
+          "label": "Activity threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "backendArgName": "threshold"
+        }
+      ],
+      "resultSchema": {
+        "type": "number",
+        "unit": null,
+        "expectedRange": null
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
+    },
+    {
+      "id": "m10p",
+      "backendMethod": "M10p",
+      "backendKey": "m10p",
+      "label": "M10 per Period",
+      "shortLabel": "M10p",
+      "category": "rest_activity",
+      "subcategory": "high_priority_catalog",
+      "summary": "M10 per Period computed using pyActigraphy when available.",
+      "description": "M10 per Period (high-priority catalog); output depends on file type and sufficient valid data.",
+      "references": [
+        "https://ghammad.github.io/pyActigraphy/MetricsMixin.html"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal",
+        "bin",
+        "gt3x",
+        "tabular"
+      ],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "period",
+          "label": "Period length",
+          "type": "duration",
+          "default": "7D",
+          "backendArgName": "period"
+        },
+        {
+          "name": "binarize",
+          "label": "Binarize activity",
+          "type": "boolean",
+          "default": false,
+          "backendArgName": "binarize"
+        },
+        {
+          "name": "threshold",
+          "label": "Activity threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "backendArgName": "threshold"
+        }
+      ],
+      "resultSchema": {
+        "type": "series",
+        "unit": null,
+        "expectedRange": null
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
+    },
+    {
+      "id": "pra",
+      "backendMethod": "pRA",
+      "backendKey": "pra",
+      "label": "Rest to Activity Transition Distribution",
+      "shortLabel": "pRA",
+      "category": "fragmentation",
+      "subcategory": "high_priority_catalog",
+      "summary": "Rest to Activity Transition Distribution computed using pyActigraphy when available.",
+      "description": "Rest to Activity Transition Distribution (high-priority catalog); output depends on file type and sufficient valid data.",
+      "references": [
+        "https://ghammad.github.io/pyActigraphy/MetricsMixin.html"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal",
+        "bin",
+        "gt3x",
+        "tabular"
+      ],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "threshold",
+          "label": "Activity threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "backendArgName": "threshold"
+        }
+      ],
+      "resultSchema": {
+        "type": "series",
+        "unit": null,
+        "expectedRange": null
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
+    },
+    {
+      "id": "par",
+      "backendMethod": "pAR",
+      "backendKey": "par",
+      "label": "Activity to Rest Transition Distribution",
+      "shortLabel": "pAR",
+      "category": "fragmentation",
+      "subcategory": "high_priority_catalog",
+      "summary": "Activity to Rest Transition Distribution computed using pyActigraphy when available.",
+      "description": "Activity to Rest Transition Distribution (high-priority catalog); output depends on file type and sufficient valid data.",
+      "references": [
+        "https://ghammad.github.io/pyActigraphy/MetricsMixin.html"
+      ],
+      "requiresSleepScoring": false,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal",
+        "bin",
+        "gt3x",
+        "tabular"
+      ],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": true,
+        "planned": false
+      },
+      "parameterSchema": [
+        {
+          "name": "threshold",
+          "label": "Activity threshold",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "backendArgName": "threshold"
+        }
+      ],
+      "resultSchema": {
+        "type": "series",
+        "unit": null,
+        "expectedRange": null
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
+    },
+    {
+      "id": "sleep_midpoint",
+      "backendMethod": "SleepMidPoint",
+      "backendKey": "sleep_midpoint",
+      "label": "Sleep Midpoint",
+      "shortLabel": "SleepMidPoint",
+      "category": "sleep",
+      "subcategory": "high_priority_catalog",
+      "summary": "Sleep Midpoint computed using pyActigraphy when available.",
+      "description": "Sleep Midpoint (high-priority catalog); output depends on file type and sufficient valid data.",
+      "references": [
+        "https://ghammad.github.io/pyActigraphy/MetricsMixin.html"
+      ],
+      "requiresSleepScoring": true,
+      "requiresDiary": false,
+      "requiresMaskingOption": false,
+      "defaultSelected": false,
+      "supportedInputTypes": [
+        "agd",
+        "atr",
+        "awd",
+        "bba",
+        "dqt",
+        "mesa",
+        "mtn",
+        "rpx",
+        "tal",
+        "bin",
+        "gt3x",
+        "tabular"
+      ],
+      "uiExposure": {
+        "showInMetricPicker": true,
+        "showInResults": true,
+        "advanced": false,
+        "planned": false
+      },
+      "parameterSchema": [],
+      "resultSchema": {
+        "type": "number",
+        "unit": "minutes after midnight",
+        "expectedRange": null
+      },
+      "catalogPriority": "High",
+      "catalogSource": "pyActigraphy"
     }
   ]
 }

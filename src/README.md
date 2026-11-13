@@ -27,6 +27,9 @@ With native GT3X or GENEActiv BIN data, users can opt into a configurable raw-si
 
 Start with the [ActiLab user documentation](docs/README.md).
 
+**NEW — local terminal toolkit:** Download the ZIP from the ActiLab in-app **Documentation → Terminal / CLI & comparisons** tab, or use the source in `validation/`. The [stage-by-stage Linux setup and GGIR/pyActigraphy comparison guide](docs/CLI_AND_VALIDATION.md) documents QC, non-wear, metric selection, sleep and light, export provenance, Cohen kappa, Lin CCC, ICC and Bland–Altman. The [uploaded high-priority metric audit](docs/METRIC_CATALOG_IMPLEMENTATION_STATUS.csv) distinguishes working pathways from pending GGIR/ActCR cosinor and SPT-specific non-wear measures. The raw triaxial detector is **GGIR-inspired**, not a claimed port or a replacement for GGIR quality assessment.
+
+
 - [User guide](docs/USER_GUIDE.md)
 - [Initial QC and data-quality settings](docs/PREPROCESSING_VALIDITY_RULES.md)
 - [Supported file formats](docs/FILE_FORMATS.md)

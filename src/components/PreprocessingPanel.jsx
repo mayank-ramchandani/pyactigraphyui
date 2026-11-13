@@ -63,9 +63,17 @@ function InitialQcCard({ entry, payload, loading, error, settings, onDownload })
               </button>
             </div>
             <SamplingHarmonizationNotice harmonization={payload?.participant_join?.sampling_harmonization} compact />
+            <div style={{ fontSize: 13, lineHeight: 1.55, marginBottom: 12, color: payload.detected_nonwear_available ? "#155e75" : "#92400e" }}>
+              <strong>Non-wear QC:</strong> {payload.nonwear_detection?.method === "triaxial_sd_range_60m_15m_ggir_inspired"
+                ? `GGIR-inspired raw-XYZ screening (${payload.nonwear_detection.windows_checked} eligible 60-minute windows; 15-minute steps). `
+                : payload.detected_nonwear_available ? "Existing device / imported wear mask. " : "Not estimable for these data. "}
+              {payload.nonwear_detection?.limitations || ""} Crespo and Roenneberg classify rest/sleep and are not non-wear detectors.
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
               <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10 }}><strong>Recorded</strong><br />{formatHours(payload.recorded_hours)}</div>
               <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10 }}><strong>Initial gaps</strong><br />{formatHours(payload.recording_gap_hours)}</div>
+              <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10 }}><strong>Non-wear detected</strong><br />{payload.detected_nonwear_available ? formatHours(windows.reduce((n,r) => n + Number(r.detected_nonwear_hours || 0),0)) : "Unavailable"}</div>
+              <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10 }}><strong>Native sample rate</strong><br />{payload.samplefreq != null ? `${Number(payload.samplefreq.toFixed(2))} Hz` : "Unavailable"}</div>
               <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10 }}><strong>Window basis</strong><br />{modeLabel}</div>
               <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10 }}><strong>Threshold applied here</strong><br />{threshold} h</div>
             </div>

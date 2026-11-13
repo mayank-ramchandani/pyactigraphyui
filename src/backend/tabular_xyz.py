@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from .io_helpers import build_baseraw_from_dataframe, _coerce_localized_numeric
+from .nonwear import TriaxialNonwear
 from .activity_mapping import attach_mapping_metadata, mapping_metadata
 
 
@@ -69,6 +70,17 @@ def load_xyz_as_baseraw(dataframe: pd.DataFrame, mapping: dict, *, name: str, ep
         raise ValueError("Cannot estimate sample rate from the XYZ timestamps.")
     if sample_seconds > period:
         raise ValueError(f"XYZ sample spacing ({sample_seconds:g}s) exceeds chosen {period}s epoch; choose an appropriate epoch length.")
+    nonwear_screen = TriaxialNonwear()
+    # CSV XYZ is capped at 5M samples; use bounded batches for consistency.
+    for start in range(0, len(frame), 100_000):
+        chunk = frame.iloc[start:start+100_000]
+        if len(chunk):
+            # A chunk might contain gaps; break at timestamp discontinuities.
+            run_breaks = np.where(np.abs(np.diff(chunk.index.asi8) / 1e9 - sample_seconds) > sample_seconds * 0.2)[0] + 1
+            for run in np.split(np.arange(len(chunk)), run_breaks):
+                if len(run):
+                    nonwear_screen.add(chunk.iloc[run][["x_g", "y_g", "z_g"]].to_numpy(),
+                                       chunk.index[run[0]].timestamp(), 1.0/sample_seconds)
     vm = np.sqrt((frame[["x_g", "y_g", "z_g"]] ** 2).sum(axis=1))
     deviation = (vm - 1.0) * 1000
     positive = deviation.clip(lower=0)
@@ -112,6 +124,8 @@ def load_xyz_as_baseraw(dataframe: pd.DataFrame, mapping: dict, *, name: str, ep
             if field == "nonwear_col":
                 output.attrs["nonwear_source_column"] = source_col
     raw = build_baseraw_from_dataframe(output, name=name, uuid="xyz-csv-import")
+    raw._ui_nonwear_summary = nonwear_screen.finish()
+    raw._ui_nonwear_intervals = raw._ui_nonwear_summary["nonwear_intervals"]
     raw._ui_tabular_xyz_info = {
         "axis_columns": cols, "input_unit": unit,
         "estimated_sample_seconds": sample_seconds, "output_epoch_seconds": period,

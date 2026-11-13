@@ -138,7 +138,8 @@ class DataQualityTests(unittest.TestCase):
             "masking": {"respectNonwear": False, "minimumValidHoursPerDay": 16}
         })
 
-        self.assertFalse(quality["detected_nonwear_available"])
+        self.assertTrue(quality["detected_nonwear_available"])
+        self.assertFalse(quality["nonwear_applied"])
         self.assertEqual(quality["valid_days"], 1)
         self.assertTrue(pd.isna(cleaned.data.loc["2026-03-01 10:00"]))
         self.assertEqual(float(cleaned.data.loc["2026-03-01 09:00"]), 2.0)

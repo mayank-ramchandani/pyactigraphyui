@@ -8,6 +8,9 @@ import { ACTIVITY_MAPPING_OPTIONS } from "./ActivityMappingPanel";
 import TermsOfUseContent from "./TermsOfUseContent";
 import BrandLogo from "./BrandLogo";
 
+// Bundled static toolkit: downloadable without a backend request or GitHub access.
+const cliToolkitUrl = new URL("../assets/actilab-cli-toolkit.zip", import.meta.url).href;
+
 const DEFAULT_REPOSITORY_URL = "https://github.com/mayank-ramchandani/pyactigraphyui";
 const DEFAULT_DOCS_URL = "https://github.com/mayank-ramchandani/pyactigraphyui/tree/main/src/docs";
 
@@ -26,6 +29,7 @@ const FILE_ROWS = [
 const NARRATIVE_SEARCH_TEXT = {
   overview: "start here user guide upload de-identified data recommended settings preview analysis results export research educational privacy feedback",
   plugplay: "plug and play raw xyz csv timestamp acceleration unit enmo epoch length 5 10 15 30 60 GGIR HDCZA SIB not implemented daily aggregated metadata reproducibility comparison benchmark",
+  cli: "download Linux python terminal toolkit python3.10 virtual environment batch files QC nonwear GGIR pairwise pyActigraphy native reference kappa concordance ICC Bland Altman three way comparison catalog",
   workflow: appConfig.workflow.map((step) => `${step.id} ${step.title} ${step.description}`).join(" "),
   preprocessing: "pre-processing recommended settings 16 analyzable hours calendar day recording aligned 24 hour consecutive valid windows sleep coverage 80 percent gaps non-wear masks missing data",
   files: `${FILE_ROWS.flat().join(" ")} encoding utf-8 windows-1252 localized actiware french german generic csv manual mapping nhanes paxhr`,
@@ -43,6 +47,7 @@ const NARRATIVE_SEARCH_TEXT = {
 const SECTIONS = [
   { id: "overview", label: "Start here" },
   { id: "plugplay", label: "Plug-and-play & outputs" },
+  { id: "cli", label: "Terminal / CLI & comparisons" },
   { id: "workflow", label: "10-step workflow" },
   { id: "preprocessing", label: "Preprocessing/Initial QC" },
   { id: "files", label: "File formats" },
@@ -220,10 +225,27 @@ export default function DocumentationPanel({ onClose }) {
           Export offers two independent CSV selections. <strong>Daily</strong> contains one QC quality-window row per day (or recording-aligned 24h window), valid wear/coverage and valid-epoch activity summary. <strong>Aggregated</strong> contains one row per recording or joined participant, including scalar multi-day metrics from ActiLab itself. These are GGIR-inspired output <em>levels</em>, not matching GGIR Parts 4/5 column-for-column. <strong>Metadata</strong> is downloadable in every successful run, including default and overridden options, source mapping, effective quality settings, epoch, algorithm/metric parameters, provenance, QC and software versions.
         </Card>
         <Card title="What is validated and what remains outstanding?">
-          A comparison utility is provided in <Code>validation/compare_outputs.py</Code> and a protocol in <Code>docs/GGIR_COMPARISON_PROTOCOL.md</Code>. It compares matched numerical columns only. GGIR parity needs paired raw recordings with aligned calibration, non-wear, epochs, sleep methods and statistical tolerances. The candidate catalogue of pyActigraphy/GGIR metrics is in <Code>docs/METRIC_CATALOG_CANDIDATES.csv</Code> and is not a list of implemented measures. Review the source documentation before an official research release.
+          Download the separate terminal toolkit from <strong>Terminal / CLI & comparisons</strong>. The updated <Code>validation/compare_outputs.py</Code> reports matched categorical and continuous agreement; <Code>validation/compare_three.py</Code> adds all three pairings. See <Code>docs/CLI_AND_VALIDATION.md</Code> for the high-priority workbook audit. GGIR parity needs paired raw recordings with aligned calibration, non-wear, epochs, sleep methods and statistical tolerances. The candidate catalogue of pyActigraphy/GGIR metrics is in <Code>docs/METRIC_CATALOG_CANDIDATES.csv</Code> and is not a list of implemented measures. Review the source documentation before an official research release.
         </Card>
         <Card title="Scientific references">
           <a href="https://wadpac.github.io/GGIR/articles/chapter4_AccMetrics.html" target="_blank" rel="noreferrer">GGIR raw acceleration and metrics</a>; <a href="https://wadpac.github.io/GGIR/articles/GGIRParameters.html" target="_blank" rel="noreferrer">GGIR parameters and HDCZA</a>; <a href="https://ghammad.github.io/pyActigraphy/MetricsMixin.html" target="_blank" rel="noreferrer">pyActigraphy metrics</a>; <a href="https://doi.org/10.1371/journal.pone.0261718" target="_blank" rel="noreferrer">Maczák et al. (2021)</a>. Each source informs a distinct step; no one source validates all file types automatically.
+        </Card>
+      </div>
+    ),
+    cli: (
+      <div style={{ display: "grid", gap: 14 }}>
+        <Card title="Download the local Python toolkit">
+          <p>Use ActiLab locally on Linux, macOS or WSL without uploading actigraphy files to a server. The toolkit contains the backend processing code, batch CLI, independent direct pyActigraphy method calls, GGIR R benchmark script, pairwise / three-way agreement tests, and full instructions.</p>
+          <a href={cliToolkitUrl} download="actilab-cli-toolkit.zip" style={{ display: "inline-block", padding: "10px 14px", borderRadius: 10, background: "#0f766e", color: "white", fontWeight: 700, textDecoration: "none" }}>Download ActiLab terminal toolkit (.zip)</a>
+          <p>Unzip, open the included <Code>src/docs/CLI_AND_VALIDATION.md</Code>, create a Python 3.10 environment and install <Code>src/backend/requirements.txt</Code>. The GGIR comparison additionally requires R and the GGIR package.</p>
+        </Card>
+        <Card title="Stage-by-stage terminal processing">
+          <p>From inside the extracted <Code>src</Code> folder, run <Code>python -m validation.actilab_cli /path/to/recording.bin --stage qc --out results</Code> for non-wear and missingness, or change the stage to <Code>rhythm</Code>, <Code>sleep</Code>, <Code>light</Code>, or <Code>all</Code>. Use <Code>--activity enmo --epoch 30 --min-valid-hours 16</Code> and select any optional sleep or threshold settings.</p>
+          <p>Outputs include initial and final QC, detected non-wear, cleaned epoch data, metric availability, daily/aggregated CSV, and machine-readable configuration. The native triaxial non-wear screen is GGIR-inspired, not an exact replication. Crespo and Roenneberg remain rest/sleep classifiers.</p>
+        </Card>
+        <Card title="Compare ActiLab, GGIR and pyActigraphy">
+          <p><Code>validation/compare_outputs.py</Code> computes Cohen's kappa, categorical agreement, ICC, Lin's concordance, Bland–Altman limits, MAE, RMSE, and correlations for explicitly matched columns. <Code>validation/compare_three.py</Code> reports all three pairwise comparisons and triply matched rows. <Code>validation/pyactigraphy_reference.py</Code> separately calls native library methods on a common epoch input or supported pyActigraphy native recording. Read the guide for example commands and the metric mapping JSON.</p>
+          <p>The uploaded High-priority metric catalog is audited in <Code>docs/METRIC_CATALOG_IMPLEMENTATION_STATUS.csv</Code>. GGIR standard/extended-cosinor parity and SPT-specific non-wear percentages remain pending; the toolkit does not invent these outputs.</p>
         </Card>
       </div>
     ),

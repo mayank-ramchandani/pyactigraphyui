@@ -23,6 +23,8 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from .nonwear import wear_mask_from_intervals
+
 try:  # Optional in lightweight unit-test environments.
     from pyActigraphy.io import BaseRaw
 except Exception:  # pragma: no cover - deployment installs pyActigraphy
@@ -268,6 +270,48 @@ def _reader_mask(raw: Any, index: pd.DatetimeIndex) -> Optional[pd.Series]:
     return numeric.reindex(index).fillna(0) > 0
 
 
+def _detected_wear_mask(raw: Any, index: pd.DatetimeIndex) -> Optional[pd.Series]:
+    """Combine source reader mask with raw-triaxial screen; never infer nonwear
+    from lack of activity (e.g., sleep or count-epoch zeros).
+    """
+    reader = _reader_mask(raw, index)
+    summary = getattr(raw, "_ui_nonwear_summary", None) or {}
+    if int(summary.get("windows_checked") or 0) <= 0:
+        return reader
+    triaxial = wear_mask_from_intervals(index, getattr(raw, "_ui_nonwear_intervals", []) or [])
+    return (reader & triaxial) if reader is not None else triaxial
+
+
+def _nonwear_details(raw: Any, detected_available: bool) -> dict:
+    info = getattr(raw, "_ui_nonwear_summary", None) or {}
+    if info.get("windows_checked"):
+        return {k: v for k, v in info.items() if k != "nonwear_intervals"}
+    if detected_available:
+        return {"method": "native_or_uploaded_reader_wear_mask", "limitations": "Reader mask semantics depend on input format."}
+    return {"method": "unavailable", "limitations": "Requires triaxial native g-unit samples with at least one fully observed 60-minute window, or a trusted wear mask."}
+
+
+def _native_sampling_rate(raw: Any) -> Optional[float]:
+    details = getattr(raw, "_ui_nonwear_summary", None) or {}
+    rate = details.get("native_sample_rate_hz")
+    if rate:
+        return float(rate)
+    info = getattr(raw, "_ui_gt3x_summary", None) or {}
+    if info.get("_sample_rate_hz"):
+        return float(info["_sample_rate_hz"])
+    xyz = getattr(raw, "_ui_tabular_xyz_info", None) or {}
+    if xyz.get("estimated_sample_seconds"):
+        return 1.0 / float(xyz["estimated_sample_seconds"])
+    metadata = getattr(raw, "metadata", None) or {}
+    if isinstance(metadata, dict):
+        try:
+            header = metadata.get("header") or {}
+            return float(header["measurement frequency"])
+        except (KeyError, ValueError, TypeError):
+            pass
+    return None
+
+
 def _manual_interval_mask(index: pd.DatetimeIndex, intervals: Iterable[dict]) -> pd.Series:
     valid = pd.Series(True, index=index, dtype=bool)
     for interval in intervals or []:
@@ -380,6 +424,8 @@ def _quality_window_table(
                 "detected_nonwear_hours": nonwear_hours,
                 "manual_mask_hours": manual_hours,
                 "analyzable_hours": analyzable_hours,
+                "N_valid_hours": analyzable_hours,
+                "nonwear_perc_day": round(100.0 * nonwear_hours / recorded_hours, 4) if recorded_hours else None,
                 "valid_day": bool(is_valid),
                 "exclusion_reason": "; ".join(reasons) if reasons else None,
             }
@@ -398,7 +444,7 @@ def inspect_initial_data_coverage(raw: Any) -> Dict[str, Any]:
 
     source = _numeric_activity_series(raw)
     regular, frequency = _regularize_series(raw, source)
-    existing_mask = _reader_mask(raw, regular.index)
+    existing_mask = _detected_wear_mask(raw, regular.index)
     native_wear = existing_mask if existing_mask is not None else pd.Series(True, index=regular.index, dtype=bool)
     manual_wear = pd.Series(True, index=regular.index, dtype=bool)
 
@@ -432,6 +478,11 @@ def inspect_initial_data_coverage(raw: Any) -> Dict[str, Any]:
         "recorded_hours": _rounded_hours(recorded_epochs, epoch_hours),
         "recording_gap_hours": _rounded_hours(len(regular) - recorded_epochs, epoch_hours),
         "detected_nonwear_available": existing_mask is not None,
+        "nonwear_detection": _nonwear_details(raw, existing_mask is not None),
+        "samplefreq": _native_sampling_rate(raw),
+        "Nvaliddays": modes["calendar_day"]["valid_at_recommended_threshold"],
+        "Nvaliddays_WD": sum(bool(row["valid_day"]) and pd.Timestamp(row["date"]).weekday() < 5 for row in modes["calendar_day"]["windows"]),
+        "Nvaliddays_WE": sum(bool(row["valid_day"]) and pd.Timestamp(row["date"]).weekday() >= 5 for row in modes["calendar_day"]["windows"]),
         "modes": modes,
         "note": (
             "This initial QC is descriptive. Final QC is recalculated after start/stop restrictions, "
@@ -500,7 +551,8 @@ def apply_data_quality_control(raw: Any, support_settings: Optional[dict] = None
     source = _numeric_activity_series(raw)
     regular, frequency = _regularize_series(raw, source)
 
-    existing_mask = _reader_mask(raw, regular.index) if settings["respect_detected_nonwear"] else None
+    detected_mask = _detected_wear_mask(raw, regular.index)
+    existing_mask = detected_mask if settings["respect_detected_nonwear"] else None
     native_wear = existing_mask if existing_mask is not None else pd.Series(True, index=regular.index, dtype=bool)
     manual_intervals = getattr(raw, "_ui_mask_intervals", None) or []
     manual_wear = _manual_interval_mask(regular.index, manual_intervals)
@@ -522,6 +574,8 @@ def apply_data_quality_control(raw: Any, support_settings: Optional[dict] = None
     gap_hours = round(sum(row["recording_gap_hours"] for row in daily_rows), 4)
 
     qc_warnings = []
+    if detected_mask is None:
+        qc_warnings.append("Non-wear detection unavailable: wear duration is an upper bound based on recorded data and masks, not confirmed wear.")
     if invalid_days:
         qc_warnings.append(
             f"Excluded {len(invalid_days)} quality window(s) with less than the recommended/configured {settings['minimum_valid_hours_per_day']:g} analyzable hours."
@@ -557,7 +611,13 @@ def apply_data_quality_control(raw: Any, support_settings: Optional[dict] = None
         "recording_gap_hours": gap_hours,
         "detected_nonwear_hours": detected_nonwear_hours,
         "manual_mask_hours": manual_mask_hours,
-        "detected_nonwear_available": existing_mask is not None,
+        "detected_nonwear_available": detected_mask is not None,
+        "nonwear_applied": bool(settings["respect_detected_nonwear"] and detected_mask is not None),
+        "nonwear_detection": _nonwear_details(raw, detected_mask is not None),
+        "samplefreq": _native_sampling_rate(raw),
+        "Nvaliddays": len(valid_days),
+        "Nvaliddays_WD": sum(bool(row["valid_day"]) and pd.Timestamp(row["date"]).weekday() < 5 for row in daily_rows),
+        "Nvaliddays_WE": sum(bool(row["valid_day"]) and pd.Timestamp(row["date"]).weekday() >= 5 for row in daily_rows),
         "daily_qc": daily_rows,
         "warnings": qc_warnings,
     }

@@ -1,3 +1,5 @@
+> **New:** For Linux local processing, high-priority implementation audit, separate native pyActigraphy reference, Cohen kappa/ICC/Bland–Altman, and all-three comparisons, see [CLI and validation guide](CLI_AND_VALIDATION.md).
+
 # Validation plan: ActiLab versus GGIR
 
 **Status 5 November 2026:** Runnable ActiLab-versus-GGIR benchmark scripts added; *no* paired GGIR/ActiLab raw-device benchmark results have been produced from this uploaded source alone. GGIR HDCZA/SIB sleep parity is not currently implemented in ActiLab.

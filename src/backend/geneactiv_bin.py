@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
+from .nonwear import TriaxialNonwear
 from .activity_mapping import (
     attach_mapping_metadata,
     mapping_metadata,
@@ -667,6 +668,7 @@ def read_raw_geneactiv_bin(
         "lux": 1.0,
     }
 
+    nonwear_screen = TriaxialNonwear()
     buckets: Dict[int, Dict[str, float]] = {}
     mad_by_bucket: Dict[int, float] = {}
     active_mad_bucket_ns: Optional[int] = None
@@ -785,10 +787,11 @@ def read_raw_geneactiv_bin(
         page_ns = int(page_time.value)
         ns_per_sample = int(round(1_000_000_000 / float(freq)))
         temperature = _parse_float(page.get("temperature"))
-        decoded = _decode_measurement_array(page_hex, calibration, include_axes=custom_processor is not None)
+        decoded = _decode_measurement_array(page_hex, calibration, include_axes=True)
         enmo_values, vm_values, light_lux_values = decoded[:3]
         if enmo_values is None or vm_values is None or light_lux_values is None or len(enmo_values) == 0:
             return
+        nonwear_screen.add(decoded[3], page_ns / 1_000_000_000.0, float(freq))
         use_processed_acc = requested_mapping in {"auto", "accelerometer"}
         if custom_processor is not None:
             dynamic_values = custom_processor.apply(decoded[3], page_ns / 1_000_000_000.0, float(freq))
@@ -1068,4 +1071,6 @@ def read_raw_geneactiv_bin(
             "available_activity_mappings": ["auto", "accelerometer", "mad", "enmo", "pim", "zcm", "tat"],
         },
     )
+    raw._ui_nonwear_summary = nonwear_screen.finish()
+    raw._ui_nonwear_intervals = raw._ui_nonwear_summary["nonwear_intervals"]
     return attach_mapping_metadata(raw, activity_mapping_metadata)

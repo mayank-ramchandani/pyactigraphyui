@@ -6,13 +6,14 @@ This directory contains the public documentation for researchers and analysts us
 
 ## Start here
 
-1. Read the [Plug-and-play release guide](PLUG_AND_PLAY_RELEASE.md) for automatic device identification, raw XYZ CSV, epoch lengths, scoring limitations, daily/aggregated outputs and complete metadata.
-2. Read [Automatic pipelines by file type](AUTOMATIC_PIPELINES_BY_FORMAT.md) for exactly which reader, library, preprocessing and assumptions ActiLab uses for each supported input.
-3. Read the [User guide](USER_GUIDE.md) for the complete ten-step workflow.
-4. Review [Initial QC and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) before changing the recommended Analysis settings in Step 7.
-5. Check [Supported file formats](FILE_FORMATS.md) and [Choosing an activity representation](ACTIVITY_PROCESSING.md) when preparing data.
-6. Use [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) to understand the available analyses.
-7. Use [Troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) when a result is missing or a run fails.
+1. For command-line analysis and validation, read the [Linux CLI, high-priority catalog, and GGIR/pyActigraphy comparison guide](CLI_AND_VALIDATION.md).
+2. Read the [Plug-and-play release guide](PLUG_AND_PLAY_RELEASE.md) for automatic device identification, raw XYZ CSV, epoch lengths, scoring limitations, daily/aggregated outputs and complete metadata.
+3. Read [Automatic pipelines by file type](AUTOMATIC_PIPELINES_BY_FORMAT.md) for exactly which reader, library, preprocessing and assumptions ActiLab uses for each supported input.
+4. Read the [User guide](USER_GUIDE.md) for the complete ten-step workflow.
+5. Review [Initial QC and data-quality settings](PREPROCESSING_VALIDITY_RULES.md) before changing the recommended Analysis settings in Step 7.
+6. Check [Supported file formats](FILE_FORMATS.md) and [Choosing an activity representation](ACTIVITY_PROCESSING.md) when preparing data.
+7. Use [Metrics and algorithms](METRICS_AND_ALGORITHMS.md) to understand the available analyses.
+8. Use [Troubleshooting](DIAGNOSTICS_AND_TROUBLESHOOTING.md) when a result is missing or a run fails.
 
 ## Documentation by task
 
@@ -21,6 +22,8 @@ This directory contains the public documentation for researchers and analysts us
 | Configure plug-and-play raw processing, CSV XYZ import, epochs and reproducible summary exports | [Plug-and-play release guide](PLUG_AND_PLAY_RELEASE.md) |
 | Understand the automatic reader/processing source for every format | [Automatic pipelines by file type](AUTOMATIC_PIPELINES_BY_FORMAT.md) |
 | Export Step 2 QC results without completing analysis | [User guide — Step 2](USER_GUIDE.md#2-preprocessinginitial-qc) |
+| Process files on a Linux machine, use raw non-wear QC, and compare three tools statistically | [Command-line and validation guide](CLI_AND_VALIDATION.md) |
+| Review the uploaded workbook metrics against completed code and limitations | [Metric catalog implementation status](METRIC_CATALOG_IMPLEMENTATION_STATUS.csv) |
 | Compare matched results against GGIR | [GGIR validation protocol](GGIR_COMPARISON_PROTOCOL.md) |
 | Browse candidate metrics from GGIR and pyActigraphy (not all implemented) | [Candidate metric catalogue](METRIC_CATALOG_CANDIDATES.csv) |
 | Complete an analysis from upload to export | [User guide](USER_GUIDE.md) |
@@ -61,4 +64,4 @@ After at least one actigraphy file is uploaded, Steps 2–9 can be opened direct
 - **Unavailable result:** a metric that could not be calculated because required data, valid windows, sleep windows, or supported signals were not available.
 - **Warning:** processing continued, but the result or data quality requires review.
 
-Last updated: **2026-11-05**.
+Last updated: **2026-11-12**.
